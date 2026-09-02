@@ -33,10 +33,19 @@ Ratings carried forward unchanged from the four source docs (novelty = real-WebS
 | R2-7 | Voice-Agent Session Replay & Diff Debugger | Structured session recorder plus a turn-aligned diff view comparing two Voice Agent API runs (e.g. prompt v1 vs v2). | Low | High | Medium |
 | R2-8 | Latency Budget Profiler | Per-stage protocol-event instrumentation breaks the ~1s Voice Agent latency claim into a flame-graph-style budget per turn. | Medium | Very High | Medium |
 | R3-21 | Voice-Agent Compliance/Legal-Risk Checker | Ingests one Voice Agent API session and flags TCPA-consent gaps, missing AI-disclosure, and PII leaks as a scoped compliance report. | Medium-High | High | High |
+| W3 | Voice-Authored Agent Arena | Voice-authored constraints seed a small multi-agent NPC simulation; an LLM judge scores whether agents held their constraints under live voice-directed scenario pressure. | High | Medium | Medium-High |
+| W2 | Spoken Ensemble NPC Director | Player voice-directs a live multi-persona scene via Voice Agent API function calls and native barge-in; sessions export as persona-consistency-drift eval transcripts. | Medium | High | Medium |
+| W1 | Voice-Native Living World Weaver | Live two-way Voice Agent API session mutates a persistent world-state graph via function calls; sessions export as reusable world-definition files for other agents. | Medium | Medium-High | Low-Medium |
 
 Every idea above has a rating on all three axes - none needed a "not yet rated" fallback.
 
-**Sources for the above (full detail, not repeated here):** `docs/hackathon-ideas.md` (R1 concepts), `docs/hackathon-ideas-technical.md` (R2 concepts), `docs/hackathon-completion-likelihood.md` (completion ratings + bottleneck reasoning), `docs/hackathon-novelty-research.md` (novelty ratings + prior-art citations), `docs/hackathon-round3-synthesis.md` (actual-use ratings + the R3-21 candidate + its own sourcing).
+**Sources for the above (full detail, not repeated here):** `docs/hackathon-ideas.md` (R1 concepts), `docs/hackathon-ideas-technical.md` (R2 concepts), `docs/hackathon-completion-likelihood.md` (completion ratings + bottleneck reasoning), `docs/hackathon-novelty-research.md` (novelty ratings + prior-art citations), `docs/hackathon-round3-synthesis.md` (actual-use ratings + the R3-21 candidate + its own sourcing), `docs/hackathon-ideas-worldbuilding-gaming.md` (W1/W2/W3 candidates - a new round exploring world-building and generative gaming through a voice-agent lens, added 2026-09-02).
+
+---
+
+## Part 1b: Round 5 - World-building & generative-gaming angle (W1/W2/W3)
+
+Full writeups (prior-art research, completion/actual-use/API-coverage analysis, judging-criteria scoring) live in `docs/hackathon-ideas-worldbuilding-gaming.md`. Short version: this angle was explored at captain's request, framed around a dual-purpose test - could an idea double as (a) a real game/interactive-fiction product and (b) an agent-training/eval environment. **Honest finding: the angle is weaker than the existing top picks, not a new leader.** The entertainment half is commercially crowded (VoxDungeon, DungeonsDeep.ai, AI Dungeon, and Summer Engine already ship close analogs to a "voice-driven world/game" pitch; Inworld AI, Convai, and NVIDIA ACE already own the NPC-dialogue-platform space), which caps novelty and business value for the two more game-shaped candidates (W1, W2). The one candidate that leans hardest into genuine agent-evaluation territory (W3, Voice-Authored Agent Arena - voice-authored constraints seed a small multi-agent simulation, an LLM judge scores whether NPC agents held their constraints under pressure) is the most novel of the three and the only one with no close prior art found, but it pays for that with Medium (not High) AssemblyAI API coverage, since the bulk of its mechanic is a non-AssemblyAI multi-agent orchestration stack - exactly the honest gap the brief asked to watch for. Merged into the full ranking, **W3 lands at rank 7 and W2 at rank 8, both below the existing top five; W1 lands at rank 15.** None of the three displaces R1-11, R3-21, COMBINED, R2-6, or R1-3 at the top.
 
 ---
 
@@ -117,7 +126,7 @@ None of the 21 consolidated ideas require a large stack of *paid* third-party AP
 
 ## Part 5: CSV matrix and weighting method
 
-Full matrix: `docs/hackathon-idea-matrix.csv` (22 rows: all 21 consolidated ideas + the Part 3 combined pitch). Columns: id, one-line description, novelty, 30-day completion, actual-use-after-30-days, AssemblyAI-API-coverage, the four real judging criteria (Application of Technology / Presentation / Business Value / Originality, each High/Medium/Low or a small set of compound terms carried from the source docs for the first three axes), and an overall-rank column.
+Full matrix: `docs/hackathon-idea-matrix.csv` (22 rows as of this Part: all 21 consolidated ideas + the Part 3 combined pitch; now 25 rows after the round 5 world-building/gaming additions W1/W2/W3 - see Part 1b - with `overall_rank` recomputed across all 25 using the same formula below). Columns: id, one-line description, novelty, 30-day completion, actual-use-after-30-days, AssemblyAI-API-coverage, the four real judging criteria (Application of Technology / Presentation / Business Value / Originality, each High/Medium/Low or a small set of compound terms carried from the source docs for the first three axes), and an overall-rank column.
 
 **Weighting method used to compute `overall_rank`** (a reasoned synthesis, not a formula lablab publishes):
 
@@ -127,7 +136,7 @@ Full matrix: `docs/hackathon-idea-matrix.csv` (22 rows: all 21 consolidated idea
 
 Reasoning for the weights: the four judging criteria get the largest single share (0.35) because that is literally how the contest picks winners - everything else is a proxy for whether the team *can and should* pursue an idea, not how it will be scored on Sep 30. Novelty and completion are weighted equally (0.20 each) because they gate each other symmetrically: a novel idea that can't ship in 30 days never reaches judging at all, and a fast-to-build idea with no novelty scores poorly on Originality regardless of how the other axes look - so the model treats "can this even happen" and "is this worth happening" as equally load-bearing. Actual-use (0.15) matters to the team's own post-hackathon motivation but not to the judges, so it's weighted lower than novelty/completion but still real - it's the tie-breaker between two similarly-scoring ideas. AssemblyAI API coverage (0.10) gets the smallest weight because it's a captain-imposed build constraint, not a judging axis, but it still counts because an idea that leans on non-AssemblyAI tooling for its core mechanism is a weaker "Application of Technology" story by construction (judges are told to look at "how effectively the chosen model(s) are integrated").
 
-**Result:** R1-11 (Reasoning-Timeline Debugger) ranks #1, R3-21 (Compliance/Legal-Risk Checker) #2, the Part 3 combined pitch #3, R2-6 (Adversarial Eval Generator alone) #4, R1-3 (Verbal Code-Review Companion) #5. Full ranked order for all 22 rows is in the CSV.
+**Result:** R1-11 (Reasoning-Timeline Debugger) ranks #1, R3-21 (Compliance/Legal-Risk Checker) #2, the Part 3 combined pitch #3, R2-6 (Adversarial Eval Generator alone) #4, R1-3 (Verbal Code-Review Companion) #5. Full ranked order for all 22 rows (at this Part's writing) is in the CSV; the top 5 are unaffected by the round 5 world-building/gaming additions (Part 1b) - see that section for where W1/W2/W3 land in the now-25-row ranking.
 
 ---
 
