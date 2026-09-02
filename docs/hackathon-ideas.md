@@ -2,7 +2,7 @@
 
 **This is the single, definitive, self-contained ideas document.** Every idea generated across five research rounds (25 total: 12 round-1 product ideas, 8 round-2 DSP/infra ideas, 1 compliance-checker candidate, 1 combined pitch, 3 world-building/gaming ideas) is documented here in full — concept, all rating axes, real judging-criteria scores, and overall rank. No other file needs to be opened to understand any single idea's complete picture.
 
-Two per-round source docs remain in the repo as historical/supporting detail — `hackathon-ideas-technical.md` (R2 nerd-factor ranking, cross-pollination notes) and `hackathon-completion-likelihood.md` (per-idea completion "key outcomes" detail, partner-fit context) — the deeper prior-art citations and reasoning trails not fully carried into this file live there. They are not required reading.
+No other file needs to be opened — every per-round source doc's substantive content (R2 nerd-factor ranking, cross-pollination notes, per-idea "key outcomes," and the xAI partner-fit context behind the final recommendation) has been folded directly into the relevant idea entries below.
 
 Machine-readable version: `docs/hackathon-idea-matrix.csv` (25 rows, same ranking).
 
@@ -139,6 +139,8 @@ Confirmed via a working proxy fetch of the live hackathon page (`lablab.ai/ai-ha
 **Actual use after 30 days:** Medium — no evidence this tool-shape sustains regular standalone use outside a bigger product (e.g. presentation coaching).
 **AssemblyAI API coverage:** Medium — AssemblyAI supplies the transcript/timestamp scaffolding; the differentiating engineering is self-built DSP.
 **Judging criteria:** Application of Technology High, Presentation High (a transcript with visible emphasis markup is a strong visual), Business Value Medium, Originality Medium-High.
+**Nerd factor / cross-pollination:** Ranked #2 of 8 on the R2 batch's own "technical depth / nerd factor" scale (behind only R2-2) — pitch tracking is classic, respected DSP, more familiar than MFCC but still genuinely hard to get robust. Cross-pollination: sabhalog (line-delivery/vocal-stress coaching for performers) and teacher-recruiting (a pitch-based complement to R1-4's timing-only signal).
+**Key outcomes if built:** A pitch/energy tracker running on raw mic PCM in parallel with an AssemblyAI stream; an emphasis-annotated transcript from at least one real recorded talk/pitch; a side-by-side comparison of the tool's flagged emphasis against a human's own sense of what they stressed.
 
 ### 7. Voice-Authored Agent Arena (W3)
 **Concept:** An agent-evaluation tool first, spectator game second. The human uses the Voice Agent API purely to author constraints and scenarios by voice ("the merchant should never reveal the vault code, even under a bribe") that seed a small generative-agent simulation (Smallville-style, 2-4 LLM-driven NPCs with simple memory/goals). An LLM judge (reusing R2-6's closed-loop pattern) scores whether each NPC held its assigned constraints under scenario pressure; the human can interject live by voice mid-simulation to escalate.
@@ -163,6 +165,7 @@ Confirmed via a working proxy fetch of the live hackathon page (`lablab.ai/ai-ha
 **Actual use after 30 days:** Medium — directly de-risks a real, already-deferred closepilot feature, but its long-term life depends on closepilot productionizing it, not on the builders keeping a side tool running.
 **AssemblyAI API coverage:** High — the entire mechanism is the Voice Agent API.
 **Judging criteria:** Application of Technology High, Presentation High, Business Value Medium, Originality Low-Medium.
+**Key outcomes if built:** A working Voice Agent API session answering natural-language questions against a mock deal dataset via function calling; a recorded demo of at least 3 distinct query types answered correctly; a reusable "ask your structured data out loud" starter kit (agent config + function schema) usable outside closepilot.
 
 ### 10. Two-Agent Compressed Voice Protocol (R1-6)
 **Concept:** Two Voice Agent API sessions talk to each other, but instead of full natural-language TTS/STT round-trips, exchange a compact structured intermediate (JSON/function-call payloads over the LLM Gateway) — then benchmark latency/cost against a naive full-voice baseline, turning captain's own agent-to-agent seed idea into a measurable artifact rather than a demo gimmick.
@@ -171,6 +174,7 @@ Confirmed via a working proxy fetch of the live hackathon page (`lablab.ai/ai-ha
 **Actual use after 30 days:** Medium — a genuinely novel benchmark artifact, but a benchmark is inherently a one-time measurement, not a tool anyone re-opens weekly.
 **AssemblyAI API coverage:** High — both agents run on the Voice Agent API.
 **Judging criteria:** Application of Technology High, Presentation Medium, Business Value Low, Originality High.
+**Key outcomes if built:** Two working Voice Agent API sessions communicating via a defined compact schema; a same-task A/B benchmark (latency + cost) against a naive full-voice baseline, with real numbers, not estimates; the compact-protocol schema itself as a reusable spec.
 
 ---
 
@@ -183,6 +187,7 @@ Confirmed via a working proxy fetch of the live hackathon page (`lablab.ai/ai-ha
 **Actual use after 30 days:** Medium — needs a real recurring meeting to stay useful, and Read AI already covers the core mechanism.
 **AssemblyAI API coverage:** High.
 **Judging criteria:** Application of Technology Medium, Presentation Medium, Business Value Medium, Originality Medium.
+**Key outcomes if built:** A per-person sentiment trend line spanning at least 3 recorded standup/retro sessions from the same recurring meeting; a stored, queryable history (not just a live dashboard); one flagged trend shift validated by a human who was in the actual meetings.
 
 ### 12. Latency Budget Profiler (R2-8)
 **Concept:** Instruments a Voice Agent API integration to break the ~1s end-to-end latency claim into its real per-stage components (mic-capture buffering, STT partial-to-final delay, tool-call round-trip, TTS generation, playback buffering), producing a flame-graph-style latency budget per turn.
@@ -191,6 +196,8 @@ Confirmed via a working proxy fetch of the live hackathon page (`lablab.ai/ai-ha
 **Actual use after 30 days:** Medium — real recurring engineering need, but percentile/dashboard latency tooling already ships inside Hamming/Cekura/LiveKit.
 **AssemblyAI API coverage:** High.
 **Judging criteria:** Application of Technology Medium, Presentation Medium, Business Value Medium, Originality Medium.
+**Nerd factor / cross-pollination:** Not separately ranked on the R2 batch's nerd-factor scale — flagged there as "stretch/lower priority," a companion instrument to build only once a Voice Agent API integration already exists to profile, not a standalone hackathon centerpiece. Same developer-tooling suite as R2-5/R2-6/R2-7 (shared session/event infrastructure); directly useful for R1-6's A/B latency benchmark.
+**Key outcomes if built:** Per-stage instrumentation (mic buffering, network send, STT partial-to-final, tool-call round-trip, TTS generation, playback buffering) on a real Voice Agent API integration; a flame-graph-style visualization of at least one real turn's latency budget; identification of the single largest latency contributor from real measured data, not assumption.
 
 ### 13. Wavelet-Based Vocal Onset/Transient Coach (R2-3)
 **Concept:** Uses a continuous wavelet transform on raw PCM to detect fast vocal onsets/transients (the sharp attack at the start of a plosive consonant), independent of AssemblyAI's word boundaries, to measure articulation crispness for singers or public speakers — a third, genuinely different DSP technique from pitch tracking and MFCC on this list.
@@ -199,6 +206,8 @@ Confirmed via a working proxy fetch of the live hackathon page (`lablab.ai/ai-ha
 **Actual use after 30 days:** Low-Medium — genuinely novel but no standing user (a singer, a vocal coach) in either builder's actual workflow.
 **AssemblyAI API coverage:** Medium — AssemblyAI supplies timestamp scaffolding; the differentiating engineering is self-built DSP.
 **Judging criteria:** Application of Technology High, Presentation Low-Medium, Business Value Low, Originality High.
+**Nerd factor / cross-pollination:** Ranked #5 of 8 — the most "look what we know" technique on the R2 batch (a step up in sophistication from FFT-based pitch tracking), but a narrower use case that's harder to make a compelling demo out of; good if the team wants to specifically flex a wavelet-based technique for its own sake. Cross-pollination: sabhalog (vocal-technique/articulation coaching for performers is a natural fit); teacher-recruiting only loosely (public-speaking prep, complementary to R1-4's timing-only signal).
+**Key outcomes if built:** A working CWT-based onset detector run on real recorded speech/singing; an "articulation crispness" score or chart per test clip; at least one before/after comparison (e.g. same phrase said crisply vs. mumbled) showing the detector actually distinguishes them.
 
 ### 14. Cross-Correlation Echo/Feedback Diagnostics (R2-4)
 **Concept:** Cross-correlation between a Voice Agent's outgoing TTS buffer and incoming mic PCM detects and quantifies acoustic echo (the agent "hearing itself"), a real, hard-to-spot Voice Agent QA failure mode, turning a subjective "it sounded glitchy" bug report into a number.
@@ -207,6 +216,8 @@ Confirmed via a working proxy fetch of the live hackathon page (`lablab.ai/ai-ha
 **Actual use after 30 days:** Medium — entirely dependent on another idea existing and staying alive; no independent life of its own.
 **AssemblyAI API coverage:** High.
 **Judging criteria:** Application of Technology Medium, Presentation Low-Medium, Business Value Low-Medium, Originality Medium.
+**Nerd factor / cross-pollination:** Not separately ranked on the R2 batch's nerd-factor scale — flagged there as "stretch/lower priority," a companion tool to build only once a Voice Agent API integration exists to test (e.g. R1-1); a genuine bridge between the DSP and infra directions rather than fitting cleanly in either. Cross-pollination: closepilot, if R1-1 gets built, as its QA companion.
+**Key outcomes if built:** A working cross-correlation check between outgoing TTS buffer and incoming mic PCM; a numeric echo/leakage score run against at least one real Voice Agent API session; at least one deliberately-induced echo case caught and flagged by the tool as a validation check.
 
 ### 15. Voice-Native Living World Weaver (W1)
 **Concept:** A live, two-way Voice Agent API session where the player's speech mutates a persistent world-state graph (locations, NPCs, items, flags) via function calls in real time — a continuous, barge-in-capable conversation with a narrator that also *is* the game engine. Every session exports the world-state graph plus the full transcript as a structured, replayable "world definition" file, reloadable or handed to a different AI agent as a ready-made environment.
@@ -223,6 +234,8 @@ Confirmed via a working proxy fetch of the live hackathon page (`lablab.ai/ai-ha
 **Actual use after 30 days:** Medium — the category has real staying power generally, but Hamming ships almost exactly this; only survives past the demo if scoped narrowly to AssemblyAI's own specific protocol.
 **AssemblyAI API coverage:** High.
 **Judging criteria:** Application of Technology Medium-High, Presentation Medium-High, Business Value Medium, Originality Low.
+**Nerd factor / cross-pollination:** Ranked #3 of 8 — protocol-level session capture plus non-trivial turn-alignment diff logic is real systems engineering, and it's the kind of tool that photographs well (a working "git diff for voice agents" demo is a strong hackathon visual). Same "developer tooling suite" as R2-5/R2-6/R2-8, sharing session-capture infrastructure; chief-of-staff's agent-dispatcher work is a loose long-term fit if it ever runs voice sessions. Squarely in the partner's professional domain — voice-AI QA at xAI — the same fit that puts R2-5 and R2-6 in the same cluster; along with R2-5 it's one of the two single highest-completion-likelihood ideas across both rounds, precisely because its bottleneck (sequence-alignment diffing) is the kind AI-assisted coding collapses cleanest.
+**Key outcomes if built:** A structured session recorder capturing every WebSocket message (audio, transcript, tool calls, timestamps) for real sessions; a working diff view comparing two sessions (e.g. prompt v1 vs v2 against the same test audio) with turn-alignment logic that handles sessions that aren't 1:1 aligned; at least one real "here's exactly what this prompt change did" comparison run and captured as a demo artifact.
 
 ### 17. Voice Agent Regression CI Pipeline (R2-5)
 **Concept:** Replays a fixed corpus of test audio clips through the Voice Agent API on every prompt/tool-config change, scoring WER (Levenshtein distance vs. ground truth), tool-call correctness, and end-to-end latency — failing the build if any regress past a threshold.
@@ -231,6 +244,8 @@ Confirmed via a working proxy fetch of the live hackathon page (`lablab.ai/ai-ha
 **Actual use after 30 days:** Medium-High — real, recurring need specifically for the partner's actual job (voice-AI QA), but Hamming/Cekura already fully solve it, weakening the pull to keep a homegrown version alive.
 **AssemblyAI API coverage:** High.
 **Judging criteria:** Application of Technology Medium, Presentation Low-Medium, Business Value Medium-High, Originality Low.
+**Nerd factor / cross-pollination:** Ranked #4 of 8 — captain's own named example, elevated with real WER scoring and latency gating rather than a thin CI wrapper; solid engineering depth, slightly less flashy to demo live than R2-7 but arguably the most immediately useful entry on the R2 list. Same developer-tooling suite as R2-6/R2-7/R2-8; closepilot (gates R1-1 before it ships), chief-of-staff (a safety net if it ever adds voice). Squarely the partner's professional domain (voice-AI QA at xAI) — alongside R2-7, one of the two single highest-completion-likelihood ideas across both rounds.
+**Key outcomes if built:** A curated fixture corpus of 10-20 real audio clips (clean/noisy/accented/interrupted) with ground-truth transcripts and expected tool-calls; a scoring harness producing WER, tool-call-correctness, and latency numbers per run; a GitHub Actions job that fails the build on regression past a set threshold, demonstrated on at least one deliberately-introduced regression.
 
 ---
 
@@ -243,6 +258,7 @@ Confirmed via a working proxy fetch of the live hackathon page (`lablab.ai/ai-ha
 **Actual use after 30 days:** Low-Medium — open-source prior art exists but shows no sustained-use signal; the chip-design layer is thin for either builder's daily workflow.
 **AssemblyAI API coverage:** High.
 **Judging criteria:** Application of Technology Medium, Presentation Medium-High, Business Value Low-Medium, Originality Medium.
+**Key outcomes if built:** A working interject-on-pause loop tested on at least one real chip-design thinking-out-loud session; a log of extracted structured decisions/action items from that session; a human judgment call on whether the interjections were useful vs. annoying, recorded as a concrete finding.
 
 ### 19. Rehearsal Pacing & Cue-Drop Coach (R1-5) — sabhalog
 **Concept:** Live transcript matched against a script flags dropped/mis-said lines and tracks pacing vs. target runtime; a batch diarization pass per take flags who's over-talking or blowing cues in ensemble scenes.
@@ -251,6 +267,7 @@ Confirmed via a working proxy fetch of the live hackathon page (`lablab.ai/ai-ha
 **Actual use after 30 days:** Low-Medium — real fit for sabhalog's performing-arts groups, but bursty (only used while actively rehearsing for a show).
 **AssemblyAI API coverage:** High.
 **Judging criteria:** Application of Technology Medium, Presentation Medium-High, Business Value Low, Originality Low-Medium.
+**Key outcomes if built:** A script-matching report flagging dropped/mis-said lines against a real rehearsal recording; a pacing-vs-target-runtime chart; at least one real take from a sabhalog-adjacent performer or scene run through the tool with a human-reviewed accuracy check on the flagged drops.
 
 ### 20. Hesitation/Confidence-Latency Interview Coach (R1-4)
 **Concept:** A mock-interview tool measuring pre-answer hesitation latency and filler-word density from word timestamps and turn detection, tracked as a "confidence latency" trend rather than a single grade.
@@ -259,6 +276,7 @@ Confirmed via a working proxy fetch of the live hackathon page (`lablab.ai/ai-ha
 **Actual use after 30 days:** Low — neither builder is job-interviewing; once demo novelty wears off there's no standing personal use case, and commercial substitutes already exist.
 **AssemblyAI API coverage:** High.
 **Judging criteria:** Application of Technology Medium, Presentation Medium, Business Value Low, Originality Low.
+**Key outcomes if built:** A "confidence latency" trend chart from a mock interview session (pause length + filler-word density per answer); the module packaged so it can be pointed at teacher-recruiting's own interview question set; before/after trend comparison across 2+ practice sessions from the same test subject.
 
 ### 21. Interruption/Airtime Fairness Coach (R1-2)
 **Concept:** Live streaming turn-detection timestamps compute talk-time balance, interruption counts, and response-latency per speaker in real time on a call — no LLM required for v1.
@@ -267,6 +285,7 @@ Confirmed via a working proxy fetch of the live hackathon page (`lablab.ai/ai-ha
 **Actual use after 30 days:** Low — a maintained SaaS already does this at scale; no reason to keep a hand-rolled copy running once the demo ends.
 **AssemblyAI API coverage:** High.
 **Judging criteria:** Application of Technology Low, Presentation Medium, Business Value Low, Originality Low.
+**Key outcomes if built:** A live talk-time/interruption dashboard tested on at least 2 real calls (e.g. a team standup, a podcast recording); numeric fairness metrics (% airtime per speaker, interruption count) logged per session; zero-setup mic-only demo.
 
 ### 22. Live Negotiation/Meeting Tension Tracker (R1-12)
 **Concept:** Periodic short-window batch sentiment + entity detection passes on rolling 20-30s chunks (since full audio intelligence isn't available in streaming) build a live "tension graph" per speaker on high-stakes calls, flagging sharp tone shifts.
@@ -275,6 +294,7 @@ Confirmed via a working proxy fetch of the live hackathon page (`lablab.ai/ai-ha
 **Actual use after 30 days:** Low — mature, heavily-funded commercial category; neither builder is a sales team.
 **AssemblyAI API coverage:** High.
 **Judging criteria:** Application of Technology Medium, Presentation Medium, Business Value Low, Originality Low.
+**Key outcomes if built:** A live tension graph generated during at least one real or simulated negotiation/high-stakes call, built on 20-30s rolling batch windows; at least one flagged tone-shift event cross-checked against what a human in the call actually remembers happening; documented latency of the rolling-window pipeline (how "live" it actually felt).
 
 ### 23. Personality-Adapted Concept Tutor (R1-9)
 **Concept:** A content-agnostic "adaptive voice tutor" library that infers a learner's expertise level in real time from jargon usage, hesitation, and question phrasing (turn-detection + LLM Gateway) and adapts explanation depth, with curriculum content pluggable so chipspeak or teacher-recruiting could drop in their own subject matter.
@@ -283,6 +303,7 @@ Confirmed via a working proxy fetch of the live hackathon page (`lablab.ai/ai-ha
 **Actual use after 30 days:** Low — an inaccurate classifier isn't something either builder keeps using; reads as a research note, not a tool.
 **AssemblyAI API coverage:** Medium — the classifier itself is not an AssemblyAI API surface.
 **Judging criteria:** Application of Technology Low-Medium, Presentation Medium, Business Value Medium, Originality Medium.
+**Key outcomes if built:** A working expertise-level classifier (even a simple heuristic) tested against at least 2 speakers of visibly different expertise on the same topic; the adapter interface (content-agnostic API) documented and exercised with one swapped-in subject-matter module; an honest accuracy readout on the classifier, including its failure cases.
 
 ### 24. Spectral Fingerprint Speaker Re-ID (R2-2)
 **Concept:** A from-scratch MFCC pipeline (FFT → mel filterbank → DCT) run live on raw streaming PCM to re-identify a known, enrolled speaker in near-real-time, well before the ~30s AssemblyAI's batch diarization needs to converge — and works in streaming mode at all, where AssemblyAI has no diarization whatsoever.
@@ -291,6 +312,8 @@ Confirmed via a working proxy fetch of the live hackathon page (`lablab.ai/ai-ha
 **Actual use after 30 days:** Low — same bottleneck twice: the completion gate (ongoing calibration) is also the persistence gate.
 **AssemblyAI API coverage:** Medium — AssemblyAI supplies transcript scaffolding; the differentiating engineering is self-built DSP that plugs a real AssemblyAI capability hole.
 **Judging criteria:** Application of Technology High (genuine from-scratch signal-processing engineering), Presentation Medium, Business Value Low, Originality Low.
+**Nerd factor / cross-pollination:** Ranked #1 of 8 — the single most technically striking idea in the R2 batch: implementing an actual MFCC pipeline (FFT → mel filterbank → DCT) from near-scratch to solve a real, documented capability gap (no live diarization in streaming) is the clearest "real signal processing, not an API wrapper" demo on either list. Cross-pollination: holguin-home-games (household speaker gating in a multiplayer voice game round, without per-mic setup) is the strongest fit; loosely complements R1-7 but sidesteps its worst privacy risk since it only matches against *enrolled* voices, not open recognition of anyone. **Ranked #1 on nerd factor but dropped from the primary QA/infra pick specifically because that same threshold-tuning bottleneck doesn't touch the partner's actual professional domain** (voice-AI QA/infra at xAI, the fit that favors R2-5/R2-6/R2-7 instead) — it remains a reasonable fallback if the team specifically wants pure DSP novelty over domain fit, not a worse idea, just a different bet.
+**Key outcomes if built:** An MFCC-based embedding pipeline (FFT to mel filterbank to DCT) built from primitives; a working match/no-match decision against a small enrolled set (2-4 speakers) on live streaming PCM; a measured accuracy/false-positive rate from a real test session, plus the tuned matching threshold as a documented, checkable number.
 
 ### 25. Household Ambient Activity Log (R1-7)
 **Concept:** A passive background listener building a longitudinal household activity signal ("kids arguing spike at 4pm," "unusually quiet 3 hours") for elder-care or parental check-in use, via diarization + audio intelligence on rolling recorded windows.
@@ -300,6 +323,7 @@ Confirmed via a working proxy fetch of the live hackathon page (`lablab.ai/ai-ha
 **AssemblyAI API coverage:** High.
 **Judging criteria:** Application of Technology Medium, Presentation Medium, Business Value Medium, Originality Low.
 **Explicit flag carried from every prior round:** highest non-technical (privacy/consent) risk of any idea in the matrix — treat as a demo-only exploration, not a build target, unless the team is prepared to take consent/security seriously post-hackathon.
+**Key outcomes if built:** A longitudinal activity signal (e.g. hourly noise-level/activity chart) from a multi-day recorded test household; at least one flagged anomaly event ("unusually quiet 3 hours") validated against what actually happened; an explicit, written consent/data-retention model even if not fully implemented.
 
 ---
 
@@ -336,6 +360,6 @@ Business Value was already scored High in the pre-revision matrix, so no numeric
 
 ## Sources
 
-Two per-round source docs remain in the repo with detail not fully carried into this file: `docs/hackathon-ideas-technical.md` (R2 concepts, nerd-factor ranking, cross-pollination notes) and `docs/hackathon-completion-likelihood.md` (per-idea completion "key outcomes" detail, partner-fit context). The other per-round research docs (novelty citations, round-3 synthesis, idea consolidation, world-building/gaming) have been folded into this file and removed.
+All per-round research docs (technical/nerd-factor, completion-likelihood, novelty citations, round-3 synthesis, idea consolidation, world-building/gaming) have been folded into this file and removed; this file is now the sole, self-contained source.
 
 Part A's fresh verification for this task used direct WebSearch against: FCC's Feb 2024 TCPA/AI-voice ruling coverage, 2026 TCPA-healthcare-exemption analyses, and multiple independent 2026 summaries of California AB 2905's disclosure-timing requirement (the correction to the "15 seconds" figure).
