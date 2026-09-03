@@ -21,13 +21,24 @@ Submission for the [AssemblyAI Voice Agent Hackathon](https://lablab.ai/ai-hacka
 
 Some of the above (exact prize tracks, a formal rules document, category tags) is not fully published yet on the public hackathon page as of this writing (the page sits behind a Cloudflare bot check that blocks automated fetches - it was confirmed via lablab.ai's own search-indexed content instead of direct scraping). Re-check the [hackathon page](https://lablab.ai/ai-hackathons/assemblyai-voice-agent-hackathon) directly in a browser closer to submission time for any track-specific or AssemblyAI-specific rules beyond the general lablab.ai checklist above.
 
+## Product: ComplyLine
+
+A voice compliance advisor. Talk to it about **California CCPA/CPRA** consumer privacy rights (the only jurisdiction/regulation the demo grounds answers in - see `server/seed.js` for the full ruleset). Uses AssemblyAI's managed Voice Agent API (STT + LLM + TTS + turn detection in one WebSocket) with a `check_regulation` tool that queries a real Postgres table instead of letting the LLM improvise legal advice.
+
 ## Dev setup
 
-**Placeholder - this repo is an empty scaffold.** No product idea, tech stack, or codebase exists yet. This section will be rewritten once a direction is picked. For now:
+1. **AssemblyAI API key**: copy `.env.example` to `.env` at the repo root and set `ASSEMBLYAI_API_KEY`. Never commit `.env` (gitignored) or send the key to the browser - only `server/index.js`'s `/v1/token` route reads it.
+2. **Postgres**: `createdb complyline`, then `cd server && node seed.js` to create and seed the `regulations` table (set `DATABASE_URL` in `.env` if not using the default `postgres://localhost:5432/complyline`).
+3. **Run the backend**: `cd server && npm install && npm start` (listens on `:8787`, mints Voice Agent tokens and serves `/v1/check-regulation`).
+4. **Run the frontend**: `cd client && npm install && npm run dev` (Vite dev server proxies `/v1/*` to the backend). Open the printed localhost URL, click Start, allow mic access.
 
-1. **AssemblyAI API key**: sign up at [assemblyai.com](https://www.assemblyai.com/) and grab an API key from the dashboard. Do not commit it - once code exists, it will be read from an environment variable (e.g. `ASSEMBLYAI_API_KEY`) via a local `.env` file, gitignored.
-2. **Tech stack**: TBD. Likely candidates given the AssemblyAI Voice Agent focus: a backend/orchestration layer calling AssemblyAI's Streaming STT or Voice Agent API, plus a frontend or voice interface. This will be filled in once the team picks a concrete idea.
-3. **Running/testing**: TBD - will document exact run/test commands once there's code to run.
+### Architecture
+
+- `server/` - thin Node/Express. `GET /v1/token` mints a short-lived Voice Agent token server-side (the real API key never leaves this process). `POST /v1/check-regulation` looks up a topic/jurisdiction in Postgres for tool-call grounding.
+- `client/` - React + Vite. Connects directly to `wss://agents.assemblyai.com/v1/ws?token=...`, captures mic audio via an `AudioWorklet` (browser `MediaRecorder` can't emit raw PCM16), streams `input.audio` (PCM16 mono 24kHz, base64), and schedules `reply.audio` PCM chunks back-to-back against `AudioContext.currentTime` (no sleep-based timing) for gapless playback.
+- Tool grounding: `session.update` registers a flat-schema `check_regulation(topic, jurisdiction)` tool. When the agent emits `tool.call`, the browser calls the backend's `/v1/check-regulation`, then sends `tool.result` back over the same WebSocket.
+
+See `AGENTS.md` for the standing convention on verifying AssemblyAI API docs before writing integration code.
 
 ## Submission instructions
 
