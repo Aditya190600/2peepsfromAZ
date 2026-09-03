@@ -1,6 +1,20 @@
-# 2peepsfromAZ
+# 2peepsfromAZ - ComplyLine
 
 Submission for the [AssemblyAI Voice Agent Hackathon](https://lablab.ai/ai-hackathons/assemblyai-voice-agent-hackathon) on lablab.ai.
+
+**ComplyLine** is a voice-agent compliance/legal-risk checker built on AssemblyAI's Voice Agent API. It ingests one voice-agent session and produces a scoped compliance report against a core, industry-agnostic check set that applies to any company running an AI voice agent:
+
+1. Was a valid consent event logged before the call (TCPA).
+2. Was the AI nature of the call disclosed at the start (state disclosure laws, e.g. California AB 2905).
+3. A general PII-pattern scan (SSN, credit-card numbers, account-number shapes) over the transcript.
+
+Industry-specific pattern packs (HIPAA identifiers for healthcare, finance/insurance account formats, etc.) ship as optional drop-in extensions on top of the core checks, not a hard requirement to be useful out of the box. See `docs/hackathon-ideas.md` for the full research and scoring behind this pick.
+
+**Why this idea:** nothing found does a free, narrow, single-session compliance checker for voice agents - the closest existing tools (Hamming/LiveKit compliance features) are bundled into big paid observability platforms. The addressable market is any company running a voice agent, not one vertical. It scores High across all four hackathon judging criteria: Application of Technology (session log, Guardrails, and LLM Gateway all doing real, central work), Presentation (a report of concrete flagged findings demos cleanly), Business Value (broad buyer-side need, not a niche dev tool), and Originality.
+
+**Target outcomes:** a working session-ingestion pipeline that flags consent-event-logged, AI-disclosure-timing, and PII-pattern findings against a real or synthetic Voice Agent API session, plus at least one industry-specific pattern pack (e.g. HIPAA) demoed as a real drop-in extension rather than just described.
+
+**Status:** product direction is decided; the voice pipeline is under active development (see the `voice-pipeline` work).
 
 ## Hackathon requirements
 
@@ -23,11 +37,9 @@ Some of the above (exact prize tracks, a formal rules document, category tags) i
 
 ## Dev setup
 
-**Placeholder - this repo is an empty scaffold.** No product idea, tech stack, or codebase exists yet. This section will be rewritten once a direction is picked. For now:
-
-1. **AssemblyAI API key**: sign up at [assemblyai.com](https://www.assemblyai.com/) and grab an API key from the dashboard. Do not commit it - once code exists, it will be read from an environment variable (e.g. `ASSEMBLYAI_API_KEY`) via a local `.env` file, gitignored.
-2. **Tech stack**: TBD. Likely candidates given the AssemblyAI Voice Agent focus: a backend/orchestration layer calling AssemblyAI's Streaming STT or Voice Agent API, plus a frontend or voice interface. This will be filled in once the team picks a concrete idea.
-3. **Running/testing**: TBD - will document exact run/test commands once there's code to run.
+1. **AssemblyAI API key**: sign up at [assemblyai.com](https://www.assemblyai.com/) and grab an API key from the dashboard. Do not commit it - it's read from an environment variable (e.g. `ASSEMBLYAI_API_KEY`) via a local `.env` file, gitignored.
+2. **Tech stack**: a thin backend that mints short-lived Voice Agent tokens and grounds compliance checks against a seeded ruleset, plus a frontend that talks to the Voice Agent API session directly.
+3. **Running/testing**: exact run/test commands land in `AGENTS.md` alongside the pipeline work.
 
 ## Submission instructions
 
