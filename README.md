@@ -21,24 +21,30 @@ Submission for the [AssemblyAI Voice Agent Hackathon](https://lablab.ai/ai-hacka
 
 Some of the above (exact prize tracks, a formal rules document, category tags) is not fully published yet on the public hackathon page as of this writing (the page sits behind a Cloudflare bot check that blocks automated fetches - it was confirmed via lablab.ai's own search-indexed content instead of direct scraping). Re-check the [hackathon page](https://lablab.ai/ai-hackathons/assemblyai-voice-agent-hackathon) directly in a browser closer to submission time for any track-specific or AssemblyAI-specific rules beyond the general lablab.ai checklist above.
 
-## Product: ComplyLine
+## Product: Voice-Agent Session Compliance Report (R3-21)
 
-A voice compliance advisor. Talk to it about **California CCPA/CPRA** consumer privacy rights (the only jurisdiction/regulation the demo grounds answers in - see `server/seed.js` for the full ruleset). Uses AssemblyAI's managed Voice Agent API (STT + LLM + TTS + turn detection in one WebSocket) with a `check_regulation` tool that queries a real Postgres table instead of letting the LLM improvise legal advice.
+Ingests **one completed** AssemblyAI Voice Agent API session (live or synthetic) and produces a post-hoc compliance report - this is not a live conversational advisor, the flagged-findings report is the actual demo artifact. Core, industry-agnostic checks:
 
-**Why this idea:** nothing else offers a free, narrow, real-time compliance advisor scoped to a single regulatory domain - existing compliance tooling is bundled into big paid platforms aimed at enterprises, not a lightweight voice interface a consumer or small business can just talk to. The addressable market extends past CCPA/CPRA to any regulatory domain worth grounding this way. It scores well across the hackathon's four judging criteria: Application of Technology (the Voice Agent API, tool-call grounding, and a real Postgres ruleset are all doing central work, not decoration), Presentation (a live back-and-forth voice conversation demos more compellingly than a static report), Business Value (compliance guidance is a real recurring need, not a novelty), and Originality (a grounded, narrow-domain voice advisor rather than a generic chatbot wrapper).
+1. **Consent-event-logged (TCPA)**: was a valid consent event logged before the call.
+2. **AI-disclosure-timing** (e.g. CA AB 2905): was the AI nature of the call disclosed within the first few seconds.
+3. **Generic PII-pattern scan**: SSN / credit-card / account-number shapes, via a pluggable pattern-set architecture (`server/checks/patternPacks.js`).
+
+A **HIPAA identifier pattern pack** (`server/checks/patternPacks.js`'s `hipaaPack`) ships as a real drop-in extension on top of the generic scan - see `server/checks/analyze.test.js` for a runnable demonstration that the generic scan alone misses HIPAA identifiers while enabling the HIPAA pack catches them, with no core-code changes.
+
+**Why this idea:** see `docs/hackathon-ideas.md`'s R3-21 entry for the full novelty/scoring rationale. In short: no scoped, protocol-level, industry-agnostic-first compliance checker for AI voice agents was found built anywhere; the addressable market is any company running a voice agent, not one vertical.
 
 ## Dev setup
 
 1. **AssemblyAI API key**: copy `.env.example` to `.env` at the repo root and set `ASSEMBLYAI_API_KEY`. Never commit `.env` (gitignored) or send the key to the browser - only `server/index.js`'s `/v1/token` route reads it.
-2. **Postgres**: `createdb complyline`, then `cd server && node seed.js` to create and seed the `regulations` table (set `DATABASE_URL` in `.env` if not using the default `postgres://localhost:5432/complyline`).
-3. **Run the backend**: `cd server && npm install && npm start` (listens on `:8787`, mints Voice Agent tokens and serves `/v1/check-regulation`).
-4. **Run the frontend**: `cd client && npm install && npm run dev` (Vite dev server proxies `/v1/*` to the backend). Open the printed localhost URL, click Start, allow mic access.
+2. **Run the backend**: `cd server && npm install && npm start` (listens on `:8787`, mints Voice Agent tokens and serves `/v1/analyze-session`). No database - pattern packs and checks are plain code modules.
+3. **Run the frontend**: `cd client && npm install && npm run dev` (Vite dev server proxies `/v1/*` to the backend). Open the printed localhost URL. Check the consent box, click Start, allow mic access, talk, then End call and Generate report - or skip the mic entirely and click one of the synthetic sample-session buttons.
+4. **Run the checks' self-tests**: `cd server && npm test`.
 
 ### Architecture
 
-- `server/` - thin Node/Express. `GET /v1/token` mints a short-lived Voice Agent token server-side (the real API key never leaves this process). `POST /v1/check-regulation` looks up a topic/jurisdiction in Postgres for tool-call grounding.
-- `client/` - React + Vite. Connects directly to `wss://agents.assemblyai.com/v1/ws?token=...`, captures mic audio via an `AudioWorklet` (browser `MediaRecorder` can't emit raw PCM16), streams `input.audio` (PCM16 mono 24kHz, base64), and schedules `reply.audio` PCM chunks back-to-back against `AudioContext.currentTime` (no sleep-based timing) for gapless playback.
-- Tool grounding: `session.update` registers a flat-schema `check_regulation(topic, jurisdiction)` tool. When the agent emits `tool.call`, the browser calls the backend's `/v1/check-regulation`, then sends `tool.result` back over the same WebSocket.
+- `server/` - thin Node/Express. `GET /v1/token` mints a short-lived Voice Agent token server-side (the real API key never leaves this process; reused as-is from the earlier build). `POST /v1/analyze-session` runs `server/checks/analyze.js` against a submitted session log and returns a findings report.
+- `server/checks/` - the R3-21 mechanisms: `consentCheck.js`, `disclosureCheck.js`, `piiScan.js` (runs a list of pluggable pattern packs from `patternPacks.js` against every transcript turn), and `analyze.js` which composes them. `analyze.test.js` is the self-check, including the HIPAA-pack-as-drop-in-extension demonstration.
+- `client/` - React + Vite. `useVoiceAgent.js` connects to `wss://agents.assemblyai.com/v1/ws?token=...` (session-ingestion plumbing reused from the earlier build: `AudioWorklet` mic capture, PCM16 streaming, gapless `reply.audio` playback scheduling), logs a consent event and a timestamped transcript turn-by-turn, and hands the completed session log to `App.jsx` on `session.ended` for analysis. No live tool-calling and no domain persona - the agent config is neutral.
 
 See `AGENTS.md` for the standing convention on verifying AssemblyAI API docs before writing integration code.
 
