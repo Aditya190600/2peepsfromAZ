@@ -35,6 +35,18 @@ A **HIPAA identifier pattern pack** (`server/checks/patternPacks.js`'s `hipaaPac
 
 ## Dev setup
 
+**Quick start** (requires Node.js and a local PostgreSQL install with `createdb`/`psql` on PATH):
+
+```
+./scripts/install.sh   # once: npm install (server + client), create + seed the DB, scaffold .env
+# fill in ASSEMBLYAI_API_KEY in .env
+./scripts/start.sh      # every time: runs backend + frontend together, Ctrl+C stops both
+```
+
+`scripts/install.sh` is idempotent - safe to re-run. `scripts/start.sh` prints the frontend URL once both services are up.
+
+### Manual setup (what the scripts above automate)
+
 1. **AssemblyAI API key**: copy `.env.example` to `.env` at the repo root and set `ASSEMBLYAI_API_KEY`. Never commit `.env` (gitignored) or send the key to the browser - only `server/index.js`'s `/v1/token` route reads it.
 2. **Run the backend**: `cd server && npm install && npm start` (listens on `:8787`, mints Voice Agent tokens and serves `/v1/analyze-session`). No database - pattern packs and checks are plain code modules.
 3. **Run the frontend**: `cd client && npm install && npm run dev` (Vite dev server proxies `/v1/*` to the backend). Open the printed localhost URL. Check the consent box, click Start, allow mic access, talk, then End call and Generate report - or skip the mic entirely and click one of the synthetic sample-session buttons.
