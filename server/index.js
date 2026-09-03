@@ -3,14 +3,14 @@ import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
-import { pool } from "./db.js";
+import { analyzeSession } from "./checks/analyze.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, "..", ".env") });
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "2mb" }));
 
 const API_KEY = process.env.ASSEMBLYAI_API_KEY;
 if (!API_KEY) {
@@ -29,38 +29,17 @@ app.get("/v1/token", async (_req, res) => {
   res.status(resp.status).json(body);
 });
 
-// Grounding endpoint for the check_regulation tool. Browser client calls this after
-// receiving a tool.call event from the agent WS, then sends the result back as tool.result.
-app.post("/v1/check-regulation", async (req, res) => {
-  const { topic, jurisdiction } = req.body ?? {};
-  if (!topic || !jurisdiction) {
-    return res.status(400).json({ found: false, error: "topic and jurisdiction are required" });
+// Post-hoc compliance report for one completed (or synthetic) Voice Agent
+// session: consent-event-logged (TCPA), AI-disclosure-timing (e.g. CA AB
+// 2905), and a pluggable PII pattern-set scan. Body: { session, patternPackIds }.
+app.post("/v1/analyze-session", (req, res) => {
+  const { session, patternPackIds } = req.body ?? {};
+  if (!session || !Array.isArray(session.turns)) {
+    return res.status(400).json({ error: "session with a turns array is required" });
   }
-
-  const { rows } = await pool.query(
-    `SELECT topic, jurisdiction, summary, citation FROM regulations
-     WHERE lower(topic) = lower($1) AND lower(jurisdiction) = lower($2)`,
-    [topic, jurisdiction]
-  );
-
-  if (rows.length === 0) {
-    const { rows: fuzzy } = await pool.query(
-      `SELECT topic, jurisdiction, summary, citation FROM regulations
-       WHERE lower(jurisdiction) = lower($1) AND topic ILIKE '%' || $2 || '%'
-       LIMIT 1`,
-      [jurisdiction, topic]
-    );
-    if (fuzzy.length === 0) {
-      return res.json({
-        found: false,
-        message: `No grounded ruleset entry for "${topic}" in ${jurisdiction}. This demo only covers California CCPA/CPRA (jurisdiction "US-CA"). Do not answer from general knowledge; tell the user this topic/jurisdiction isn't covered.`,
-      });
-    }
-    return res.json({ found: true, ...fuzzy[0] });
-  }
-
-  res.json({ found: true, ...rows[0] });
+  const report = analyzeSession(session, { patternPackIds });
+  res.json(report);
 });
 
 const port = process.env.PORT || 8787;
-app.listen(port, () => console.log(`complyline server listening on :${port}`));
+app.listen(port, () => console.log(`R3-21 compliance report server listening on :${port}`));

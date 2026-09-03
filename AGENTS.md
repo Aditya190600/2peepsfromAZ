@@ -15,7 +15,9 @@ Submission repo for the **AssemblyAI Voice Agent Hackathon** (lablab.ai, Sep 1-3
 
 ## Current state
 
-Product: **ComplyLine**, a voice compliance advisor for California CCPA/CPRA (only jurisdiction covered - see `server/seed.js`). Stack: React+Vite frontend, Node/Express backend, Postgres for the compliance ruleset. Uses AssemblyAI's managed Voice Agent API (`wss://agents.assemblyai.com/v1/ws`). See `README.md` for architecture and run/test instructions.
+Product (R3-21, selected idea - see `docs/hackathon-ideas.md`): a **post-hoc session compliance report**. It ingests one completed AssemblyAI Voice Agent API session and flags: (1) whether a TCPA consent event was logged before the call, (2) whether the AI nature of the call was disclosed in the first few seconds (state disclosure laws, e.g. CA AB 2905), (3) a generic PII-pattern scan (SSN/credit-card/account-number shapes) via a pluggable pattern-set architecture (`server/checks/patternPacks.js`), with a HIPAA identifier pack shipped as a real drop-in extension. This is **not** a live conversational advisor - the report is the deliverable, not a spoken conversation. Stack: React+Vite frontend, Node/Express backend, no database (pattern packs and checks are plain code modules, not stored rules). Uses AssemblyAI's managed Voice Agent API (`wss://agents.assemblyai.com/v1/ws`) purely for session-ingestion plumbing (token mint, mic capture, transcript log). See `README.md` for architecture and run/test instructions.
+
+An earlier build drifted into a live CCPA/CPRA Q&A voice advisor that was never the selected idea; that direction was reverted in favor of the above.
 
 ## Standing convention: verify AssemblyAI docs before writing integration code
 
