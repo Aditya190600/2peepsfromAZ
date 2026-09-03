@@ -25,6 +25,8 @@ Some of the above (exact prize tracks, a formal rules document, category tags) i
 
 A voice compliance advisor. Talk to it about **California CCPA/CPRA** consumer privacy rights (the only jurisdiction/regulation the demo grounds answers in - see `server/seed.js` for the full ruleset). Uses AssemblyAI's managed Voice Agent API (STT + LLM + TTS + turn detection in one WebSocket) with a `check_regulation` tool that queries a real Postgres table instead of letting the LLM improvise legal advice.
 
+**Why this idea:** nothing else offers a free, narrow, real-time compliance advisor scoped to a single regulatory domain - existing compliance tooling is bundled into big paid platforms aimed at enterprises, not a lightweight voice interface a consumer or small business can just talk to. The addressable market extends past CCPA/CPRA to any regulatory domain worth grounding this way. It scores well across the hackathon's four judging criteria: Application of Technology (the Voice Agent API, tool-call grounding, and a real Postgres ruleset are all doing central work, not decoration), Presentation (a live back-and-forth voice conversation demos more compellingly than a static report), Business Value (compliance guidance is a real recurring need, not a novelty), and Originality (a grounded, narrow-domain voice advisor rather than a generic chatbot wrapper).
+
 ## Dev setup
 
 1. **AssemblyAI API key**: copy `.env.example` to `.env` at the repo root and set `ASSEMBLYAI_API_KEY`. Never commit `.env` (gitignored) or send the key to the browser - only `server/index.js`'s `/v1/token` route reads it.
