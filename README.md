@@ -35,10 +35,10 @@ A **HIPAA identifier pattern pack** (`server/checks/patternPacks.js`'s `hipaaPac
 
 ## Dev setup
 
-**Quick start** (requires Node.js and a local PostgreSQL install with `createdb`/`psql` on PATH):
+**Quick start** (requires Node.js):
 
 ```
-./scripts/install.sh   # once: npm install (server + client), create + seed the DB, scaffold .env
+./scripts/install.sh   # once: npm install (server + client), scaffold .env
 # fill in ASSEMBLYAI_API_KEY in .env
 ./scripts/start.sh      # every time: runs backend + frontend together, Ctrl+C stops both
 ```
