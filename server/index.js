@@ -1,5 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import crypto from "node:crypto";
 import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
@@ -30,16 +31,41 @@ app.get("/v1/token", async (_req, res) => {
   res.status(resp.status).json(body);
 });
 
+// Reports are cached by a hash of the exact request (session content +
+// pattern packs) - the sample sessions are static and their verdicts never
+// change, so once a report comes back with no failed checks it never needs
+// to hit the LLM Gateway again. Live/uploaded sessions get fresh session ids
+// each time, so they naturally never collide with a cached entry.
+// ponytail: unbounded process-lifetime Map, fine at this data volume (dozens
+// of sample sessions); swap for an LRU if this ever needs to bound memory.
+const reportCache = new Map();
+
+function cacheKey(session, patternPackIds) {
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify({ session, patternPackIds: [...patternPackIds].sort() }))
+    .digest("hex");
+}
+
 // Post-hoc compliance report for one completed (or synthetic) Voice Agent
 // session: consent-event-logged (TCPA), AI-disclosure-timing (e.g. CA AB
 // 2905), and a pluggable PII pattern-set scan. Body: { session, patternPackIds }.
 app.post("/v1/analyze-session", async (req, res) => {
-  const { session, patternPackIds } = req.body ?? {};
+  const { session, patternPackIds = ["generic"] } = req.body ?? {};
   if (!session || !Array.isArray(session.turns)) {
     return res.status(400).json({ error: "session with a turns array is required" });
   }
+  const key = cacheKey(session, patternPackIds);
+  const cached = reportCache.get(key);
+  if (cached) {
+    return res.json(cached);
+  }
   try {
     const report = await analyzeSession(session, { patternPackIds });
+    const hasErroredCheck = report.findings.some((f) => f.status === "error");
+    if (!hasErroredCheck) {
+      reportCache.set(key, report);
+    }
     res.json(report);
   } catch (err) {
     res.status(502).json({ error: `Analysis failed: ${err.message}` });

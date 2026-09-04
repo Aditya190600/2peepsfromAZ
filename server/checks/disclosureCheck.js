@@ -1,4 +1,4 @@
-import { callLlmGateway, parseJsonResponse } from "./llmGateway.js";
+import { callLlmGateway, parseJsonResponse, LlmGatewayRateLimitError } from "./llmGateway.js";
 
 // CA AB 2905-style AI-disclosure-timing check: was the AI nature of the call
 // disclosed within the first few seconds. Judged semantically via AssemblyAI's
@@ -34,10 +34,15 @@ export async function disclosureCheck(session, { llmGateway = callLlmGateway } =
     ]);
     verdict = parseJsonResponse(content, null);
   } catch (err) {
+    console.error("[disclosureCheck] LLM Gateway call failed:", err.message);
+    const detail =
+      err instanceof LlmGatewayRateLimitError
+        ? "AI-disclosure check is temporarily unavailable due to high demand on the semantic model. Please retry in a moment."
+        : "AI-disclosure check could not complete right now. Please retry in a moment.";
     return {
       check: "ai_disclosure",
       status: "error",
-      detail: `Unable to run AI-disclosure check: ${err.message}`,
+      detail,
       llmGatewayError: err.message,
     };
   }

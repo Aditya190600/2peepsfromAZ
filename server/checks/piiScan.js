@@ -1,4 +1,4 @@
-import { callLlmGateway, parseJsonResponse } from "./llmGateway.js";
+import { callLlmGateway, parseJsonResponse, LlmGatewayRateLimitError } from "./llmGateway.js";
 
 function redact(match) {
   if (match.length <= 4) return "*".repeat(match.length);
@@ -24,7 +24,8 @@ async function llmPiiScan(session, llmGateway) {
       { role: "user", content: JSON.stringify(payload) },
     ]);
   } catch (err) {
-    return { error: err.message };
+    console.error("[piiScan] LLM Gateway NER call failed:", err.message);
+    return { error: err.message, rateLimited: err instanceof LlmGatewayRateLimitError };
   }
 
   const parsed = parseJsonResponse(content, { items: [] });
@@ -74,20 +75,24 @@ export async function piiScan(session, patternPacks, { llmGateway = callLlmGatew
 
   const llmResult = await llmPiiScan(session, llmGateway);
   let llmGatewayError = null;
+  let rateLimited = false;
   if (Array.isArray(llmResult)) {
     items.push(...llmResult);
   } else {
     llmGatewayError = llmResult.error;
+    rateLimited = Boolean(llmResult.rateLimited);
   }
 
   const status = items.length > 0 ? "flag" : llmGatewayError ? "error" : "pass";
+  const detail = rateLimited
+    ? "Pattern-pack scan found nothing, but the semantic pass for free-form PII (names, orgs, emails, addresses) is temporarily unavailable due to high demand. Please retry in a moment."
+    : llmGatewayError
+      ? "Pattern-pack scan found nothing, but the semantic pass for free-form PII could not complete right now. Please retry in a moment."
+      : undefined;
   return {
     check: "pii_scan",
     status,
-    detail:
-      status === "error"
-        ? `Regex pattern scan found nothing, but the LLM Gateway pass for free-form PII (names, orgs, emails, addresses) failed: ${llmGatewayError}`
-        : undefined,
+    detail,
     patternPacksUsed: patternPacks.map((p) => p.id),
     ...(llmGatewayError ? { llmGatewayError } : {}),
     items,
