@@ -36,8 +36,32 @@ const healthcareSession = {
   ],
 };
 
-test("clean session passes consent and disclosure, no PII flagged", () => {
-  const report = analyzeSession(cleanSession);
+const paraphraseDisclosureSession = {
+  sessionId: "sess_paraphrase",
+  startedAt: "2026-09-03T10:00:00.000Z",
+  consentEvent: { granted: true, timestamp: "2026-09-03T09:59:55.000Z" },
+  turns: [
+    { role: "agent", text: "Hi there, I'm a computer program helping you today.", tMs: 400 },
+    { role: "user", text: "Okay, sounds good.", tMs: 3000 },
+  ],
+};
+
+// Fakes the LLM Gateway so tests never hit the network or need an API key.
+// Distinguishes the disclosure-check call from the PII-NER call by the
+// system prompt's content, matching the two prompts in the real checks.
+function fakeLlmGateway({ disclosed = { disclosed: false, turnIndex: null, quote: null }, nerItems = [] } = {}) {
+  return async (messages) => {
+    const systemPrompt = messages[0].content;
+    if (systemPrompt.includes("disclos")) {
+      return JSON.stringify(disclosed);
+    }
+    return JSON.stringify({ items: nerItems });
+  };
+}
+
+test("clean session passes consent and disclosure, no PII flagged", async () => {
+  const llmGateway = fakeLlmGateway({ disclosed: { disclosed: true, turnIndex: 0, quote: "I'm an AI assistant" } });
+  const report = await analyzeSession(cleanSession, { llmGateway });
   const byCheck = Object.fromEntries(report.findings.map((f) => [f.check, f]));
   assert.equal(byCheck.consent.status, "pass");
   assert.equal(byCheck.ai_disclosure.status, "pass");
@@ -45,8 +69,9 @@ test("clean session passes consent and disclosure, no PII flagged", () => {
   assert.equal(byCheck.pii_scan.status, "pass");
 });
 
-test("violating session flags missing consent, missing disclosure, and SSN", () => {
-  const report = analyzeSession(violatingSession);
+test("violating session flags missing consent, missing disclosure, and SSN", async () => {
+  const llmGateway = fakeLlmGateway();
+  const report = await analyzeSession(violatingSession, { llmGateway });
   const byCheck = Object.fromEntries(report.findings.map((f) => [f.check, f]));
   assert.equal(byCheck.consent.status, "flag");
   assert.equal(byCheck.ai_disclosure.status, "flag");
@@ -55,9 +80,10 @@ test("violating session flags missing consent, missing disclosure, and SSN", () 
   assert.equal(byCheck.pii_scan.items[0].patternId, "ssn");
 });
 
-test("generic scan alone misses HIPAA identifiers; HIPAA pack catches them as a drop-in extension", () => {
-  const genericOnly = analyzeSession(healthcareSession, { patternPackIds: ["generic"] });
-  const withHipaa = analyzeSession(healthcareSession, { patternPackIds: ["generic", "hipaa"] });
+test("generic scan alone misses HIPAA identifiers; HIPAA pack catches them as a drop-in extension", async () => {
+  const llmGateway = fakeLlmGateway({ disclosed: { disclosed: true, turnIndex: 0, quote: "automated assistant" } });
+  const genericOnly = await analyzeSession(healthcareSession, { patternPackIds: ["generic"], llmGateway });
+  const withHipaa = await analyzeSession(healthcareSession, { patternPackIds: ["generic", "hipaa"], llmGateway });
 
   const genericPii = genericOnly.findings.find((f) => f.check === "pii_scan");
   const hipaaPii = withHipaa.findings.find((f) => f.check === "pii_scan");
@@ -82,9 +108,10 @@ const financeSession = {
   ],
 };
 
-test("generic scan alone misses finance identifiers; finance pack catches them as a drop-in extension", () => {
-  const genericOnly = analyzeSession(financeSession, { patternPackIds: ["generic"] });
-  const withFinance = analyzeSession(financeSession, { patternPackIds: ["generic", "finance"] });
+test("generic scan alone misses finance identifiers; finance pack catches them as a drop-in extension", async () => {
+  const llmGateway = fakeLlmGateway({ disclosed: { disclosed: true, turnIndex: 0, quote: "automated assistant" } });
+  const genericOnly = await analyzeSession(financeSession, { patternPackIds: ["generic"], llmGateway });
+  const withFinance = await analyzeSession(financeSession, { patternPackIds: ["generic", "finance"], llmGateway });
 
   const genericPii = genericOnly.findings.find((f) => f.check === "pii_scan");
   const financePii = withFinance.findings.find((f) => f.check === "pii_scan");
@@ -93,4 +120,61 @@ test("generic scan alone misses finance identifiers; finance pack catches them a
   assert.ok(financePii.items.length >= 2);
   assert.ok(financePii.items.some((i) => i.patternId === "routing_number"));
   assert.ok(financePii.items.some((i) => i.patternId === "loan_number"));
+});
+
+test("LLM Gateway disclosure check catches a paraphrase the old hardcoded phrase list would have missed", async () => {
+  const llmGateway = fakeLlmGateway({
+    disclosed: { disclosed: true, turnIndex: 0, quote: "I'm a computer program helping you today" },
+  });
+  const report = await analyzeSession(paraphraseDisclosureSession, { llmGateway });
+  const byCheck = Object.fromEntries(report.findings.map((f) => [f.check, f]));
+  assert.equal(byCheck.ai_disclosure.status, "pass");
+  assert.match(byCheck.ai_disclosure.detail, /computer program/);
+});
+
+test("LLM Gateway PII scan catches free-form PII (names/emails) that regex patterns can't express", async () => {
+  const session = {
+    sessionId: "sess_freeform_pii",
+    startedAt: "2026-09-03T10:00:00.000Z",
+    consentEvent: { granted: true, timestamp: "2026-09-03T09:59:55.000Z" },
+    turns: [
+      { role: "agent", text: "Thanks for calling, who am I speaking with?", tMs: 500 },
+      { role: "user", text: "This is Jordan Lee, reach me at jordan.lee@example.com.", tMs: 3000 },
+    ],
+  };
+  const llmGateway = fakeLlmGateway({
+    disclosed: { disclosed: false, turnIndex: null, quote: null },
+    nerItems: [
+      { turnIndex: 1, type: "person_name", text: "Jordan Lee" },
+      { turnIndex: 1, type: "email", text: "jordan.lee@example.com" },
+    ],
+  });
+  const report = await analyzeSession(session, { llmGateway });
+  const pii = report.findings.find((f) => f.check === "pii_scan");
+  assert.equal(pii.status, "flag");
+  assert.ok(pii.items.some((i) => i.packId === "llm_gateway_ner" && i.patternId === "person_name"));
+  assert.ok(pii.items.some((i) => i.packId === "llm_gateway_ner" && i.patternId === "email"));
+});
+
+test("disclosure check degrades to a flag with an error detail when the LLM Gateway call fails", async () => {
+  const llmGateway = async (messages) => {
+    if (messages[0].content.includes("disclos")) throw new Error("503 upstream unavailable");
+    return JSON.stringify({ items: [] });
+  };
+  const report = await analyzeSession(cleanSession, { llmGateway });
+  const disclosure = report.findings.find((f) => f.check === "ai_disclosure");
+  assert.equal(disclosure.status, "flag");
+  assert.ok(disclosure.llmGatewayError.includes("upstream unavailable"));
+});
+
+test("PII scan still reports pattern-pack matches and notes the error when the LLM Gateway call fails", async () => {
+  const llmGateway = async (messages) => {
+    if (messages[0].content.includes("disclos")) return JSON.stringify({ disclosed: true, turnIndex: 0, quote: "hi" });
+    throw new Error("503 upstream unavailable");
+  };
+  const report = await analyzeSession(violatingSession, { llmGateway });
+  const pii = report.findings.find((f) => f.check === "pii_scan");
+  assert.equal(pii.status, "flag");
+  assert.equal(pii.items[0].patternId, "ssn");
+  assert.ok(pii.llmGatewayError.includes("upstream unavailable"));
 });

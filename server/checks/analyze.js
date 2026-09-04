@@ -8,17 +8,18 @@ const AVAILABLE_PACKS = { generic: genericPack, hipaa: hipaaPack, finance: finan
 
 // session shape: { sessionId, startedAt, consentEvent: {granted, timestamp},
 //                  turns: [{role: "user"|"agent", text, tMs}] }
-export function analyzeSession(session, { patternPackIds = ["generic"] } = {}) {
+export async function analyzeSession(session, { patternPackIds = ["generic"], llmGateway } = {}) {
   const patternPacks = patternPackIds
     .map((id) => AVAILABLE_PACKS[id])
     .filter(Boolean);
+  const gatewayOpts = llmGateway ? { llmGateway } : {};
 
-  const findings = [
+  const findings = await Promise.all([
     consentCheck(session),
-    disclosureCheck(session),
+    disclosureCheck(session, gatewayOpts),
     recordingConsentCheck(session),
-    piiScan(session, patternPacks),
-  ];
+    piiScan(session, patternPacks, gatewayOpts),
+  ]);
 
   return {
     sessionId: session.sessionId ?? null,

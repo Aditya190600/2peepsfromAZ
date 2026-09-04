@@ -32,13 +32,17 @@ app.get("/v1/token", async (_req, res) => {
 // Post-hoc compliance report for one completed (or synthetic) Voice Agent
 // session: consent-event-logged (TCPA), AI-disclosure-timing (e.g. CA AB
 // 2905), and a pluggable PII pattern-set scan. Body: { session, patternPackIds }.
-app.post("/v1/analyze-session", (req, res) => {
+app.post("/v1/analyze-session", async (req, res) => {
   const { session, patternPackIds } = req.body ?? {};
   if (!session || !Array.isArray(session.turns)) {
     return res.status(400).json({ error: "session with a turns array is required" });
   }
-  const report = analyzeSession(session, { patternPackIds });
-  res.json(report);
+  try {
+    const report = await analyzeSession(session, { patternPackIds });
+    res.json(report);
+  } catch (err) {
+    res.status(502).json({ error: `Analysis failed: ${err.message}` });
+  }
 });
 
 const port = process.env.PORT || 8787;
