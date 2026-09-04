@@ -1,5 +1,6 @@
 import { consentCheck } from "./consentCheck.js";
 import { disclosureCheck } from "./disclosureCheck.js";
+import { recordingConsentCheck } from "./recordingConsentCheck.js";
 import { piiScan } from "./piiScan.js";
 import { genericPack, hipaaPack, financePack } from "./patternPacks.js";
 
@@ -12,7 +13,12 @@ export function analyzeSession(session, { patternPackIds = ["generic"] } = {}) {
     .map((id) => AVAILABLE_PACKS[id])
     .filter(Boolean);
 
-  const findings = [consentCheck(session), disclosureCheck(session), piiScan(session, patternPacks)];
+  const findings = [
+    consentCheck(session),
+    disclosureCheck(session),
+    recordingConsentCheck(session),
+    piiScan(session, patternPacks),
+  ];
 
   return {
     sessionId: session.sessionId ?? null,
