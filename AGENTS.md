@@ -30,6 +30,7 @@ An earlier build drifted into a live CCPA/CPRA Q&A voice advisor that was never 
 - Tool definitions in `session.tools` use AssemblyAI's own flat schema (`{type: "function", name, description, parameters}`), not OpenAI's nested `{type: "function", function: {...}}` form.
 - `reply.audio` carries its payload in the `data` field; `input.audio` carries it in the `audio` field - easy to conflate.
 - The `GET /v1/voices` endpoint mentioned in prose docs is not a working REST endpoint in practice (returns a 426 WebSocket-upgrade response) - trust the documented voice catalog instead (e.g. `anna` is the spec-documented default).
+- The LLM Gateway (`server/checks/llmGateway.js`) available-models docs page doesn't say which models a given account can actually call - Bedrock/Vertex/OpenAI-provider models (Claude, Gemini, GPT, etc.) 400 with `"Your account does not have access to this LLM Gateway model"` unless that provider is enabled on the account, verified live 2026-09-04. `qwen3.5-4b-32k-fast` is served directly by AssemblyAI with no provider gating and worked on this account; don't assume any specific model string is callable without a live test call against the real key.
 
 When something you need isn't obviously in the docs dump, don't guess - grep harder or ask.
 
