@@ -62,3 +62,25 @@ export const hipaaPack = {
     },
   ],
 };
+
+export const financePack = {
+  id: "finance",
+  name: "GLBA finance identifiers (drop-in industry pack)",
+  patterns: [
+    {
+      id: "routing_number",
+      label: "Possible ABA routing number",
+      regex: /\brouting\s*(?:number|#)?\s*[:#-]?\s*\d{9}\b/gi,
+    },
+    {
+      id: "iban",
+      label: "Possible IBAN",
+      regex: /\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/g,
+    },
+    {
+      id: "loan_number",
+      label: "Possible loan or brokerage number",
+      regex: /\b(?:loan|brokerage)\s*(?:number|#)\s*[:#-]?\s*\d{6,12}\b/gi,
+    },
+  ],
+};

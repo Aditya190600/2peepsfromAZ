@@ -1,9 +1,9 @@
 import { consentCheck } from "./consentCheck.js";
 import { disclosureCheck } from "./disclosureCheck.js";
 import { piiScan } from "./piiScan.js";
-import { genericPack, hipaaPack } from "./patternPacks.js";
+import { genericPack, hipaaPack, financePack } from "./patternPacks.js";
 
-const AVAILABLE_PACKS = { generic: genericPack, hipaa: hipaaPack };
+const AVAILABLE_PACKS = { generic: genericPack, hipaa: hipaaPack, finance: financePack };
 
 // session shape: { sessionId, startedAt, consentEvent: {granted, timestamp},
 //                  turns: [{role: "user"|"agent", text, tMs}] }
