@@ -7,7 +7,11 @@ const cleanSession = {
   startedAt: "2026-09-03T10:00:00.000Z",
   consentEvent: { granted: true, timestamp: "2026-09-03T09:59:55.000Z" },
   turns: [
-    { role: "agent", text: "Hi, this is an AI assistant calling on behalf of Acme.", tMs: 500 },
+    {
+      role: "agent",
+      text: "Hi, this is an AI assistant calling on behalf of Acme. This call may be recorded for quality purposes.",
+      tMs: 500,
+    },
     { role: "user", text: "Sure, go ahead.", tMs: 3000 },
   ],
 };
@@ -37,6 +41,7 @@ test("clean session passes consent and disclosure, no PII flagged", () => {
   const byCheck = Object.fromEntries(report.findings.map((f) => [f.check, f]));
   assert.equal(byCheck.consent.status, "pass");
   assert.equal(byCheck.ai_disclosure.status, "pass");
+  assert.equal(byCheck.recording_consent.status, "pass");
   assert.equal(byCheck.pii_scan.status, "pass");
 });
 
@@ -45,6 +50,7 @@ test("violating session flags missing consent, missing disclosure, and SSN", () 
   const byCheck = Object.fromEntries(report.findings.map((f) => [f.check, f]));
   assert.equal(byCheck.consent.status, "flag");
   assert.equal(byCheck.ai_disclosure.status, "flag");
+  assert.equal(byCheck.recording_consent.status, "flag");
   assert.equal(byCheck.pii_scan.status, "flag");
   assert.equal(byCheck.pii_scan.items[0].patternId, "ssn");
 });

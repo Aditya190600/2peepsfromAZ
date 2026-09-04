@@ -5,7 +5,11 @@ export const SAMPLE_SESSIONS = {
     startedAt: "2026-09-03T10:00:00.000Z",
     consentEvent: { granted: true, timestamp: "2026-09-03T09:59:55.000Z" },
     turns: [
-      { role: "agent", text: "Hi, this is an AI assistant calling from Acme Support.", tMs: 500 },
+      {
+        role: "agent",
+        text: "Hi, this is an AI assistant calling from Acme Support. This call may be recorded for quality purposes.",
+        tMs: 500,
+      },
       { role: "user", text: "Sure, go ahead.", tMs: 3200 },
       { role: "agent", text: "Great, how can I help you today?", tMs: 4500 },
     ],
@@ -43,7 +47,11 @@ export const SAMPLE_SESSIONS = {
     startedAt: "2026-09-03T10:20:00.000Z",
     consentEvent: { granted: true, timestamp: "2026-09-03T10:19:45.000Z" },
     turns: [
-      { role: "agent", text: "Hello, this is a virtual assistant calling on behalf of Acme Billing.", tMs: 400 },
+      {
+        role: "agent",
+        text: "Hello, this is a virtual assistant calling on behalf of Acme Billing. This call is being recorded for quality purposes.",
+        tMs: 400,
+      },
       { role: "user", text: "Okay, what's this about?", tMs: 2800 },
       { role: "agent", text: "Just a reminder that your invoice is due next week.", tMs: 4200 },
     ],
