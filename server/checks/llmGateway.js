@@ -19,6 +19,22 @@ export class LlmGatewayModelAccessError extends Error {
   }
 }
 
+// Thrown after retries are exhausted on a 429. Kept distinct from a generic
+// failure so callers can show honest "rate limited" copy instead of a raw
+// error dump. See docs/judging-criteria-and-enterprise-gap-assessment.md #1.
+export class LlmGatewayRateLimitError extends Error {
+  constructor(status, body) {
+    super(`LLM Gateway rate limited after retries: ${status} ${body}`);
+    this.name = "LlmGatewayRateLimitError";
+  }
+}
+
+const RETRYABLE_429_DELAYS_MS = [500, 1500, 3500];
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function callLlmGateway(messages, options = {}) {
   const {
     apiKey = process.env.ASSEMBLYAI_API_KEY,
@@ -27,20 +43,32 @@ export async function callLlmGateway(messages, options = {}) {
     temperature = 0,
   } = options;
 
-  const resp = await fetch(LLM_GATEWAY_URL, {
-    method: "POST",
-    headers: { authorization: apiKey, "content-type": "application/json" },
-    body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature }),
-  });
-  if (!resp.ok) {
+  let lastStatus, lastText;
+  for (let attempt = 0; attempt <= RETRYABLE_429_DELAYS_MS.length; attempt++) {
+    const resp = await fetch(LLM_GATEWAY_URL, {
+      method: "POST",
+      headers: { authorization: apiKey, "content-type": "application/json" },
+      body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature }),
+    });
+    if (resp.ok) {
+      const body = await resp.json();
+      return body.choices[0].message.content;
+    }
+
     const text = await resp.text();
     if (resp.status === 400 && text.includes("does not have access to this LLM Gateway model")) {
       throw new LlmGatewayModelAccessError(model, resp.status, text);
     }
-    throw new Error(`LLM Gateway request failed: ${resp.status} ${text}`);
+    if (resp.status !== 429) {
+      throw new Error(`LLM Gateway request failed: ${resp.status} ${text}`);
+    }
+    lastStatus = resp.status;
+    lastText = text;
+    if (attempt < RETRYABLE_429_DELAYS_MS.length) {
+      await sleep(RETRYABLE_429_DELAYS_MS[attempt]);
+    }
   }
-  const body = await resp.json();
-  return body.choices[0].message.content;
+  throw new LlmGatewayRateLimitError(lastStatus, lastText);
 }
 
 export function parseJsonResponse(content, fallback) {

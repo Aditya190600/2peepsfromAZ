@@ -1,19 +1,18 @@
-export default function Landing({ onGetStarted }) {
+import { Nav, Footer } from "./Chrome";
+
+export default function Landing({ onGetStarted, navigate, path }) {
   return (
     <div className="page">
+      <Nav path={path} navigate={navigate} />
       <header className="masthead">
-        <div className="brand">
-          <span className="brand-mark" aria-hidden="true" />
-          <h1>ComplyLine</h1>
-        </div>
         <p className="tagline">Post-call compliance review for AI voice agents.</p>
       </header>
 
       <main className="hero">
         <h2 className="hero-headline">Know what your voice agent said before your lawyer finds out.</h2>
         <p className="hero-lede">
-          Feed us one completed AssemblyAI call. Get back a report on consent, disclosure, and
-          PII exposure in seconds.
+          Feed us one completed AssemblyAI call. Get back a severity-ranked report on consent,
+          disclosure, and PII exposure — with a regulatory citation on every finding.
         </p>
 
         <ul className="hero-value-list">
@@ -27,6 +26,23 @@ export default function Landing({ onGetStarted }) {
           Get started
         </button>
       </main>
+
+      <section className="trust-strip">
+        <div className="trust-strip-item">
+          <strong>No data retention risk.</strong>
+          <p>Live call audio is never written to disk; transcripts live only in browser memory.</p>
+        </div>
+        <div className="trust-strip-item">
+          <strong>Built on real citations.</strong>
+          <p>Every finding traces to the statute it checks — TCPA, state AI-disclosure law, HIPAA, GLBA.</p>
+        </div>
+        <div className="trust-strip-item">
+          <strong>Pluggable by industry.</strong>
+          <p>Generic PII scan out of the box, with HIPAA and GLBA identifier packs as drop-in extensions.</p>
+        </div>
+      </section>
+
+      <Footer />
     </div>
   );
 }
