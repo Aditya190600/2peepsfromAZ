@@ -12,6 +12,8 @@
   --pass-soft: #e7f4ec;
   --flag: #b3261e;
   --flag-soft: #fbeae8;
+  --na: #6b6f76;
+  --na-soft: #eceef0;
   --radius: 3px;
   --serif: "Source Serif 4", Georgia, serif;
   --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -335,6 +337,10 @@ body {
   border-left-color: var(--flag);
 }
 
+.finding.is-na {
+  border-left-color: var(--na);
+}
+
 .finding-head {
   display: flex;
   align-items: baseline;
@@ -358,6 +364,11 @@ body {
 .finding.is-flag .finding-status {
   color: var(--flag);
   background: var(--flag-soft);
+}
+
+.finding.is-na .finding-status {
+  color: var(--na);
+  background: var(--na-soft);
 }
 
 .finding-name {

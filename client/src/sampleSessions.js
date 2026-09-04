@@ -23,6 +23,17 @@ export const SAMPLE_SESSIONS = {
       { role: "user", text: "My SSN is 123-45-6789 and my card is 4111 1111 1111 1111.", tMs: 6000 },
     ],
   },
+  "optout-ignored": {
+    sessionId: "sess_demo_optout_ignored",
+    startedAt: "2026-09-03T10:15:00.000Z",
+    consentEvent: { granted: true, timestamp: "2026-09-03T10:14:30.000Z" },
+    turns: [
+      { role: "agent", text: "Hi, this is an AI assistant calling about your account.", tMs: 500 },
+      { role: "user", text: "Stop calling me, take me off your list.", tMs: 4000 },
+      { role: "agent", text: "I hear you, but let me tell you about today's offer.", tMs: 5200 },
+      { role: "agent", text: "This deal expires tonight.", tMs: 8000 },
+    ],
+  },
   "healthcare-hipaa": {
     sessionId: "sess_demo_healthcare",
     startedAt: "2026-09-03T10:10:00.000Z",
