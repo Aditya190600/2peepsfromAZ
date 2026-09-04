@@ -257,7 +257,7 @@ function Report({ report, audioUrl, audioRef, onSeek }) {
 }
 
 export default function Dashboard() {
-  const { status, transcript, lastSession, connect, disconnect } = useVoiceAgent();
+  const { status, transcript, lastSession, micSilent, connect, disconnect } = useVoiceAgent();
   const [consent, setConsent] = useState(false);
   const [hipaaPack, setHipaaPack] = useState(false);
   const [report, setReport] = useState(null);
@@ -402,6 +402,13 @@ export default function Dashboard() {
               <p className="error-banner">
                 The call could not connect. Check the AssemblyAI API key on the server and try
                 again.
+              </p>
+            )}
+
+            {status === "ready" && micSilent && (
+              <p className="error-banner">
+                No signal from your microphone - it may be muted or the wrong input device is
+                selected. Check your system sound settings.
               </p>
             )}
 
