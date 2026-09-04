@@ -198,14 +198,14 @@ test("LLM Gateway PII scan catches free-form PII (names/emails) that regex patte
   assert.ok(pii.items.some((i) => i.packId === "llm_gateway_ner" && i.patternId === "email"));
 });
 
-test("disclosure check degrades to a flag with an error detail when the LLM Gateway call fails", async () => {
+test("disclosure check reports an error status (not a false flag) when the LLM Gateway call fails", async () => {
   const llmGateway = async (messages) => {
     if (messages[0].content.includes("disclos")) throw new Error("503 upstream unavailable");
     return JSON.stringify({ items: [] });
   };
   const report = await analyzeSession(cleanSession, { llmGateway });
   const disclosure = report.findings.find((f) => f.check === "ai_disclosure");
-  assert.equal(disclosure.status, "flag");
+  assert.equal(disclosure.status, "error");
   assert.ok(disclosure.llmGatewayError.includes("upstream unavailable"));
 });
 

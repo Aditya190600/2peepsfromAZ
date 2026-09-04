@@ -36,8 +36,8 @@ export async function disclosureCheck(session, { llmGateway = callLlmGateway } =
   } catch (err) {
     return {
       check: "ai_disclosure",
-      status: "flag",
-      detail: `LLM Gateway disclosure check failed: ${err.message}`,
+      status: "error",
+      detail: `Unable to run AI-disclosure check: ${err.message}`,
       llmGatewayError: err.message,
     };
   }

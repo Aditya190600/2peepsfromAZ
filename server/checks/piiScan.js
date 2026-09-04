@@ -80,9 +80,14 @@ export async function piiScan(session, patternPacks, { llmGateway = callLlmGatew
     llmGatewayError = llmResult.error;
   }
 
+  const status = items.length > 0 ? "flag" : llmGatewayError ? "error" : "pass";
   return {
     check: "pii_scan",
-    status: items.length > 0 ? "flag" : "pass",
+    status,
+    detail:
+      status === "error"
+        ? `Regex pattern scan found nothing, but the LLM Gateway pass for free-form PII (names, orgs, emails, addresses) failed: ${llmGatewayError}`
+        : undefined,
     patternPacksUsed: patternPacks.map((p) => p.id),
     ...(llmGatewayError ? { llmGatewayError } : {}),
     items,
