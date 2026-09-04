@@ -14,12 +14,14 @@ const CHECK_LABEL = {
   consent: "Consent logged (TCPA)",
   ai_disclosure: "AI disclosure timing",
   recording_consent: "Recording-consent disclosure",
+  opt_out: "Opt-out honored (TCPA)",
   pii_scan: "PII pattern scan",
 };
 
 const SAMPLE_LABEL = {
   "clean-call": "Clean call — everything passes",
   "tcpa-violation": "TCPA violation — no consent, SSN spoken",
+  "optout-ignored": "Opt-out request ignored by agent",
   "healthcare-hipaa": "Healthcare call — HIPAA identifiers spoken",
   "late-disclosure": "Late disclosure — AI mentioned after 10s window",
   "clean-call-2": "Clean call — billing reminder, everything passes",
@@ -34,12 +36,14 @@ async function analyze(session, patternPackIds) {
   return resp.json();
 }
 
+const STATUS_CLASS = { flag: "is-flag", pass: "is-pass", "n/a": "is-na" };
+const STATUS_TEXT = { flag: "Flag", pass: "Pass", "n/a": "N/A" };
+
 function Finding({ finding }) {
-  const isFlag = finding.status === "flag";
   return (
-    <div className={`finding ${isFlag ? "is-flag" : "is-pass"}`}>
+    <div className={`finding ${STATUS_CLASS[finding.status] ?? "is-pass"}`}>
       <div className="finding-head">
-        <span className="finding-status">{isFlag ? "Flag" : "Pass"}</span>
+        <span className="finding-status">{STATUS_TEXT[finding.status] ?? finding.status}</span>
         <span className="finding-name">{CHECK_LABEL[finding.check] ?? finding.check}</span>
       </div>
       {finding.detail && <p className="finding-detail">{finding.detail}</p>}
