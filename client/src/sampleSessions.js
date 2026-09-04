@@ -1,4 +1,7 @@
 // Synthetic sessions for demoing the report pipeline without a live call.
+// Each key also has a matching recorded-speech file at /samples/<key>.mp3
+// (generated from these same turns) so a sample session can actually be
+// played back, not just read as text - see SAMPLE_AUDIO_URLS below.
 export const SAMPLE_SESSIONS = {
   "clean-call": {
     sessionId: "sess_demo_clean",
@@ -68,3 +71,7 @@ export const SAMPLE_SESSIONS = {
     ],
   },
 };
+
+export const SAMPLE_AUDIO_URLS = Object.fromEntries(
+  Object.keys(SAMPLE_SESSIONS).map((key) => [key, `/samples/${key}.mp3`])
+);
