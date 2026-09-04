@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
 import { analyzeSession } from "./checks/analyze.js";
+import { transcribeUpload } from "./checks/transcribeUpload.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, "..", ".env") });
@@ -44,6 +45,34 @@ app.post("/v1/analyze-session", async (req, res) => {
     res.status(502).json({ error: `Analysis failed: ${err.message}` });
   }
 });
+
+// Demo pipeline: transcribes an uploaded audio file (drag-and-drop, not a
+// live call) via AssemblyAI's pre-recorded STT API into the same
+// {turns: [{role, text, tMs}]} session shape a live call produces, so the
+// client can feed it into the existing /v1/analyze-session pipeline.
+app.post(
+  "/v1/transcribe-upload",
+  express.raw({ type: () => true, limit: "25mb" }),
+  async (req, res) => {
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+      return res.status(400).json({ error: "audio file body is required" });
+    }
+    try {
+      const turns = await transcribeUpload(req.body, API_KEY);
+      if (turns.length === 0) {
+        return res.status(422).json({ error: "No speech detected in the uploaded audio." });
+      }
+      res.json({
+        sessionId: `sess_upload_${Date.now()}`,
+        startedAt: new Date().toISOString(),
+        consentEvent: null,
+        turns,
+      });
+    } catch (err) {
+      res.status(502).json({ error: `Transcription failed: ${err.message}` });
+    }
+  }
+);
 
 const port = process.env.PORT || 8787;
 app.listen(port, () => console.log(`R3-21 compliance report server listening on :${port}`));
