@@ -581,6 +581,62 @@ body {
   border-top: 1px solid var(--line);
 }
 
+.hero {
+  max-width: 640px;
+  margin: 80px auto 0;
+  text-align: left;
+}
+
+.hero-headline {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 34px;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  margin: 0 0 16px;
+}
+
+.hero-lede {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 0 0 32px;
+}
+
+.hero-value-list {
+  list-style: none;
+  margin: 0 0 36px;
+  padding: 0;
+}
+
+.hero-value-list li {
+  font-size: 15px;
+  line-height: 1.6;
+  padding: 12px 0 12px 20px;
+  border-top: 1px solid var(--line);
+  position: relative;
+}
+
+.hero-value-list li:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.hero-value-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 21px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.hero-cta {
+  font-size: 15px;
+  padding: 12px 26px;
+}
+
 .error-banner {
   margin-top: 14px;
   padding: 10px 12px;
