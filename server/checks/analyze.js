@@ -1,6 +1,7 @@
 import { consentCheck } from "./consentCheck.js";
 import { disclosureCheck } from "./disclosureCheck.js";
 import { recordingConsentCheck } from "./recordingConsentCheck.js";
+import { optOutCheck } from "./optOutCheck.js";
 import { piiScan } from "./piiScan.js";
 import { genericPack, hipaaPack, financePack } from "./patternPacks.js";
 
@@ -18,6 +19,7 @@ export async function analyzeSession(session, { patternPackIds = ["generic"], ll
     consentCheck(session),
     disclosureCheck(session, gatewayOpts),
     recordingConsentCheck(session),
+    optOutCheck(session),
     piiScan(session, patternPacks, gatewayOpts),
   ]);
 
