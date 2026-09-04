@@ -80,6 +80,48 @@ test("violating session flags missing consent, missing disclosure, and SSN", asy
   assert.equal(byCheck.pii_scan.items[0].patternId, "ssn");
 });
 
+test("no opt-out request reports n/a, not a false flag", async () => {
+  const llmGateway = fakeLlmGateway({ disclosed: { disclosed: true, turnIndex: 0, quote: "AI assistant" } });
+  const report = await analyzeSession(cleanSession, { llmGateway });
+  const byCheck = Object.fromEntries(report.findings.map((f) => [f.check, f]));
+  assert.equal(byCheck.opt_out.status, "n/a");
+});
+
+test("opt-out request honored by the agent passes", async () => {
+  const llmGateway = fakeLlmGateway({ disclosed: { disclosed: true, turnIndex: 0, quote: "AI assistant" } });
+  const session = {
+    sessionId: "sess_optout_honored",
+    startedAt: "2026-09-03T10:00:00.000Z",
+    consentEvent: { granted: true, timestamp: "2026-09-03T09:59:00.000Z" },
+    turns: [
+      { role: "agent", text: "Hi, this is an AI assistant calling about your account.", tMs: 500 },
+      { role: "user", text: "Stop calling me, take me off your list.", tMs: 4000 },
+      { role: "agent", text: "Understood, I've removed you from our calling list.", tMs: 5000 },
+    ],
+  };
+  const report = await analyzeSession(session, { llmGateway });
+  const byCheck = Object.fromEntries(report.findings.map((f) => [f.check, f]));
+  assert.equal(byCheck.opt_out.status, "pass");
+});
+
+test("opt-out request ignored by the agent flags", async () => {
+  const llmGateway = fakeLlmGateway({ disclosed: { disclosed: true, turnIndex: 0, quote: "AI assistant" } });
+  const session = {
+    sessionId: "sess_optout_ignored",
+    startedAt: "2026-09-03T10:00:00.000Z",
+    consentEvent: { granted: true, timestamp: "2026-09-03T09:59:00.000Z" },
+    turns: [
+      { role: "agent", text: "Hi, this is an AI assistant calling about your account.", tMs: 500 },
+      { role: "user", text: "Stop calling me, remove me from your list.", tMs: 4000 },
+      { role: "agent", text: "I understand, but let me tell you about our new offer.", tMs: 5000 },
+      { role: "agent", text: "This deal is only available today.", tMs: 8000 },
+    ],
+  };
+  const report = await analyzeSession(session, { llmGateway });
+  const byCheck = Object.fromEntries(report.findings.map((f) => [f.check, f]));
+  assert.equal(byCheck.opt_out.status, "flag");
+});
+
 test("generic scan alone misses HIPAA identifiers; HIPAA pack catches them as a drop-in extension", async () => {
   const llmGateway = fakeLlmGateway({ disclosed: { disclosed: true, turnIndex: 0, quote: "automated assistant" } });
   const genericOnly = await analyzeSession(healthcareSession, { patternPackIds: ["generic"], llmGateway });
