@@ -47,7 +47,11 @@ export const SAMPLE_SESSIONS = {
     startedAt: "2026-09-03T10:20:00.000Z",
     consentEvent: { granted: true, timestamp: "2026-09-03T10:19:45.000Z" },
     turns: [
-      { role: "agent", text: "Hello, this is a virtual assistant calling on behalf of Acme Billing.", tMs: 400 },
+      {
+        role: "agent",
+        text: "Hello, this is a virtual assistant calling on behalf of Acme Billing. This call is being recorded for quality purposes.",
+        tMs: 400,
+      },
       { role: "user", text: "Okay, what's this about?", tMs: 2800 },
       { role: "agent", text: "Just a reminder that your invoice is due next week.", tMs: 4200 },
     ],
