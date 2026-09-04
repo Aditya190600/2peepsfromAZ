@@ -33,6 +33,12 @@ An earlier build drifted into a live CCPA/CPRA Q&A voice advisor that was never 
 
 When something you need isn't obviously in the docs dump, don't guess - grep harder or ask.
 
+## Debugging the live voice call end to end
+
+When a live-call bug report can't be pinned down from code reading alone, don't guess at an acoustic/hardware cause and patch blind - instrument the real pipeline and get evidence: proxy `window.WebSocket` (log every non-audio-frame send/recv type + timestamp) and hook `navigator.mediaDevices.getUserMedia` (to inspect the real `MediaStreamTrack` state, or to substitute a `MediaStreamAudioDestinationNode` fed by `decodeAudioData` on a real speech sample so genuine signal flows through the actual unmodified worklet/PCM16/WS code path when physical mic capture isn't available in the environment). Before trusting a "mic captured nothing" result, verify at the OS level independent of the browser (e.g. `sox`/`rec`, `osascript -e 'get volume settings'` for muted/zeroed input or output) - a sandboxed/CI machine's system input gain can be 0 by default, which looks identical to a code bug from inside the browser alone.
+
+`useVoiceAgent.js` surfaces a `micSilent` flag (peak-amplitude check on captured PCM chunks, ~15s no-signal threshold) and `Dashboard.jsx` renders a banner when it fires - added because a genuinely dead input device previously failed completely silently, indistinguishable from a hung app.
+
 ## Dependency hygiene
 
 `server/package-lock.json` and `client/package-lock.json` are committed - do not gitignore them. `server/package.json` pins `qs` via an `overrides` entry (body-parser hard-pins a vulnerable `qs` version transitively; the override is the fix, not a workaround to remove later). `client/package.json` is on Vite 7.x deliberately, not the audit-suggested Vite 8 - v8 ships the experimental rolldown-vite engine and `@vitejs/plugin-react` doesn't officially peer-support it yet. On a fresh macOS install `npm install` warns that `fsevents`'s install script isn't in `allowScripts`; that's expected and safe to leave unapproved (fsevents is an optional macOS-only file-watcher acceleration, not required for `vite`/`npm test`/`npm run build` to work).
