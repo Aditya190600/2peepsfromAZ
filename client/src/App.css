@@ -296,6 +296,17 @@ body {
   text-align: left;
 }
 
+.sample-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sample-audio {
+  width: 100%;
+  height: 32px;
+}
+
 .report-panel {
   min-height: 320px;
 }
