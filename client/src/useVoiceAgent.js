@@ -150,6 +150,7 @@ export function useVoiceAgent() {
             if (sessionRef.current) {
               setLastSession({ ...sessionRef.current });
             }
+            ws.close();
             break;
           case "session.error":
             console.error("session.error", msg);
@@ -214,10 +215,14 @@ export function useVoiceAgent() {
   const disconnect = useCallback(() => {
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
-      // Clean teardown: session.end stops billing immediately, unlike just closing the socket.
-      // The server replies with session.ended, which is what captures lastSession above.
+      // Clean teardown: send session.end and wait for the session.ended reply
+      // (closed there) before closing the socket - closing immediately races
+      // the reply and drops lastSession. Fall back to a timed close in case
+      // session.ended never arrives.
       ws.send(JSON.stringify({ type: "session.end" }));
-      ws.close();
+      setTimeout(() => {
+        if (ws.readyState === WebSocket.OPEN) ws.close();
+      }, 3000);
     }
     wsRef.current = null;
     stopMic();
