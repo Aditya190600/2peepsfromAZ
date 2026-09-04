@@ -13,6 +13,7 @@ const STATUS_LABEL = {
 const CHECK_LABEL = {
   consent: "Consent logged (TCPA)",
   ai_disclosure: "AI disclosure timing",
+  recording_consent: "Recording-consent disclosure",
   pii_scan: "PII pattern scan",
 };
 

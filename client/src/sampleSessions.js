@@ -5,7 +5,11 @@ export const SAMPLE_SESSIONS = {
     startedAt: "2026-09-03T10:00:00.000Z",
     consentEvent: { granted: true, timestamp: "2026-09-03T09:59:55.000Z" },
     turns: [
-      { role: "agent", text: "Hi, this is an AI assistant calling from Acme Support.", tMs: 500 },
+      {
+        role: "agent",
+        text: "Hi, this is an AI assistant calling from Acme Support. This call may be recorded for quality purposes.",
+        tMs: 500,
+      },
       { role: "user", text: "Sure, go ahead.", tMs: 3200 },
       { role: "agent", text: "Great, how can I help you today?", tMs: 4500 },
     ],
