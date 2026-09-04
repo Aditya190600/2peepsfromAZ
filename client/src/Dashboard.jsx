@@ -54,8 +54,8 @@ async function transcribeUpload(file) {
   return body;
 }
 
-const STATUS_CLASS = { flag: "is-flag", pass: "is-pass", "n/a": "is-na" };
-const STATUS_TEXT = { flag: "Flag", pass: "Pass", "n/a": "N/A" };
+const STATUS_CLASS = { flag: "is-flag", pass: "is-pass", "n/a": "is-na", error: "is-na" };
+const STATUS_TEXT = { flag: "Flag", pass: "Pass", "n/a": "N/A", error: "Unable to run" };
 
 function Timestamp({ tMs, onSeek }) {
   if (tMs == null) return null;
