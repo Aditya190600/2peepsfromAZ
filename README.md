@@ -26,8 +26,8 @@ Some of the above (exact prize tracks, a formal rules document, category tags) i
 Ingests **one completed** AssemblyAI Voice Agent API session (live or synthetic) and produces a post-hoc compliance report - this is not a live conversational advisor, the flagged-findings report is the actual demo artifact. Core, industry-agnostic checks:
 
 1. **Consent-event-logged (TCPA)**: was a valid consent event logged before the call.
-2. **AI-disclosure-timing** (e.g. CA AB 2905): was the AI nature of the call disclosed within the first few seconds.
-3. **Generic PII-pattern scan**: SSN / credit-card / account-number shapes, via a pluggable pattern-set architecture (`server/checks/patternPacks.js`).
+2. **AI-disclosure-timing** (e.g. CA AB 2905): was the AI nature of the call disclosed within the first few seconds - judged semantically via AssemblyAI's LLM Gateway (catches paraphrases, not just a fixed phrase list).
+3. **PII scan**: a deterministic SSN / credit-card / account-number pattern scan, via a pluggable pattern-set architecture (`server/checks/patternPacks.js`), plus a free-form-PII pass (names, emails, addresses) via AssemblyAI's LLM Gateway. See `docs/guardrails-llm-gateway-integration.md` for why LLM Gateway rather than Guardrails' audio-time redaction is the fit for a post-hoc, text-only report.
 
 A **HIPAA identifier pattern pack** (`server/checks/patternPacks.js`'s `hipaaPack`) ships as a real drop-in extension on top of the generic scan - see `server/checks/analyze.test.js` for a runnable demonstration that the generic scan alone misses HIPAA identifiers while enabling the HIPAA pack catches them, with no core-code changes.
 
@@ -47,7 +47,7 @@ A **HIPAA identifier pattern pack** (`server/checks/patternPacks.js`'s `hipaaPac
 
 ### Manual setup (what the scripts above automate)
 
-1. **AssemblyAI API key**: copy `.env.example` to `.env` at the repo root and set `ASSEMBLYAI_API_KEY`. Never commit `.env` (gitignored) or send the key to the browser - only `server/index.js`'s `/v1/token` route reads it.
+1. **AssemblyAI API key**: copy `.env.example` to `.env` at the repo root and set `ASSEMBLYAI_API_KEY`. Never commit `.env` (gitignored) or send the key to the browser - it's read server-side only, by `server/index.js`'s `/v1/token` route and by `server/checks/llmGateway.js` (used from `disclosureCheck.js` and `piiScan.js`).
 2. **Run the backend**: `cd server && npm install && npm start` (listens on `:8787`, mints Voice Agent tokens and serves `/v1/analyze-session`). No database - pattern packs and checks are plain code modules.
 3. **Run the frontend**: `cd client && npm install && npm run dev` (Vite dev server proxies `/v1/*` to the backend). Open the printed localhost URL. Check the consent box, click Start, allow mic access, talk, then End call and Generate report - or skip the mic entirely and click one of the synthetic sample-session buttons.
 4. **Run the checks' self-tests**: `cd server && npm test`.
@@ -55,7 +55,7 @@ A **HIPAA identifier pattern pack** (`server/checks/patternPacks.js`'s `hipaaPac
 ### Architecture
 
 - `server/` - thin Node/Express. `GET /v1/token` mints a short-lived Voice Agent token server-side (the real API key never leaves this process; reused as-is from the earlier build). `POST /v1/analyze-session` runs `server/checks/analyze.js` against a submitted session log and returns a findings report.
-- `server/checks/` - the R3-21 mechanisms: `consentCheck.js`, `disclosureCheck.js`, `piiScan.js` (runs a list of pluggable pattern packs from `patternPacks.js` against every transcript turn), and `analyze.js` which composes them. `analyze.test.js` is the self-check, including the HIPAA-pack-as-drop-in-extension demonstration.
+- `server/checks/` - the R3-21 mechanisms: `consentCheck.js`, `disclosureCheck.js` (LLM Gateway semantic judgment), `piiScan.js` (pattern packs from `patternPacks.js` plus an LLM Gateway free-form-PII pass), `llmGateway.js` (shared LLM Gateway client), and `analyze.js` which composes them - see `docs/guardrails-llm-gateway-integration.md` for how the AssemblyAI calls work. `analyze.test.js` is the self-check, including the HIPAA-pack-as-drop-in-extension demonstration.
 - `client/` - React + Vite. `useVoiceAgent.js` connects to `wss://agents.assemblyai.com/v1/ws?token=...` (session-ingestion plumbing reused from the earlier build: `AudioWorklet` mic capture, PCM16 streaming, gapless `reply.audio` playback scheduling), logs a consent event and a timestamped transcript turn-by-turn, and hands the completed session log to `App.jsx` on `session.ended` for analysis. No live tool-calling and no domain persona - the agent config is neutral.
 
 See `AGENTS.md` for the standing convention on verifying AssemblyAI API docs before writing integration code.
