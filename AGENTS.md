@@ -31,6 +31,10 @@ An earlier build drifted into a live CCPA/CPRA Q&A voice advisor that was never 
 
 When something you need isn't obviously in the docs dump, don't guess - grep harder or ask.
 
+## Dependency hygiene
+
+`server/package-lock.json` and `client/package-lock.json` are committed - do not gitignore them. `server/package.json` pins `qs` via an `overrides` entry (body-parser hard-pins a vulnerable `qs` version transitively; the override is the fix, not a workaround to remove later). `client/package.json` is on Vite 7.x deliberately, not the audit-suggested Vite 8 - v8 ships the experimental rolldown-vite engine and `@vitejs/plugin-react` doesn't officially peer-support it yet. On a fresh macOS install `npm install` warns that `fsevents`'s install script isn't in `allowScripts`; that's expected and safe to leave unapproved (fsevents is an optional macOS-only file-watcher acceleration, not required for `vite`/`npm test`/`npm run build` to work).
+
 ## Maintaining this file
 
 Keep this file proportionate: durable, project-wide facts only (constraints, architecture, how to run things). Prefer pointing at the authoritative file/command over duplicating details that will drift. Update it when the product direction, stack, or hard constraints change - not for routine feature work.
