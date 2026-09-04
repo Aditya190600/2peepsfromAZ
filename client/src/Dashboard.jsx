@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useVoiceAgent } from "./useVoiceAgent";
-import { SAMPLE_SESSIONS } from "./sampleSessions";
+import { SAMPLE_SESSIONS, SAMPLE_AUDIO_URLS } from "./sampleSessions";
 import "./App.css";
 
 const STATUS_LABEL = {
@@ -345,9 +345,17 @@ export default function Dashboard() {
             <h3>Or analyze a sample session</h3>
             <div className="sample-buttons">
               {Object.keys(SAMPLE_SESSIONS).map((key) => (
-                <button key={key} className="btn btn-outline" onClick={() => runSample(key)}>
-                  {SAMPLE_LABEL[key] ?? key}
-                </button>
+                <div key={key} className="sample-row">
+                  <button className="btn btn-outline" onClick={() => runSample(key)}>
+                    {SAMPLE_LABEL[key] ?? key}
+                  </button>
+                  <audio
+                    className="sample-audio"
+                    controls
+                    preload="none"
+                    src={SAMPLE_AUDIO_URLS[key]}
+                  />
+                </div>
               ))}
             </div>
           </div>
