@@ -2,6 +2,15 @@ import { useCallback, useRef, useState } from "react";
 
 const SAMPLE_RATE = 24000;
 
+// Below this peak amplitude (int16 scale) a chunk is treated as silence for the
+// mic-liveness check - not a VAD, just "is the input device producing any signal at all".
+const SILENCE_AMPLITUDE_THRESHOLD = 200;
+// How long the mic can stay silent before we warn the user their input device may be
+// muted/misconfigured. Well above normal conversational gaps (agent reply playback +
+// the caller's think time before responding) so it doesn't fire during a real call -
+// only when the input device is truly producing nothing.
+const SILENCE_WARNING_MS = 15000;
+
 // Neutral, industry-agnostic session config - no domain persona, no tools.
 // This is only the session-ingestion plumbing R3-21 analyzes after the fact.
 const SYSTEM_PROMPT =
@@ -13,6 +22,7 @@ export function useVoiceAgent() {
   const [status, setStatus] = useState("idle"); // idle | connecting | ready | error
   const [transcript, setTranscript] = useState([]); // {role, text}[]
   const [lastSession, setLastSession] = useState(null); // completed session log, ready to analyze
+  const [micSilent, setMicSilent] = useState(false);
 
   const wsRef = useRef(null);
   const audioCtxInRef = useRef(null);
@@ -22,6 +32,8 @@ export function useVoiceAgent() {
   const nextPlaybackTimeRef = useRef(0);
   const pendingSourcesRef = useRef([]);
   const sessionRef = useRef(null); // {sessionId, startedAt, consentEvent, turns}
+  const lastAudibleAtRef = useRef(0);
+  const silenceCheckIntervalRef = useRef(null);
 
   const appendTranscript = useCallback((role, text) => {
     setTranscript((prev) => [...prev, { role, text }]);
@@ -196,9 +208,16 @@ export function useVoiceAgent() {
       if (ws.readyState !== WebSocket.OPEN) return;
       const float32 = event.data;
       const int16 = new Int16Array(float32.length);
+      let peak = 0;
       for (let i = 0; i < float32.length; i++) {
         const s = Math.max(-1, Math.min(1, float32[i]));
         int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+        const abs = Math.abs(int16[i]);
+        if (abs > peak) peak = abs;
+      }
+      if (peak >= SILENCE_AMPLITUDE_THRESHOLD) {
+        lastAudibleAtRef.current = Date.now();
+        setMicSilent(false);
       }
       const bytes = new Uint8Array(int16.buffer);
       let binary = "";
@@ -207,9 +226,18 @@ export function useVoiceAgent() {
     };
 
     source.connect(worklet);
+
+    lastAudibleAtRef.current = Date.now();
+    setMicSilent(false);
+    silenceCheckIntervalRef.current = setInterval(() => {
+      setMicSilent(Date.now() - lastAudibleAtRef.current > SILENCE_WARNING_MS);
+    }, 1000);
   }, []);
 
   const stopMic = useCallback(() => {
+    clearInterval(silenceCheckIntervalRef.current);
+    silenceCheckIntervalRef.current = null;
+    setMicSilent(false);
     workletNodeRef.current?.port.close();
     workletNodeRef.current?.disconnect();
     workletNodeRef.current = null;
@@ -238,5 +266,5 @@ export function useVoiceAgent() {
     setStatus("idle");
   }, [stopMic]);
 
-  return { status, transcript, lastSession, connect, disconnect };
+  return { status, transcript, lastSession, micSilent, connect, disconnect };
 }
