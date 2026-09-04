@@ -590,3 +590,76 @@ body {
   font-size: 13px;
   line-height: 1.5;
 }
+
+.report-toolbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.print-btn {
+  flex-shrink: 0;
+}
+
+.print-letterhead,
+.print-footer {
+  display: none;
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .masthead,
+  .session-panel,
+  .report-toolbar,
+  .report-heading {
+    display: none;
+  }
+
+  .page {
+    max-width: none;
+    padding: 0;
+  }
+
+  .layout {
+    display: block;
+  }
+
+  .report-panel {
+    border: none;
+    padding: 0;
+  }
+
+  .print-letterhead {
+    display: block;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+  }
+
+  .print-letterhead .brand {
+    margin-bottom: 6px;
+  }
+
+  .print-letterhead p {
+    margin: 2px 0;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .finding {
+    break-inside: avoid;
+  }
+
+  .print-footer {
+    display: block;
+    margin-top: 32px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+    font-size: 11px;
+    color: var(--muted);
+  }
+}
