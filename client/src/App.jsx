@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Landing from "./Landing";
 import Dashboard from "./Dashboard";
+import History from "./History";
 import "./App.css";
 
 function navigate(path) {
@@ -18,7 +19,10 @@ export default function App() {
   }, []);
 
   if (path === "/dashboard") {
-    return <Dashboard />;
+    return <Dashboard navigate={navigate} path={path} />;
   }
-  return <Landing onGetStarted={() => navigate("/dashboard")} />;
+  if (path === "/history") {
+    return <History navigate={navigate} path={path} />;
+  }
+  return <Landing onGetStarted={() => navigate("/dashboard")} navigate={navigate} path={path} />;
 }
