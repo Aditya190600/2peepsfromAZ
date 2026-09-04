@@ -55,6 +55,54 @@ function Finding({ finding }) {
   );
 }
 
+function IntroSteps() {
+  return (
+    <div className="intro-steps">
+      <h2>How this works</h2>
+      <p className="intro-lede">
+        ComplyLine reviews one completed AssemblyAI voice call and reports whether it met three
+        compliance checks. Try it two ways:
+      </p>
+      <ol className="intro-list">
+        <li>
+          <span className="intro-num">1</span>
+          <div>
+            <strong>Start a live call</strong>
+            <p>
+              Click <em>Start call</em> in the panel on the left. Your browser will ask for
+              microphone access — allow it so your voice can reach the AssemblyAI agent.
+            </p>
+          </div>
+        </li>
+        <li>
+          <span className="intro-num">2</span>
+          <div>
+            <strong>Talk to the agent</strong>
+            <p>
+              It's a real voice conversation — say hello, ask a question, anything. The agent
+              discloses up front that it's AI, and the transcript fills in live as you speak.
+            </p>
+          </div>
+        </li>
+        <li>
+          <span className="intro-num">3</span>
+          <div>
+            <strong>End the call for your report</strong>
+            <p>
+              Click <em>End call</em>, then <em>Generate report for last call</em>. The report
+              here shows consent logging, AI-disclosure timing, and a PII pattern scan.
+            </p>
+          </div>
+        </li>
+      </ol>
+      <p className="intro-alt">
+        Prefer not to use your mic right now? Skip straight to a <strong>sample session</strong>{" "}
+        below the call controls — same report, no live call needed.
+      </p>
+    </div>
+  );
+}
+
 function Report({ report }) {
   if (!report) {
     return (
@@ -150,6 +198,19 @@ export default function App() {
               </span>
             </div>
 
+            {canStart && (
+              <p className="hint">Your browser will ask for microphone access.</p>
+            )}
+            {status === "connecting" && (
+              <p className="hint">Connecting to the AssemblyAI voice agent…</p>
+            )}
+            {status === "ready" && (
+              <p className="hint">
+                Live — say hello or ask anything. Click <em>End call</em> when you're done to
+                generate the report.
+              </p>
+            )}
+
             {status === "error" && (
               <p className="error-banner">
                 The call could not connect. Check the AssemblyAI API key on the server and try
@@ -189,8 +250,14 @@ export default function App() {
         </section>
 
         <section className="panel report-panel">
-          <h2>Compliance report</h2>
-          <Report report={report} />
+          {status === "idle" && !report ? (
+            <IntroSteps />
+          ) : (
+            <>
+              <h2>Compliance report</h2>
+              <Report report={report} />
+            </>
+          )}
         </section>
       </main>
     </div>
