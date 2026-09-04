@@ -382,6 +382,54 @@ body {
   background: var(--na-soft);
 }
 
+.finding-timestamp {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.finding-timestamp-clickable {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  padding: 2px 8px;
+  cursor: pointer;
+  font-family: var(--mono);
+}
+
+.finding-timestamp-clickable:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.dropzone {
+  display: block;
+  border: 2px dashed var(--line-strong);
+  border-radius: var(--radius);
+  padding: 20px 14px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.dropzone:hover,
+.dropzone.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.report-audio {
+  margin-bottom: 20px;
+}
+
+.report-audio audio {
+  width: 100%;
+}
+
 .finding-name {
   font-weight: 600;
   font-size: 14.5px;
@@ -682,7 +730,8 @@ body {
   .masthead,
   .session-panel,
   .report-toolbar,
-  .report-heading {
+  .report-heading,
+  .report-audio {
     display: none;
   }
 

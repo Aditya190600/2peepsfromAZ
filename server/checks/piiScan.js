@@ -34,6 +34,7 @@ async function llmPiiScan(session, llmGateway) {
     .filter((item) => turns[item.turnIndex] && typeof item.text === "string" && item.text.length > 0)
     .map((item) => ({
       turnIndex: item.turnIndex,
+      tMs: turns[item.turnIndex].tMs,
       role: turns[item.turnIndex].role,
       packId: "llm_gateway_ner",
       patternId: item.type,
@@ -59,6 +60,7 @@ export async function piiScan(session, patternPacks, { llmGateway = callLlmGatew
           if (pattern.validate && !pattern.validate(match[0])) continue;
           items.push({
             turnIndex,
+            tMs: turn.tMs,
             role: turn.role,
             packId: pack.id,
             patternId: pattern.id,

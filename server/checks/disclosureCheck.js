@@ -57,5 +57,6 @@ export async function disclosureCheck(session, { llmGateway = callLlmGateway } =
     check: "ai_disclosure",
     status: "pass",
     detail: `AI disclosure detected at ${matchedTurn.tMs}ms: "${verdict.quote ?? matchedTurn.text}"`,
+    tMs: matchedTurn.tMs,
   };
 }

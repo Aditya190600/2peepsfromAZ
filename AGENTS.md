@@ -19,6 +19,8 @@ Product (R3-21, selected idea - see `docs/hackathon-ideas.md`): a **post-hoc ses
 
 An earlier build drifted into a live CCPA/CPRA Q&A voice advisor that was never the selected idea; that direction was reverted in favor of the above.
 
+**Live-call audio is never stored - only the checked-in fact, so don't assume otherwise.** `client/src/useVoiceAgent.js` streams mic PCM to AssemblyAI and plays reply PCM back through the Web Audio API in real time; neither is written to disk, blob storage, or a DB - only the text transcript (with per-turn `tMs`) is kept, in React state, lost on reload. `recordingConsentCheck.js`/`consentCheck.js` verify that recording/consent language was *declared* (spoken, or a `consentEvent` flag), not that audio was actually captured. The demo-upload path (`POST /v1/transcribe-upload`, via AssemblyAI's pre-recorded STT - a different product from the Voice Agent API) is the only path with real audio available for playback, since the client keeps the uploaded `File` as a local blob URL; every finding (from every check except `consent`, which has no audio position) carries a `tMs` so the UI can seek that player to it.
+
 ## Standing convention: verify AssemblyAI docs before writing integration code
 
 **Before writing or modifying any AssemblyAI integration code**, fetch `https://www.assemblyai.com/docs/llms-full.txt` live (it's ~95k lines; grep it, don't try to read it whole) and check the relevant `/docs/voice-agents/...` pages as needed. Do not rely on memorized/training-data parameter names or event shapes - this API has changed since most models' training cutoffs, and the docs disagree with common LLM assumptions in specific, easy-to-miss ways (verified live 2026-09-03):

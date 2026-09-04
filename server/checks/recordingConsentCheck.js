@@ -26,5 +26,6 @@ export function recordingConsentCheck(session) {
     check: "recording_consent",
     status: "pass",
     detail: `Recording-disclosure language detected at ${match.tMs}ms: "${match.text}"`,
+    tMs: match.tMs,
   };
 }
