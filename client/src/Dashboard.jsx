@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { useVoiceAgent } from "./useVoiceAgent";
-import { SAMPLE_SESSIONS, SAMPLE_AUDIO_URLS } from "./sampleSessions";
+import { SAMPLE_SESSIONS, SAMPLE_AUDIO_URLS, GENERATED_SESSION_KEYS } from "./sampleSessions";
+import { Nav, Footer } from "./Chrome";
+import AudioPlayer from "./AudioPlayer";
+import { saveHistoryEntry } from "./reportHistory";
+import {
+  CHECK_LABEL,
+  CHECK_CITATION,
+  PACK_CITATION,
+  sortFindingsBySeverity,
+  headlineVerdict,
+} from "./compliance";
 import "./App.css";
 
 function formatTMs(tMs) {
@@ -17,15 +27,7 @@ const STATUS_LABEL = {
   error: "Connection error",
 };
 
-const CHECK_LABEL = {
-  consent: "Consent logged (TCPA)",
-  ai_disclosure: "AI disclosure timing",
-  recording_consent: "Recording-consent disclosure",
-  opt_out: "Opt-out honored (TCPA)",
-  pii_scan: "PII pattern scan",
-};
-
-const SAMPLE_LABEL = {
+const PLAYABLE_SAMPLE_LABEL = {
   "clean-call": "Clean call — everything passes",
   "tcpa-violation": "TCPA violation — no consent, SSN spoken",
   "optout-ignored": "Opt-out request ignored by agent",
@@ -34,12 +36,41 @@ const SAMPLE_LABEL = {
   "clean-call-2": "Clean call — billing reminder, everything passes",
 };
 
+const GENERATED_SCENARIO_LABEL = {
+  clean: "Clean call",
+  tcpa: "TCPA violation",
+  optout: "Opt-out ignored",
+  hipaa: "HIPAA identifiers spoken",
+  finance: "Finance (GLBA) identifiers spoken",
+  late: "Late AI disclosure",
+};
+
+function sampleLabel(key) {
+  if (PLAYABLE_SAMPLE_LABEL[key]) return PLAYABLE_SAMPLE_LABEL[key];
+  const scenario = key.replace(/^gen-/, "").replace(/-\d+$/, "");
+  return GENERATED_SCENARIO_LABEL[scenario] ?? key;
+}
+
+const INDUSTRY_PACKS = [
+  { id: "hipaa", name: "HIPAA identifiers (healthcare)" },
+  { id: "finance", name: "GLBA finance identifiers (banking)" },
+];
+
+class ApiError extends Error {}
+
 async function analyze(session, patternPackIds) {
   const resp = await fetch("/v1/analyze-session", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ session, patternPackIds }),
   });
+  if (!resp.ok) {
+    throw new ApiError(
+      resp.status >= 500
+        ? "The compliance server hit an error analyzing this session. Please try again."
+        : "This session couldn't be analyzed - check that it has a valid transcript and try again."
+    );
+  }
   return resp.json();
 }
 
@@ -49,13 +80,39 @@ async function transcribeUpload(file) {
     headers: { "Content-Type": file.type || "application/octet-stream" },
     body: file,
   });
-  const body = await resp.json();
-  if (!resp.ok) throw new Error(body.error ?? "Transcription failed.");
+  let body;
+  try {
+    body = await resp.json();
+  } catch {
+    throw new ApiError("The compliance server is unreachable right now. Please try again shortly.");
+  }
+  if (!resp.ok) throw new ApiError(body.error ?? "Transcription failed. Please try again.");
   return body;
+}
+
+// Runs `fn` over `items` with at most `limit` in flight at once, so a fleet
+// run never fires a burst of concurrent LLM Gateway calls into the account's
+// rate limit again. Calls `onResult` as each one finishes, in item order for
+// display but not necessarily completion order.
+async function mapWithConcurrency(items, limit, fn, onProgress) {
+  const results = new Array(items.length);
+  let next = 0;
+  let done = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i], i);
+      done += 1;
+      onProgress?.(done, items.length);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
 }
 
 const STATUS_CLASS = { flag: "is-flag", pass: "is-pass", "n/a": "is-na", error: "is-na" };
 const STATUS_TEXT = { flag: "Flag", pass: "Pass", "n/a": "N/A", error: "Unable to run" };
+const VERDICT_CLASS = { critical: "is-flag", high: "is-flag", medium: "is-flag", review: "is-na", clear: "is-pass" };
 
 function Timestamp({ tMs, onSeek }) {
   if (tMs == null) return null;
@@ -83,13 +140,19 @@ function Finding({ finding, onSeek }) {
         <Timestamp tMs={finding.tMs} onSeek={onSeek} />
       </div>
       {finding.detail && <p className="finding-detail">{finding.detail}</p>}
+      <p className="finding-citation">{CHECK_CITATION[finding.check]}</p>
       {finding.check === "pii_scan" && (
         <ul className="finding-items">
           {finding.items.map((item, i) => (
             <li key={i}>
-              turn {item.turnIndex} ({item.role}) — {item.label}{" "}
-              <span className="pack-tag">[{item.packId}]</span>: {item.matchRedacted}{" "}
-              <Timestamp tMs={item.tMs} onSeek={onSeek} />
+              <div>
+                turn {item.turnIndex} ({item.role}) — {item.label}{" "}
+                <span className="pack-tag">[{item.packId}]</span>: {item.matchRedacted}{" "}
+                <Timestamp tMs={item.tMs} onSeek={onSeek} />
+              </div>
+              {PACK_CITATION[item.packId] && (
+                <div className="finding-item-citation">{PACK_CITATION[item.packId]}</div>
+              )}
             </li>
           ))}
           {finding.items.length === 0 && <li>No matches.</li>}
@@ -104,8 +167,8 @@ function IntroSteps() {
     <div className="intro-steps">
       <h2>How this works</h2>
       <p className="intro-lede">
-        ComplyLine reviews one completed AssemblyAI voice call and reports whether it met three
-        compliance checks. Try it two ways:
+        ComplyLine reviews one completed AssemblyAI voice call and reports whether it met a set of
+        compliance checks, ranked by severity. Try it two ways:
       </p>
       <ol className="intro-list">
         <li>
@@ -134,7 +197,7 @@ function IntroSteps() {
             <strong>End the call for your report</strong>
             <p>
               Click <em>End call</em>, then <em>Generate report for last call</em>. The report
-              here shows consent logging, AI-disclosure timing, and a PII pattern scan.
+              here ranks findings by severity, with a regulatory citation on each.
             </p>
           </div>
         </li>
@@ -147,25 +210,44 @@ function IntroSteps() {
   );
 }
 
-function FleetSummary({ results }) {
-  const sessionsPassed = results.filter((r) =>
-    r.report.findings.every((f) => f.status === "pass")
+function FleetSummary({ results, progress }) {
+  const total = results.length;
+  const passed = results.filter(
+    (r) => !r.report.findings.some((f) => f.status === "flag" || f.status === "error")
   ).length;
+  const flagged = results.filter((r) => r.report.findings.some((f) => f.status === "flag")).length;
+  const erroredOnly = total - passed - flagged;
+  const complianceRate = total > 0 ? Math.round((passed / total) * 100) : 0;
+
   const perCheck = {};
   for (const r of results) {
     for (const f of r.report.findings) {
-      perCheck[f.check] ??= { pass: 0, flag: 0 };
-      perCheck[f.check][f.status] += 1;
+      perCheck[f.check] ??= { pass: 0, flag: 0, error: 0, na: 0 };
+      if (f.status === "n/a") perCheck[f.check].na += 1;
+      else perCheck[f.check][f.status] += 1;
     }
   }
 
   return (
     <div className="fleet-summary">
+      {progress && progress.done < progress.total && (
+        <p className="fleet-progress">
+          Analyzing… {progress.done} of {progress.total} sessions complete.
+        </p>
+      )}
+      <div className="fleet-rate">
+        <span className="fleet-rate-number">{complianceRate}%</span>
+        <span className="fleet-rate-label">compliance rate</span>
+      </div>
       <p className="fleet-headline">
-        <strong>
-          {sessionsPassed} of {results.length}
-        </strong>{" "}
-        calls passed all checks · {results.length - sessionsPassed} flagged
+        <strong>{passed}</strong> of <strong>{total}</strong> calls passed every check ·{" "}
+        <strong>{flagged}</strong> flagged
+        {erroredOnly > 0 && (
+          <>
+            {" "}
+            · <strong>{erroredOnly}</strong> could not be fully checked
+          </>
+        )}
       </p>
       <ul className="fleet-check-counts">
         {Object.entries(perCheck).map(([check, counts]) => (
@@ -173,6 +255,8 @@ function FleetSummary({ results }) {
             <span className="fleet-check-name">{CHECK_LABEL[check] ?? check}</span>
             <span className="fleet-check-pass">{counts.pass} pass</span>
             <span className="fleet-check-flag">{counts.flag} flag</span>
+            {counts.error > 0 && <span className="fleet-check-error">{counts.error} unable to run</span>}
+            {counts.na > 0 && <span className="fleet-check-na">{counts.na} n/a</span>}
           </li>
         ))}
       </ul>
@@ -180,19 +264,19 @@ function FleetSummary({ results }) {
   );
 }
 
-function FleetView({ results }) {
+function FleetView({ results, progress }) {
   return (
     <div>
-      <FleetSummary results={results} />
+      <FleetSummary results={results} progress={progress} />
       <ul className="fleet-session-list">
         {results.map(({ key, report }) => {
-          const hasFlag = report.findings.some((f) => f.status === "flag");
+          const verdict = headlineVerdict(report.findings);
           return (
             <li key={key} className="fleet-session-item">
               <details>
-                <summary className={`fleet-session-summary ${hasFlag ? "is-flag" : "is-pass"}`}>
-                  <span className="finding-status">{hasFlag ? "Flag" : "Pass"}</span>
-                  <span className="fleet-session-label">{SAMPLE_LABEL[key] ?? key}</span>
+                <summary className={`fleet-session-summary ${VERDICT_CLASS[verdict.level] ?? "is-na"}`}>
+                  <span className="finding-status">{verdict.label}</span>
+                  <span className="fleet-session-label">{sampleLabel(key)}</span>
                   <span className="fleet-session-id">{report.sessionId}</span>
                 </summary>
                 <div className="fleet-session-body">
@@ -213,24 +297,31 @@ function Report({ report, audioUrl, audioRef, onSeek }) {
       <div className="report-empty">
         <p>
           Run a live call, drop in an audio file, or pick a sample session to generate a
-          compliance report — consent logging, AI-disclosure timing, and a PII pattern scan.
+          compliance report, ranked by severity with a regulatory citation on every finding.
         </p>
       </div>
     );
   }
+  const sortedFindings = sortFindingsBySeverity(report.findings);
+  const verdict = headlineVerdict(report.findings);
   return (
     <div>
       <div className="report-toolbar">
-        <p className="report-meta">
-          {report.sessionId ?? "no session id"} · generated {report.generatedAt}
-        </p>
+        <div>
+          <p className="report-meta">
+            {report.sessionId ?? "no session id"} · generated {report.generatedAt}
+          </p>
+          <span className={`report-verdict finding-status ${VERDICT_CLASS[verdict.level] ?? "is-na"}`}>
+            {verdict.label}
+          </span>
+        </div>
         <button className="btn btn-outline print-btn" onClick={() => window.print()}>
           Print / export report
         </button>
       </div>
       {audioUrl && (
         <div className="report-audio">
-          <audio ref={audioRef} controls src={audioUrl} />
+          <AudioPlayer src={audioUrl} audioRef={audioRef} />
           <p className="hint">
             Findings with a ▶ timestamp are clickable — click one to jump the player there.
           </p>
@@ -241,12 +332,12 @@ function Report({ report, audioUrl, audioRef, onSeek }) {
           <span className="brand-mark" aria-hidden="true" />
           <h1>ComplyLine</h1>
         </div>
-        <p>Post-call compliance report</p>
+        <p>Post-call compliance report — {verdict.label}</p>
         <p className="report-meta">
           {report.sessionId ?? "no session id"} · generated {report.generatedAt}
         </p>
       </div>
-      {report.findings.map((f) => (
+      {sortedFindings.map((f) => (
         <Finding key={f.check} finding={f} onSeek={audioUrl ? onSeek : null} />
       ))}
       <p className="print-footer">
@@ -256,21 +347,44 @@ function Report({ report, audioUrl, audioRef, onSeek }) {
   );
 }
 
-export default function Dashboard() {
+function DataHandlingPanel() {
+  return (
+    <div className="section-block data-handling-panel">
+      <h3>Data handling</h3>
+      <ul className="data-handling-list">
+        <li>Live call audio is never written to disk.</li>
+        <li>Transcripts exist only in your browser's memory and are discarded on reload.</li>
+        <li>Your AssemblyAI API key never leaves the server.</li>
+      </ul>
+    </div>
+  );
+}
+
+export default function Dashboard({ navigate, path }) {
   const { status, transcript, lastSession, micSilent, connect, disconnect } = useVoiceAgent();
   const [consent, setConsent] = useState(false);
-  const [hipaaPack, setHipaaPack] = useState(false);
+  const [selectedPacks, setSelectedPacks] = useState([]);
   const [report, setReport] = useState(null);
   const [fleetResults, setFleetResults] = useState(null);
   const [fleetLoading, setFleetLoading] = useState(false);
+  const [fleetProgress, setFleetProgress] = useState(null);
+  const [fleetError, setFleetError] = useState(null);
   const [activeAudioUrl, setActiveAudioUrl] = useState(null);
   const [uploadStatus, setUploadStatus] = useState("idle"); // idle | uploading | error
   const [uploadError, setUploadError] = useState(null);
   const [dragActive, setDragActive] = useState(false);
+  const [sampleLoadingKey, setSampleLoadingKey] = useState(null);
+  const [sampleError, setSampleError] = useState(null);
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [liveError, setLiveError] = useState(null);
   const audioRef = useRef(null);
 
-  const patternPackIds = hipaaPack ? ["generic", "hipaa"] : ["generic"];
+  const patternPackIds = ["generic", ...selectedPacks];
   const canStart = status === "idle" || status === "error";
+
+  const togglePack = (id) => {
+    setSelectedPacks((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]));
+  };
 
   const onSeek = (tMs) => {
     const audio = audioRef.current;
@@ -283,45 +397,98 @@ export default function Dashboard() {
     document.title = report ? `ComplyLine report — ${report.sessionId ?? "session"}` : "ComplyLine";
   }, [report]);
 
+  const recordHistory = (label, sessionId, findings) => {
+    const verdict = headlineVerdict(findings);
+    saveHistoryEntry({
+      timestamp: new Date().toISOString(),
+      label,
+      sessionId,
+      verdictLevel: verdict.level,
+      verdictLabel: verdict.label,
+    });
+  };
+
   const runLiveReport = async () => {
     if (!lastSession) return;
     setFleetResults(null);
+    setFleetError(null);
     setActiveAudioUrl(null); // live calls aren't recorded/stored - no audio to play back
-    setReport(await analyze(lastSession, patternPackIds));
+    setLiveError(null);
+    setLiveLoading(true);
+    try {
+      const nextReport = await analyze(lastSession, patternPackIds);
+      setReport(nextReport);
+      recordHistory("Live call", nextReport.sessionId, nextReport.findings);
+    } catch (err) {
+      setLiveError(err.message ?? "Something went wrong generating this report.");
+    } finally {
+      setLiveLoading(false);
+    }
   };
 
   const runSample = async (key) => {
     setFleetResults(null);
-    setActiveAudioUrl(SAMPLE_AUDIO_URLS[key]);
-    setReport(await analyze(SAMPLE_SESSIONS[key], patternPackIds));
+    setFleetError(null);
+    setSampleError(null);
+    setSampleLoadingKey(key);
+    setActiveAudioUrl(SAMPLE_AUDIO_URLS[key] && PLAYABLE_SAMPLE_LABEL[key] ? SAMPLE_AUDIO_URLS[key] : null);
+    try {
+      const nextReport = await analyze(SAMPLE_SESSIONS[key], patternPackIds);
+      setReport(nextReport);
+      recordHistory(sampleLabel(key), nextReport.sessionId, nextReport.findings);
+    } catch (err) {
+      setSampleError(err.message ?? "Something went wrong generating this report.");
+      setReport(null);
+    } finally {
+      setSampleLoadingKey(null);
+    }
   };
 
-  const runFleet = async () => {
+  const runFleetOn = async (keys) => {
     setFleetLoading(true);
+    setFleetError(null);
     setReport(null);
     setActiveAudioUrl(null);
-    const keys = Object.keys(SAMPLE_SESSIONS);
-    const reports = await Promise.all(
-      keys.map((key) => analyze(SAMPLE_SESSIONS[key], patternPackIds))
-    );
-    setFleetResults(keys.map((key, i) => ({ key, report: reports[i] })));
-    setFleetLoading(false);
+    setFleetResults([]);
+    setFleetProgress({ done: 0, total: keys.length });
+    try {
+      const reports = await mapWithConcurrency(
+        keys,
+        2,
+        (key) => analyze(SAMPLE_SESSIONS[key], patternPackIds),
+        (done, total) => setFleetProgress({ done, total })
+      );
+      const results = keys.map((key, i) => ({ key, report: reports[i] }));
+      setFleetResults(results);
+      for (const { key, report: r } of results) {
+        recordHistory(sampleLabel(key), r.sessionId, r.findings);
+      }
+    } catch (err) {
+      setFleetError(err.message ?? "Something went wrong running the fleet analysis.");
+      setFleetResults(null);
+    } finally {
+      setFleetLoading(false);
+      setFleetProgress(null);
+    }
   };
 
   const runUpload = async (file) => {
     if (!file) return;
     setFleetResults(null);
+    setFleetError(null);
     setReport(null);
     setUploadError(null);
     setUploadStatus("uploading");
     setActiveAudioUrl(URL.createObjectURL(file));
     try {
       const session = await transcribeUpload(file);
-      setReport(await analyze(session, patternPackIds));
+      const nextReport = await analyze(session, patternPackIds);
+      setReport(nextReport);
+      recordHistory("Uploaded audio", nextReport.sessionId, nextReport.findings);
       setUploadStatus("idle");
     } catch (err) {
       setUploadStatus("error");
-      setUploadError(err.message);
+      setUploadError(err.message ?? "Something went wrong processing this file.");
     }
   };
 
@@ -331,33 +498,39 @@ export default function Dashboard() {
     runUpload(e.dataTransfer.files?.[0]);
   };
 
+  const playableKeys = Object.keys(PLAYABLE_SAMPLE_LABEL);
+
   return (
     <div className="page">
+      <Nav path={path} navigate={navigate} />
       <header className="masthead">
-        <div className="brand">
-          <span className="brand-mark" aria-hidden="true" />
-          <h1>ComplyLine</h1>
-        </div>
         <p className="tagline">
           Post-call compliance review for AI voice agents. Ingests one completed AssemblyAI Voice
           Agent session and flags TCPA consent logging, AI-disclosure timing, and PII exposure —
-          with an industry pattern pack pluggable on top of the generic scan.
+          ranked by severity, with a regulatory citation on every finding.
         </p>
       </header>
 
       <main className="layout">
         <section className="panel session-panel">
+          <DataHandlingPanel />
+
           <div className="section-block">
             <h2>Session</h2>
-            <label className="check-row" style={{ marginTop: 14 }}>
-              <input
-                type="checkbox"
-                checked={hipaaPack}
-                onChange={(e) => setHipaaPack(e.target.checked)}
-              />
-              Include HIPAA identifier pack
-            </label>
-            <p className="pack-note">Drop-in extension over the generic scan — no core changes.</p>
+            <p className="panel-label">Industry pattern packs (in addition to the generic scan)</p>
+            <div className="pack-select">
+              {INDUSTRY_PACKS.map((pack) => (
+                <label className="check-row" key={pack.id}>
+                  <input
+                    type="checkbox"
+                    checked={selectedPacks.includes(pack.id)}
+                    onChange={() => togglePack(pack.id)}
+                  />
+                  {pack.name}
+                </label>
+              ))}
+            </div>
+            <p className="pack-note">Drop-in extensions over the generic scan — no core changes.</p>
           </div>
 
           <div className="section-block">
@@ -425,15 +598,20 @@ export default function Dashboard() {
             )}
 
             {lastSession && (
-              <button className="btn btn-outline generate-btn" onClick={runLiveReport}>
-                Generate report for last call
+              <button
+                className="btn btn-outline generate-btn"
+                onClick={runLiveReport}
+                disabled={liveLoading}
+              >
+                {liveLoading ? "Generating report…" : "Generate report for last call"}
               </button>
             )}
+            {liveError && <p className="error-banner">{liveError}</p>}
           </div>
 
           <div className="section-block">
             <h3>Demo: try your own audio</h3>
-            <p className="pack-note">
+            <p className="pack-note upload-note">
               Not a live call — drop in any recorded audio file and it runs through the same
               compliance pipeline, with playback synced to each finding.
             </p>
@@ -460,42 +638,78 @@ export default function Dashboard() {
           </div>
 
           <div className="section-block">
-            <h3>Or analyze a sample session</h3>
+            <h3>Playable samples</h3>
             <div className="sample-buttons">
-              {Object.keys(SAMPLE_SESSIONS).map((key) => (
+              {playableKeys.map((key) => (
                 <div key={key} className="sample-row">
-                  <button className="btn btn-outline" onClick={() => runSample(key)}>
-                    {SAMPLE_LABEL[key] ?? key}
+                  <button
+                    className="btn btn-outline"
+                    onClick={() => runSample(key)}
+                    disabled={sampleLoadingKey === key}
+                  >
+                    {sampleLoadingKey === key ? "Analyzing…" : sampleLabel(key)}
                   </button>
-                  <audio
-                    className="sample-audio"
-                    controls
-                    preload="none"
-                    src={SAMPLE_AUDIO_URLS[key]}
-                  />
+                  <AudioPlayer src={SAMPLE_AUDIO_URLS[key]} compact />
                 </div>
               ))}
             </div>
           </div>
 
           <div className="section-block">
+            <h3>Sample library ({GENERATED_SESSION_KEYS.length} text-only sessions)</h3>
+            <p className="pack-note">Synthetic sessions for exercising the fleet view at volume.</p>
+            <ul className="sample-library-list">
+              {GENERATED_SESSION_KEYS.map((key) => (
+                <li key={key}>
+                  <button
+                    className="sample-library-item"
+                    onClick={() => runSample(key)}
+                    disabled={sampleLoadingKey === key}
+                  >
+                    {sampleLoadingKey === key ? "Analyzing…" : sampleLabel(key)}
+                    <span className="sample-library-id">{SAMPLE_SESSIONS[key].sessionId}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {sampleError && <p className="error-banner">{sampleError}</p>}
+          </div>
+
+          <div className="section-block">
             <h3>Or analyze a fleet</h3>
-            <button className="btn btn-outline generate-btn" onClick={runFleet} disabled={fleetLoading}>
-              {fleetLoading ? "Analyzing…" : `Analyze all ${Object.keys(SAMPLE_SESSIONS).length} sample sessions`}
+            <button
+              className="btn btn-outline generate-btn"
+              onClick={() => runFleetOn(playableKeys)}
+              disabled={fleetLoading}
+            >
+              {fleetLoading ? "Analyzing…" : `Analyze ${playableKeys.length} sample sessions`}
+            </button>
+            <button
+              className="btn btn-outline generate-btn"
+              onClick={() => runFleetOn(Object.keys(SAMPLE_SESSIONS))}
+              disabled={fleetLoading}
+              style={{ marginTop: 8 }}
+            >
+              {fleetLoading
+                ? "Analyzing…"
+                : `Analyze full library (${Object.keys(SAMPLE_SESSIONS).length} sessions)`}
             </button>
             <p className="pack-note">
-              Aggregates pass/flag counts across every sample session at once.
+              Aggregates pass/flag counts and compliance rate across every sample session. The
+              full library run may take a few minutes on a rate-limited account - results appear
+              as they complete.
             </p>
+            {fleetError && <p className="error-banner">{fleetError}</p>}
           </div>
         </section>
 
         <section className="panel report-panel">
-          {status === "idle" && !report && !fleetResults ? (
+          {status === "idle" && !report && !fleetResults && !fleetLoading ? (
             <IntroSteps />
           ) : fleetResults ? (
             <>
               <h2>Fleet compliance report</h2>
-              <FleetView results={fleetResults} />
+              <FleetView results={fleetResults} progress={fleetProgress} />
             </>
           ) : (
             <>
@@ -505,6 +719,7 @@ export default function Dashboard() {
           )}
         </section>
       </main>
+      <Footer />
     </div>
   );
 }

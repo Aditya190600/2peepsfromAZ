@@ -1,0 +1,74 @@
+// Shared compliance vocabulary: labels, regulatory citations, and severity
+// ranking for each check, plus the headline-risk-verdict rollup. Lives
+// outside Dashboard.jsx so History.jsx can compute the same verdict from a
+// stored report without re-importing the whole dashboard.
+
+export const CHECK_LABEL = {
+  consent: "Consent logged (TCPA)",
+  ai_disclosure: "AI disclosure timing",
+  recording_consent: "Recording-consent disclosure",
+  opt_out: "Opt-out honored (TCPA)",
+  pii_scan: "PII pattern scan",
+};
+
+export const CHECK_CITATION = {
+  consent: "TCPA, 47 U.S.C. §227; 47 CFR §64.1200(a) — prior express consent required before an autodialed/AI call.",
+  ai_disclosure: "CA AB 2905 (Cal. Pub. Util. Code §2872) — AI voice callers must disclose their artificial nature.",
+  recording_consent: "State two-party consent (wiretap) statutes, e.g. Cal. Penal Code §632 — notice required before recording a call.",
+  opt_out: "TCPA, 47 CFR §64.1200(d) — do-not-call requests must be honored.",
+  pii_scan: "Pattern pack dependent — see citation on each matched pack below.",
+};
+
+export const PACK_CITATION = {
+  generic: "State data-breach notification laws (e.g. Cal. Civ. Code §1798.82) — SSN/card/account numbers are regulated PII.",
+  hipaa: "HIPAA Privacy Rule Safe Harbor, 45 CFR §164.514(b)(2) — 18 identifier categories requiring de-identification.",
+  finance: "GLBA Safeguards Rule, 15 U.S.C. §6801 — nonpublic personal financial information must be protected.",
+  llm_gateway_ner: "State data-breach notification laws — free-form PII (names, emails, addresses) is regulated personal information.",
+};
+
+// Missing consent / PII exposure carries statutory per-call damages; late
+// disclosure is a single-call statute violation; recording disclosure is a
+// state-by-state notice requirement, most often civil rather than statutory-fine risk.
+export const CHECK_SEVERITY = {
+  consent: "critical",
+  pii_scan: "critical",
+  ai_disclosure: "high",
+  recording_consent: "medium",
+  opt_out: "high",
+};
+
+export const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
+export const SEVERITY_LABEL = { critical: "Critical", high: "High", medium: "Medium", low: "Low" };
+
+function severityOf(finding) {
+  if (finding.status !== "flag") return null;
+  return CHECK_SEVERITY[finding.check] ?? "low";
+}
+
+// Sorts findings worst-first: flagged checks by severity, then errored
+// checks (unknown risk - can't be cleared), then passes/n-a last.
+export function sortFindingsBySeverity(findings) {
+  const rank = (f) => {
+    if (f.status === "flag") return SEVERITY_RANK[severityOf(f)] ?? 3;
+    if (f.status === "error") return 4;
+    return 5;
+  };
+  return [...findings].sort((a, b) => rank(a) - rank(b));
+}
+
+// One headline verdict for a report: worst severity among flagged findings,
+// or "review" if nothing flagged but a check errored, or "clear" otherwise.
+export function headlineVerdict(findings) {
+  const flagged = findings.filter((f) => f.status === "flag");
+  if (flagged.length > 0) {
+    const worst = flagged
+      .map(severityOf)
+      .sort((a, b) => SEVERITY_RANK[a] - SEVERITY_RANK[b])[0];
+    return { level: worst, label: `${SEVERITY_LABEL[worst]} risk`, flaggedCount: flagged.length };
+  }
+  const errored = findings.filter((f) => f.status === "error");
+  if (errored.length > 0) {
+    return { level: "review", label: "Needs review", flaggedCount: 0 };
+  }
+  return { level: "clear", label: "Clear", flaggedCount: 0 };
+}
