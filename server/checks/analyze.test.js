@@ -61,3 +61,30 @@ test("generic scan alone misses HIPAA identifiers; HIPAA pack catches them as a 
   assert.ok(hipaaPii.items.some((i) => i.patternId === "mrn"));
   assert.ok(hipaaPii.items.some((i) => i.patternId === "patient_id"));
 });
+
+const financeSession = {
+  sessionId: "sess_finance",
+  startedAt: "2026-09-03T10:00:00.000Z",
+  consentEvent: { granted: true, timestamp: "2026-09-03T09:59:00.000Z" },
+  turns: [
+    { role: "agent", text: "Hi, this is an automated assistant from the bank.", tMs: 200 },
+    {
+      role: "user",
+      text: "My routing number 021000021 and loan number 4837201 are on file.",
+      tMs: 3000,
+    },
+  ],
+};
+
+test("generic scan alone misses finance identifiers; finance pack catches them as a drop-in extension", () => {
+  const genericOnly = analyzeSession(financeSession, { patternPackIds: ["generic"] });
+  const withFinance = analyzeSession(financeSession, { patternPackIds: ["generic", "finance"] });
+
+  const genericPii = genericOnly.findings.find((f) => f.check === "pii_scan");
+  const financePii = withFinance.findings.find((f) => f.check === "pii_scan");
+
+  assert.equal(genericPii.items.length, 0);
+  assert.ok(financePii.items.length >= 2);
+  assert.ok(financePii.items.some((i) => i.patternId === "routing_number"));
+  assert.ok(financePii.items.some((i) => i.patternId === "loan_number"));
+});
