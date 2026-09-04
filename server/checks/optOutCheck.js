@@ -40,6 +40,7 @@ export function optOutCheck(session) {
       check: "opt_out",
       status: "pass",
       detail: `Opt-out request at turn ${optOutIndex} ("${turns[optOutIndex].text}") was acknowledged by the agent.`,
+      tMs: turns[optOutIndex].tMs,
     };
   }
 
@@ -47,5 +48,6 @@ export function optOutCheck(session) {
     check: "opt_out",
     status: "flag",
     detail: `Opt-out request at turn ${optOutIndex} ("${turns[optOutIndex].text}") was not acknowledged within ${AGENT_TURN_GRACE} agent turns.`,
+    tMs: turns[optOutIndex].tMs,
   };
 }
