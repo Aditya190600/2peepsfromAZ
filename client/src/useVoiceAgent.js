@@ -174,7 +174,14 @@ export function useVoiceAgent() {
   );
 
   const startMic = useCallback(async (ws) => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // Explicit (not relying on browser defaults): without echo cancellation, the
+    // agent's own reply audio leaking back into the mic (real speaker + mic, no
+    // headphones) reads to AssemblyAI's VAD as the user talking over every reply,
+    // so it keeps barging in on itself and no turn after the first ever finishes
+    // cleanly - see AssemblyAI docs' "TTS bleed-through" barge-in gotcha.
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
     micStreamRef.current = stream;
 
     const ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
