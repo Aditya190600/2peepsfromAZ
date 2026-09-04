@@ -28,4 +28,24 @@ export const SAMPLE_SESSIONS = {
       { role: "user", text: "My patient id 483920 and MRN:1029384 are on file.", tMs: 3500 },
     ],
   },
+  "late-disclosure": {
+    sessionId: "sess_demo_late_disclosure",
+    startedAt: "2026-09-03T10:15:00.000Z",
+    consentEvent: { granted: true, timestamp: "2026-09-03T10:14:50.000Z" },
+    turns: [
+      { role: "agent", text: "Hi there, thanks for calling Acme Support.", tMs: 500 },
+      { role: "user", text: "Hey, I have a question about my account.", tMs: 3000 },
+      { role: "agent", text: "Sure — just so you know, I'm an AI assistant helping with this call.", tMs: 15000 },
+    ],
+  },
+  "clean-call-2": {
+    sessionId: "sess_demo_clean_2",
+    startedAt: "2026-09-03T10:20:00.000Z",
+    consentEvent: { granted: true, timestamp: "2026-09-03T10:19:45.000Z" },
+    turns: [
+      { role: "agent", text: "Hello, this is a virtual assistant calling on behalf of Acme Billing.", tMs: 400 },
+      { role: "user", text: "Okay, what's this about?", tMs: 2800 },
+      { role: "agent", text: "Just a reminder that your invoice is due next week.", tMs: 4200 },
+    ],
+  },
 };
