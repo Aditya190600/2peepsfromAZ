@@ -20,6 +20,8 @@ const SAMPLE_LABEL = {
   "clean-call": "Clean call — everything passes",
   "tcpa-violation": "TCPA violation — no consent, SSN spoken",
   "healthcare-hipaa": "Healthcare call — HIPAA identifiers spoken",
+  "late-disclosure": "Late disclosure — AI mentioned after 10s window",
+  "clean-call-2": "Clean call — billing reminder, everything passes",
 };
 
 async function analyze(session, patternPackIds) {
@@ -103,6 +105,66 @@ function IntroSteps() {
   );
 }
 
+function FleetSummary({ results }) {
+  const sessionsPassed = results.filter((r) =>
+    r.report.findings.every((f) => f.status === "pass")
+  ).length;
+  const perCheck = {};
+  for (const r of results) {
+    for (const f of r.report.findings) {
+      perCheck[f.check] ??= { pass: 0, flag: 0 };
+      perCheck[f.check][f.status] += 1;
+    }
+  }
+
+  return (
+    <div className="fleet-summary">
+      <p className="fleet-headline">
+        <strong>
+          {sessionsPassed} of {results.length}
+        </strong>{" "}
+        calls passed all checks · {results.length - sessionsPassed} flagged
+      </p>
+      <ul className="fleet-check-counts">
+        {Object.entries(perCheck).map(([check, counts]) => (
+          <li key={check}>
+            <span className="fleet-check-name">{CHECK_LABEL[check] ?? check}</span>
+            <span className="fleet-check-pass">{counts.pass} pass</span>
+            <span className="fleet-check-flag">{counts.flag} flag</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function FleetView({ results }) {
+  return (
+    <div>
+      <FleetSummary results={results} />
+      <ul className="fleet-session-list">
+        {results.map(({ key, report }) => {
+          const hasFlag = report.findings.some((f) => f.status === "flag");
+          return (
+            <li key={key} className="fleet-session-item">
+              <details>
+                <summary className={`fleet-session-summary ${hasFlag ? "is-flag" : "is-pass"}`}>
+                  <span className="finding-status">{hasFlag ? "Flag" : "Pass"}</span>
+                  <span className="fleet-session-label">{SAMPLE_LABEL[key] ?? key}</span>
+                  <span className="fleet-session-id">{report.sessionId}</span>
+                </summary>
+                <div className="fleet-session-body">
+                  <Report report={report} />
+                </div>
+              </details>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 function Report({ report }) {
   if (!report) {
     return (
@@ -131,17 +193,32 @@ export default function App() {
   const [consent, setConsent] = useState(false);
   const [hipaaPack, setHipaaPack] = useState(false);
   const [report, setReport] = useState(null);
+  const [fleetResults, setFleetResults] = useState(null);
+  const [fleetLoading, setFleetLoading] = useState(false);
 
   const patternPackIds = hipaaPack ? ["generic", "hipaa"] : ["generic"];
   const canStart = status === "idle" || status === "error";
 
   const runLiveReport = async () => {
     if (!lastSession) return;
+    setFleetResults(null);
     setReport(await analyze(lastSession, patternPackIds));
   };
 
   const runSample = async (key) => {
+    setFleetResults(null);
     setReport(await analyze(SAMPLE_SESSIONS[key], patternPackIds));
+  };
+
+  const runFleet = async () => {
+    setFleetLoading(true);
+    setReport(null);
+    const keys = Object.keys(SAMPLE_SESSIONS);
+    const reports = await Promise.all(
+      keys.map((key) => analyze(SAMPLE_SESSIONS[key], patternPackIds))
+    );
+    setFleetResults(keys.map((key, i) => ({ key, report: reports[i] })));
+    setFleetLoading(false);
   };
 
   return (
@@ -247,11 +324,26 @@ export default function App() {
               ))}
             </div>
           </div>
+
+          <div className="section-block">
+            <h3>Or analyze a fleet</h3>
+            <button className="btn btn-outline generate-btn" onClick={runFleet} disabled={fleetLoading}>
+              {fleetLoading ? "Analyzing…" : `Analyze all ${Object.keys(SAMPLE_SESSIONS).length} sample sessions`}
+            </button>
+            <p className="pack-note">
+              Aggregates pass/flag counts across every sample session at once.
+            </p>
+          </div>
         </section>
 
         <section className="panel report-panel">
-          {status === "idle" && !report ? (
+          {status === "idle" && !report && !fleetResults ? (
             <IntroSteps />
+          ) : fleetResults ? (
+            <>
+              <h2>Fleet compliance report</h2>
+              <FleetView results={fleetResults} />
+            </>
           ) : (
             <>
               <h2>Compliance report</h2>
