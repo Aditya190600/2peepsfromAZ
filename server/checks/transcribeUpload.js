@@ -51,13 +51,14 @@ async function pollTranscript(id, apiKey) {
 // Diarization gives speaker labels ("A", "B", ...) with no inherent role.
 // Heuristic: whichever speaker talks first is the agent (calls in this app
 // always open with the agent's greeting/disclosure) - everyone else is "user".
-function turnsFromUtterances(utterances) {
-  if (utterances.length === 0) return [];
+// Exported so unit tests can cover the mapping without hitting the network.
+export function turnsFromUtterances(utterances) {
+  if (!Array.isArray(utterances) || utterances.length === 0) return [];
   const agentSpeaker = utterances[0].speaker;
   return utterances.map((u) => ({
     role: u.speaker === agentSpeaker ? "agent" : "user",
     text: u.text,
-    tMs: u.start,
+    tMs: u.start ?? 0,
   }));
 }
 

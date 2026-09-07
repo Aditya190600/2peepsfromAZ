@@ -3,6 +3,10 @@
 // (generated from these same turns) so a sample session can actually be
 // played back, not just read as text - see SAMPLE_AUDIO_URLS below.
 export const SAMPLE_SESSIONS = {
+  // tMs values match the two-speaker MP3s in /samples (GuyNeural agent /
+  // JennyNeural user). Regenerated via scripts/generate-sample-audio.py so
+  // AssemblyAI speaker_labels diarization returns real multi-turn utterances
+  // when the file is dropped on the upload demo path.
   "clean-call": {
     sessionId: "sess_demo_clean",
     startedAt: "2026-09-03T10:00:00.000Z",
@@ -13,8 +17,8 @@ export const SAMPLE_SESSIONS = {
         text: "Hi, this is an AI assistant calling from Acme Support. This call may be recorded for quality purposes.",
         tMs: 500,
       },
-      { role: "user", text: "Sure, go ahead.", tMs: 3200 },
-      { role: "agent", text: "Great, how can I help you today?", tMs: 4500 },
+      { role: "user", text: "Sure, go ahead.", tMs: 8800 },
+      { role: "agent", text: "Great, how can I help you today?", tMs: 11604 },
     ],
   },
   "tcpa-violation": {
@@ -32,9 +36,9 @@ export const SAMPLE_SESSIONS = {
     consentEvent: { granted: true, timestamp: "2026-09-03T10:14:30.000Z" },
     turns: [
       { role: "agent", text: "Hi, this is an AI assistant calling about your account.", tMs: 500 },
-      { role: "user", text: "Stop calling me, take me off your list.", tMs: 4000 },
-      { role: "agent", text: "I hear you, but let me tell you about today's offer.", tMs: 5200 },
-      { role: "agent", text: "This deal expires tonight.", tMs: 8000 },
+      { role: "user", text: "Stop calling me, take me off your list.", tMs: 5128 },
+      { role: "agent", text: "I hear you, but let me tell you about today's offer.", tMs: 9012 },
+      { role: "agent", text: "This deal expires tonight.", tMs: 13136 },
     ],
   },
   "healthcare-hipaa": {
@@ -43,7 +47,7 @@ export const SAMPLE_SESSIONS = {
     consentEvent: { granted: true, timestamp: "2026-09-03T10:09:30.000Z" },
     turns: [
       { role: "agent", text: "Hi, this is an automated assistant from the clinic.", tMs: 300 },
-      { role: "user", text: "My patient id 483920 and MRN:1029384 are on file.", tMs: 3500 },
+      { role: "user", text: "My patient id 483920 and MRN:1029384 are on file.", tMs: 4736 },
     ],
   },
   "late-disclosure": {
@@ -52,7 +56,7 @@ export const SAMPLE_SESSIONS = {
     consentEvent: { granted: true, timestamp: "2026-09-03T10:14:50.000Z" },
     turns: [
       { role: "agent", text: "Hi there, thanks for calling Acme Support.", tMs: 500 },
-      { role: "user", text: "Hey, I have a question about my account.", tMs: 3000 },
+      { role: "user", text: "Hey, I have a question about my account.", tMs: 4336 },
       { role: "agent", text: "Sure — just so you know, I'm an AI assistant helping with this call.", tMs: 15000 },
     ],
   },
@@ -66,8 +70,8 @@ export const SAMPLE_SESSIONS = {
         text: "Hello, this is a virtual assistant calling on behalf of Acme Billing. This call is being recorded for quality purposes.",
         tMs: 400,
       },
-      { role: "user", text: "Okay, what's this about?", tMs: 2800 },
-      { role: "agent", text: "Just a reminder that your invoice is due next week.", tMs: 4200 },
+      { role: "user", text: "Okay, what's this about?", tMs: 9204 },
+      { role: "agent", text: "Just a reminder that your invoice is due next week.", tMs: 12248 },
     ],
   },
 };
