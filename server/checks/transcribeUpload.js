@@ -24,10 +24,20 @@ async function uploadAudio(buffer, apiKey) {
 }
 
 async function submitTranscript(audioUrl, apiKey) {
+  // Demo call audio is always a 2-party agent/user exchange. Without
+  // speakers_expected, AssemblyAI often collapses distinct TTS voices into a
+  // single utterance (verified live 2026-09-08 on the sample MP3s) — which
+  // zeroes out disclosure timing and clickable finding timestamps. Pinning
+  // the expected count is a hard boundary, not a hint; see
+  // https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers
   const resp = await fetch("https://api.assemblyai.com/v2/transcript", {
     method: "POST",
     headers: { Authorization: apiKey, "Content-Type": "application/json" },
-    body: JSON.stringify({ audio_url: audioUrl, speaker_labels: true }),
+    body: JSON.stringify({
+      audio_url: audioUrl,
+      speaker_labels: true,
+      speakers_expected: 2,
+    }),
   });
   if (!resp.ok) throw new Error(`AssemblyAI transcript submit failed: ${resp.status} ${await resp.text()}`);
   const { id } = await resp.json();

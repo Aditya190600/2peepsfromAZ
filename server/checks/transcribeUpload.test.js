@@ -90,6 +90,7 @@ test("transcribeUpload requests speaker_labels and maps a two-speaker transcript
     const turns = await transcribeUpload(Buffer.from("fake-audio"), "test-key");
     assert.equal(posts.length, 1);
     assert.equal(posts[0].speaker_labels, true);
+    assert.equal(posts[0].speakers_expected, 2);
     assert.deepEqual(turns, [
       { role: "agent", text: "Hi there, how can I help you today?", tMs: 500 },
       {
