@@ -55,7 +55,7 @@ A **HIPAA identifier pattern pack** (`server/checks/patternPacks.js`'s `hipaaPac
 
 ### Regenerating playable sample audio
 
-The six MP3s under `client/public/samples/` are two-speaker recordings (agent = `en-US-GuyNeural`, user = `en-US-JennyNeural`) so the upload demo's AssemblyAI `speaker_labels` diarization returns real multi-turn timestamps. Regenerate after editing playable scripts:
+The six MP3s under `client/public/samples/` are gitignored (`*.mp3`). They are two-speaker recordings (agent = `en-US-GuyNeural`, user = `en-US-JennyNeural`) so the upload demo's AssemblyAI `speaker_labels` diarization returns real multi-turn timestamps. Generate them locally after clone (or after editing playable scripts):
 
 ```
 pip install edge-tts   # once
