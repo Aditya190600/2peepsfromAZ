@@ -472,23 +472,54 @@ export default function Dashboard({ navigate, path }) {
     }
   };
 
-  const runUpload = async (file) => {
+  const runUpload = async (file, { label = "Uploaded audio", consentEvent } = {}) => {
     if (!file) return;
     setFleetResults(null);
     setFleetError(null);
     setReport(null);
     setUploadError(null);
+    setSampleError(null);
     setUploadStatus("uploading");
     setActiveAudioUrl(URL.createObjectURL(file));
     try {
       const session = await transcribeUpload(file);
-      const nextReport = await analyze(session, patternPackIds);
+      // Optional consentEvent lets the "diarize this sample" path keep the
+      // fixture's TCPA consent flag while still going through real STT +
+      // speaker_labels. Raw drag-and-drop uploads leave it undefined → null.
+      const nextReport = await analyze(
+        consentEvent !== undefined ? { ...session, consentEvent } : session,
+        patternPackIds
+      );
       setReport(nextReport);
-      recordHistory("Uploaded audio", nextReport.sessionId, nextReport.findings);
+      recordHistory(label, nextReport.sessionId, nextReport.findings);
       setUploadStatus("idle");
     } catch (err) {
       setUploadStatus("error");
       setUploadError(err.message ?? "Something went wrong processing this file.");
+    }
+  };
+
+  // Fetches a playable sample MP3 and runs it through the real upload /
+  // diarization pipeline (not the canned SAMPLE_SESSIONS text path), so the
+  // demo can prove speaker_labels produces multi-turn timestamps.
+  const runDiarizedSample = async (key) => {
+    const url = SAMPLE_AUDIO_URLS[key];
+    if (!url) return;
+    setSampleLoadingKey(key);
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`Could not load sample audio (${resp.status}).`);
+      const blob = await resp.blob();
+      const file = new File([blob], `${key}.mp3`, { type: blob.type || "audio/mpeg" });
+      await runUpload(file, {
+        label: `${sampleLabel(key)} (diarized upload)`,
+        consentEvent: SAMPLE_SESSIONS[key]?.consentEvent ?? null,
+      });
+    } catch (err) {
+      setUploadStatus("error");
+      setUploadError(err.message ?? "Something went wrong loading this sample.");
+    } finally {
+      setSampleLoadingKey(null);
     }
   };
 
@@ -612,8 +643,10 @@ export default function Dashboard({ navigate, path }) {
           <div className="section-block">
             <h3>Demo: try your own audio</h3>
             <p className="pack-note upload-note">
-              Not a live call — drop in any recorded audio file and it runs through the same
-              compliance pipeline, with playback synced to each finding.
+              Not a live call — drop in any recorded audio file and AssemblyAI&apos;s pre-recorded
+              STT + speaker diarization turns it into the same multi-turn session shape a live call
+              produces, with playback synced to each finding. Samples below are two-speaker
+              recordings so diarization returns real agent/user turns (not one collapsed utterance).
             </p>
             <label
               className={`dropzone ${dragActive ? "is-active" : ""}`}
@@ -639,16 +672,34 @@ export default function Dashboard({ navigate, path }) {
 
           <div className="section-block">
             <h3>Playable samples</h3>
+            <p className="pack-note">
+              Analyze uses the canned transcript. Diarize re-uploads the MP3 through AssemblyAI
+              speaker labels — use that to demo the upload path without bringing your own file.
+            </p>
             <div className="sample-buttons">
               {playableKeys.map((key) => (
                 <div key={key} className="sample-row">
-                  <button
-                    className="btn btn-outline"
-                    onClick={() => runSample(key)}
-                    disabled={sampleLoadingKey === key}
-                  >
-                    {sampleLoadingKey === key ? "Analyzing…" : sampleLabel(key)}
-                  </button>
+                  <div className="sample-actions">
+                    <button
+                      className="btn btn-outline"
+                      onClick={() => runSample(key)}
+                      disabled={sampleLoadingKey === key || uploadStatus === "uploading"}
+                    >
+                      {sampleLoadingKey === key && uploadStatus !== "uploading"
+                        ? "Analyzing…"
+                        : sampleLabel(key)}
+                    </button>
+                    <button
+                      className="btn btn-outline sample-diarize-btn"
+                      onClick={() => runDiarizedSample(key)}
+                      disabled={sampleLoadingKey === key || uploadStatus === "uploading"}
+                      title="Re-upload this MP3 through AssemblyAI speaker_labels diarization"
+                    >
+                      {sampleLoadingKey === key && uploadStatus === "uploading"
+                        ? "Diarizing…"
+                        : "Diarize upload"}
+                    </button>
+                  </div>
                   <AudioPlayer src={SAMPLE_AUDIO_URLS[key]} compact />
                 </div>
               ))}

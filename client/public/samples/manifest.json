@@ -1,0 +1,129 @@
+[
+  {
+    "key": "clean-call",
+    "path": "client/public/samples/clean-call.mp3",
+    "durationMs": 15288,
+    "turns": [
+      {
+        "role": "agent",
+        "tMs": 500,
+        "text": "Hi, this is an AI assistant calling from Acme Support. This call may be recorded for quality purposes."
+      },
+      {
+        "role": "user",
+        "tMs": 8800,
+        "text": "Sure, go ahead."
+      },
+      {
+        "role": "agent",
+        "tMs": 11604,
+        "text": "Great, how can I help you today?"
+      }
+    ]
+  },
+  {
+    "key": "tcpa-violation",
+    "path": "client/public/samples/tcpa-violation.mp3",
+    "durationMs": 18288,
+    "turns": [
+      {
+        "role": "agent",
+        "tMs": 500,
+        "text": "Hi there, how can I help you today?"
+      },
+      {
+        "role": "user",
+        "tMs": 6000,
+        "text": "My SSN is 123-45-6789 and my card is 4111 1111 1111 1111."
+      }
+    ]
+  },
+  {
+    "key": "optout-ignored",
+    "path": "client/public/samples/optout-ignored.mp3",
+    "durationMs": 16632,
+    "turns": [
+      {
+        "role": "agent",
+        "tMs": 500,
+        "text": "Hi, this is an AI assistant calling about your account."
+      },
+      {
+        "role": "user",
+        "tMs": 5128,
+        "text": "Stop calling me, take me off your list."
+      },
+      {
+        "role": "agent",
+        "tMs": 9012,
+        "text": "I hear you, but let me tell you about today's offer."
+      },
+      {
+        "role": "agent",
+        "tMs": 13136,
+        "text": "This deal expires tonight."
+      }
+    ]
+  },
+  {
+    "key": "healthcare-hipaa",
+    "path": "client/public/samples/healthcare-hipaa.mp3",
+    "durationMs": 12840,
+    "turns": [
+      {
+        "role": "agent",
+        "tMs": 300,
+        "text": "Hi, this is an automated assistant from the clinic."
+      },
+      {
+        "role": "user",
+        "tMs": 4736,
+        "text": "My patient id 483920 and MRN:1029384 are on file."
+      }
+    ]
+  },
+  {
+    "key": "late-disclosure",
+    "path": "client/public/samples/late-disclosure.mp3",
+    "durationMs": 20472,
+    "turns": [
+      {
+        "role": "agent",
+        "tMs": 500,
+        "text": "Hi there, thanks for calling Acme Support."
+      },
+      {
+        "role": "user",
+        "tMs": 4336,
+        "text": "Hey, I have a question about my account."
+      },
+      {
+        "role": "agent",
+        "tMs": 15000,
+        "text": "Sure \u2014 just so you know, I'm an AI assistant helping with this call."
+      }
+    ]
+  },
+  {
+    "key": "clean-call-2",
+    "path": "client/public/samples/clean-call-2.mp3",
+    "durationMs": 16752,
+    "turns": [
+      {
+        "role": "agent",
+        "tMs": 400,
+        "text": "Hello, this is a virtual assistant calling on behalf of Acme Billing. This call is being recorded for quality purposes."
+      },
+      {
+        "role": "user",
+        "tMs": 9204,
+        "text": "Okay, what's this about?"
+      },
+      {
+        "role": "agent",
+        "tMs": 12248,
+        "text": "Just a reminder that your invoice is due next week."
+      }
+    ]
+  }
+]
