@@ -198,6 +198,40 @@ test("LLM Gateway PII scan catches free-form PII (names/emails) that regex patte
   assert.ok(pii.items.some((i) => i.packId === "llm_gateway_ner" && i.patternId === "email"));
 });
 
+test("PII scan does not flag an org/support-desk greeting name, but still flags real PII in the same session", async () => {
+  const session = {
+    sessionId: "sess_org_greeting",
+    startedAt: "2026-09-03T10:00:00.000Z",
+    consentEvent: { granted: true, timestamp: "2026-09-03T09:59:55.000Z" },
+    turns: [
+      { role: "agent", text: "Hi, thanks for calling Acme Support, this is an AI assistant.", tMs: 500 },
+      {
+        role: "user",
+        text: "This is Jordan Lee, my number is 555-123-4567 and I live at 12 Main St, reach me at jordan.lee@example.com.",
+        tMs: 3000,
+      },
+    ],
+  };
+  const llmGateway = fakeLlmGateway({
+    disclosed: { disclosed: true, turnIndex: 0, quote: "AI assistant" },
+    nerItems: [
+      { turnIndex: 0, type: "person_name", text: "Acme Support" },
+      { turnIndex: 1, type: "person_name", text: "Jordan Lee" },
+      { turnIndex: 1, type: "email", text: "jordan.lee@example.com" },
+      { turnIndex: 1, type: "phone_number", text: "555-123-4567" },
+      { turnIndex: 1, type: "address", text: "12 Main St" },
+    ],
+  });
+  const report = await analyzeSession(session, { llmGateway });
+  const pii = report.findings.find((f) => f.check === "pii_scan");
+
+  assert.equal(pii.items.filter((i) => i.turnIndex === 0).length, 0, "Acme Support must not be flagged");
+  assert.ok(pii.items.some((i) => i.patternId === "person_name" && i.turnIndex === 1));
+  assert.ok(pii.items.some((i) => i.patternId === "email"));
+  assert.ok(pii.items.some((i) => i.patternId === "phone_number"));
+  assert.ok(pii.items.some((i) => i.patternId === "address"));
+});
+
 test("disclosure check reports an error status (not a false flag) when the LLM Gateway call fails", async () => {
   const llmGateway = async (messages) => {
     if (messages[0].content.includes("disclos")) throw new Error("503 upstream unavailable");
