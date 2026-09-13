@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useVoiceAgent } from "./useVoiceAgent";
-import { SAMPLE_SESSIONS, SAMPLE_AUDIO_URLS, NORTHSTAR_SESSIONS, NORTHSTAR_SESSION_KEYS } from "./sampleSessions";
+import {
+  SAMPLE_SESSIONS,
+  SAMPLE_AUDIO_URLS,
+  NORTHSTAR_SESSIONS,
+  NORTHSTAR_SESSION_KEYS,
+  SCRIPTED_VIOLATION_DEMO_KEYS,
+} from "./sampleSessions";
 import { Nav, Footer } from "./Chrome";
 import AudioPlayer from "./AudioPlayer";
 import { saveHistoryEntry, findEntryBySessionId } from "./reportHistory";
@@ -41,9 +47,15 @@ const NORTHSTAR_LABEL = {
   sess_late_01: "Late AI disclosure — outside the 10s window",
 };
 
+const SCRIPTED_VIOLATION_DEMO_LABEL = {
+  "hipaa-diagnosis-readback": "HIPAA — agent reads back diagnosis and MRN",
+  "glba-account-disclosure": "GLBA — agent discloses routing and loan number",
+};
+
 function sampleLabel(key) {
   if (PLAYABLE_SAMPLE_LABEL[key]) return PLAYABLE_SAMPLE_LABEL[key];
   if (NORTHSTAR_LABEL[key]) return NORTHSTAR_LABEL[key];
+  if (SCRIPTED_VIOLATION_DEMO_LABEL[key]) return SCRIPTED_VIOLATION_DEMO_LABEL[key];
   if (key.startsWith("sess_clean_")) return "Clean call — everything passes";
   return key;
 }
@@ -732,6 +744,29 @@ export default function Dashboard({ navigate, path, initialView }) {
               ))}
             </div>
             {sampleError && <p className="error-banner">{sampleError}</p>}
+          </div>
+
+          <div className="section-block">
+            <h3>Scripted violation demos</h3>
+            <p className="pack-note">
+              Two concrete, scripted scenarios built to trip the HIPAA and GLBA pattern packs.
+              Check the matching industry pack above, then Analyze.
+            </p>
+            <div className="sample-buttons">
+              {SCRIPTED_VIOLATION_DEMO_KEYS.map((key) => (
+                <div key={key} className="sample-row">
+                  <div className="sample-actions">
+                    <button
+                      className="btn btn-outline"
+                      onClick={() => openStoredOrRunSample(key)}
+                      disabled={sampleLoadingKey === key || uploadStatus === "uploading"}
+                    >
+                      {sampleLoadingKey === key ? "Analyzing…" : sampleLabel(key)}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="section-block">
