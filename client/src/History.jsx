@@ -56,12 +56,18 @@ export default function History({ navigate, path }) {
             <ul className="history-list">
               {entries.map((entry) => (
                 <li key={entry.id} className="history-item">
-                  <span className={`finding-status ${VERDICT_CLASS[entry.verdictLevel] ?? "is-na"}`}>
-                    {SEVERITY_LABEL[entry.verdictLevel] ?? entry.verdictLabel}
-                  </span>
-                  <span className="history-item-label">{entry.label}</span>
-                  <span className="history-item-session">{entry.sessionId ?? "no session id"}</span>
-                  <span className="history-item-when">{formatWhen(entry.timestamp)}</span>
+                  <button
+                    type="button"
+                    className="history-item-link"
+                    onClick={() => navigate(`/sessions/${encodeURIComponent(entry.sessionId ?? "")}`)}
+                  >
+                    <span className={`finding-status ${VERDICT_CLASS[entry.verdictLevel] ?? "is-na"}`}>
+                      {SEVERITY_LABEL[entry.verdictLevel] ?? entry.verdictLabel}
+                    </span>
+                    <span className="history-item-label">{entry.label}</span>
+                    <span className="history-item-session">{entry.sessionId ?? "no session id"}</span>
+                    <span className="history-item-when">{formatWhen(entry.timestamp)}</span>
+                  </button>
                 </li>
               ))}
             </ul>
