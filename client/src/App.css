@@ -102,6 +102,18 @@ body {
   margin: 0;
 }
 
+.tenant-line {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 0;
+}
+
+.tenant-contact {
+  font-family: var(--mono);
+}
+
 .tagline {
   font-size: 15px;
   line-height: 1.6;

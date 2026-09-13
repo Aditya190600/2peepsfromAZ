@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useVoiceAgent } from "./useVoiceAgent";
-import { SAMPLE_SESSIONS, SAMPLE_AUDIO_URLS, GENERATED_SESSION_KEYS } from "./sampleSessions";
+import { SAMPLE_SESSIONS, SAMPLE_AUDIO_URLS, NORTHSTAR_SESSIONS, NORTHSTAR_SESSION_KEYS } from "./sampleSessions";
 import { Nav, Footer } from "./Chrome";
 import AudioPlayer from "./AudioPlayer";
 import { saveHistoryEntry, findEntryBySessionId } from "./reportHistory";
@@ -36,25 +36,26 @@ const PLAYABLE_SAMPLE_LABEL = {
   "clean-call-2": "Clean call — billing reminder, everything passes",
 };
 
-const GENERATED_SCENARIO_LABEL = {
-  clean: "Clean call",
-  tcpa: "TCPA violation",
-  optout: "Opt-out ignored",
-  hipaa: "HIPAA identifiers spoken",
-  finance: "Finance (GLBA) identifiers spoken",
-  late: "Late AI disclosure",
+const NORTHSTAR_LABEL = {
+  sess_tcpa_04: "TCPA violation — no consent logged",
+  sess_late_01: "Late AI disclosure — outside the 10s window",
 };
 
 function sampleLabel(key) {
   if (PLAYABLE_SAMPLE_LABEL[key]) return PLAYABLE_SAMPLE_LABEL[key];
-  const scenario = key.replace(/^gen-/, "").replace(/-\d+$/, "");
-  return GENERATED_SCENARIO_LABEL[scenario] ?? key;
+  if (NORTHSTAR_LABEL[key]) return NORTHSTAR_LABEL[key];
+  if (key.startsWith("sess_clean_")) return "Clean call — everything passes";
+  return key;
 }
 
 const INDUSTRY_PACKS = [
   { id: "hipaa", name: "HIPAA identifiers (healthcare)" },
   { id: "finance", name: "GLBA finance identifiers (banking)" },
 ];
+
+function sessionByKey(key) {
+  return SAMPLE_SESSIONS[key] ?? NORTHSTAR_SESSIONS[key];
+}
 
 class ApiError extends Error {}
 
@@ -434,7 +435,7 @@ export default function Dashboard({ navigate, path }) {
     setSampleLoadingKey(key);
     setActiveAudioUrl(SAMPLE_AUDIO_URLS[key] && PLAYABLE_SAMPLE_LABEL[key] ? SAMPLE_AUDIO_URLS[key] : null);
     try {
-      const nextReport = await analyze(SAMPLE_SESSIONS[key], patternPackIds);
+      const nextReport = await analyze(sessionByKey(key), patternPackIds);
       setReport(nextReport);
       recordHistory(sampleLabel(key), nextReport);
     } catch (err) {
@@ -456,7 +457,7 @@ export default function Dashboard({ navigate, path }) {
       const reports = await mapWithConcurrency(
         keys,
         2,
-        (key) => analyze(SAMPLE_SESSIONS[key], patternPackIds),
+        (key) => analyze(sessionByKey(key), patternPackIds),
         (done, total) => setFleetProgress({ done, total })
       );
       const results = keys.map((key, i) => ({ key, report: reports[i] }));
@@ -514,7 +515,7 @@ export default function Dashboard({ navigate, path }) {
       const file = new File([blob], `${key}.mp3`, { type: blob.type || "audio/mpeg" });
       await runUpload(file, {
         label: `${sampleLabel(key)} (diarized upload)`,
-        consentEvent: SAMPLE_SESSIONS[key]?.consentEvent ?? null,
+        consentEvent: sessionByKey(key)?.consentEvent ?? null,
       });
     } catch (err) {
       setUploadStatus("error");
@@ -549,6 +550,10 @@ export default function Dashboard({ navigate, path }) {
     <div className="page">
       <Nav path={path} navigate={navigate} />
       <header className="masthead">
+        <p className="tenant-line">
+          Reviewing sessions for <strong>Northstar Voice</strong> ·{" "}
+          <span className="tenant-contact">legal@northstarvoice.com</span>
+        </p>
         <p className="tagline">
           Post-call compliance review for AI voice agents. Ingests one completed AssemblyAI Voice
           Agent session and flags TCPA consent logging, AI-disclosure timing, and PII exposure —
@@ -696,7 +701,7 @@ export default function Dashboard({ navigate, path }) {
                   <div className="sample-actions">
                     <button
                       className="btn btn-outline"
-                      onClick={() => runSample(key)}
+                      onClick={() => openStoredOrRunSample(key)}
                       disabled={sampleLoadingKey === key || uploadStatus === "uploading"}
                     >
                       {sampleLoadingKey === key && uploadStatus !== "uploading"
@@ -718,25 +723,6 @@ export default function Dashboard({ navigate, path }) {
                 </div>
               ))}
             </div>
-          </div>
-
-          <div className="section-block">
-            <h3>Sample library ({GENERATED_SESSION_KEYS.length} text-only sessions)</h3>
-            <p className="pack-note">Synthetic sessions for exercising the fleet view at volume.</p>
-            <ul className="sample-library-list">
-              {GENERATED_SESSION_KEYS.map((key) => (
-                <li key={key}>
-                  <button
-                    className="sample-library-item"
-                    onClick={() => openStoredOrRunSample(key)}
-                    disabled={sampleLoadingKey === key}
-                  >
-                    {sampleLoadingKey === key ? "Analyzing…" : sampleLabel(key)}
-                    <span className="sample-library-id">{SAMPLE_SESSIONS[key].sessionId}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
             {sampleError && <p className="error-banner">{sampleError}</p>}
           </div>
 
@@ -750,19 +736,17 @@ export default function Dashboard({ navigate, path }) {
               {fleetLoading ? "Analyzing…" : `Analyze ${playableKeys.length} sample sessions`}
             </button>
             <button
-              className="btn btn-outline generate-btn"
-              onClick={() => runFleetOn(Object.keys(SAMPLE_SESSIONS))}
+              className="btn btn-primary generate-btn"
+              onClick={() => runFleetOn(NORTHSTAR_SESSION_KEYS)}
               disabled={fleetLoading}
               style={{ marginTop: 8 }}
             >
               {fleetLoading
                 ? "Analyzing…"
-                : `Analyze full library (${Object.keys(SAMPLE_SESSIONS).length} sessions)`}
+                : `Analyze the Northstar Voice program (${NORTHSTAR_SESSION_KEYS.length} sessions)`}
             </button>
             <p className="pack-note">
-              Aggregates pass/flag counts and compliance rate across every sample session. The
-              full library run may take a few minutes on a rate-limited account - results appear
-              as they complete.
+              Aggregates pass/flag counts and compliance rate across every sample session.
             </p>
             {fleetError && <p className="error-banner">{fleetError}</p>}
           </div>
