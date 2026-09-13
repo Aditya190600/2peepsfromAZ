@@ -23,6 +23,11 @@ export function saveHistoryEntry(entry) {
   }
 }
 
+export function findEntryBySessionId(sessionId) {
+  if (!sessionId) return null;
+  return loadHistory().find((entry) => entry.sessionId === sessionId) ?? null;
+}
+
 export function clearHistory() {
   try {
     localStorage.removeItem(STORAGE_KEY);
