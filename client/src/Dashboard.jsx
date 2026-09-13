@@ -15,6 +15,8 @@ import {
   PACK_CITATION,
   sortFindingsBySeverity,
   headlineVerdict,
+  reportView,
+  VERDICT_CLASS,
 } from "./compliance";
 import { analyze, transcribeUpload, mapWithConcurrency } from "./analyzeClient";
 import "./App.css";
@@ -71,7 +73,6 @@ function sessionByKey(key) {
 
 const STATUS_CLASS = { flag: "is-flag", pass: "is-pass", "n/a": "is-na", error: "is-na" };
 const STATUS_TEXT = { flag: "Flag", pass: "Pass", "n/a": "N/A", error: "Unable to run" };
-const VERDICT_CLASS = { critical: "is-flag", high: "is-flag", medium: "is-flag", review: "is-na", clear: "is-pass" };
 
 function Timestamp({ tMs, onSeek }) {
   if (tMs == null) return null;
@@ -233,8 +234,10 @@ export function FleetView({ results, progress }) {
           return (
             <li key={key} className="fleet-session-item">
               <details>
-                <summary className={`fleet-session-summary ${VERDICT_CLASS[verdict.level] ?? "is-na"}`}>
-                  <span className="finding-status">{verdict.label}</span>
+                <summary className={`fleet-session-summary ${VERDICT_CLASS[verdict.level] ?? "is-review"}`}>
+                  <span className={`finding-status ${VERDICT_CLASS[verdict.level] ?? "is-review"}`}>
+                    {verdict.label}
+                  </span>
                   <span className="fleet-session-label">{sampleLabel(key)}</span>
                   <span className="fleet-session-id">{report.sessionId}</span>
                 </summary>
@@ -250,14 +253,13 @@ export function FleetView({ results, progress }) {
   );
 }
 
-export function Report({ report, audioUrl, audioRef, onSeek }) {
-  if (!report) {
+export function Report({ report, audioUrl, audioRef, onSeek, loading = false, error = null, idleMessage }) {
+  const view = reportView({ report, loading, error });
+  if (view.kind !== "ready") {
     return (
-      <div className="report-empty">
-        <p>
-          Run a live call, drop in an audio file, or pick a sample session to generate a
-          compliance report, ranked by severity with a regulatory citation on every finding.
-        </p>
+      <div className={`report-state ${view.className}`}>
+        <span className={`report-verdict finding-status ${view.className}`}>{view.label}</span>
+        <p>{view.kind === "idle" && idleMessage ? idleMessage : view.message}</p>
       </div>
     );
   }
@@ -270,7 +272,7 @@ export function Report({ report, audioUrl, audioRef, onSeek }) {
           <p className="report-meta">
             {report.sessionId ?? "no session id"} · generated {report.generatedAt}
           </p>
-          <span className={`report-verdict finding-status ${VERDICT_CLASS[verdict.level] ?? "is-na"}`}>
+          <span className={`report-verdict finding-status ${view.className}`}>
             {verdict.label}
           </span>
         </div>
@@ -503,6 +505,14 @@ export default function Dashboard({ navigate, path }) {
   };
 
   const playableKeys = Object.keys(PLAYABLE_SAMPLE_LABEL);
+  const reportLoading =
+    liveLoading ||
+    sampleLoadingKey != null ||
+    uploadStatus === "uploading" ||
+    (fleetLoading && (!fleetResults || fleetResults.length === 0));
+  const reportError =
+    liveError || sampleError || (uploadStatus === "error" ? uploadError : null) || fleetError;
+  const fleetReady = Array.isArray(fleetResults) && fleetResults.length > 0;
 
   return (
     <div className="page">
@@ -725,17 +735,28 @@ export default function Dashboard({ navigate, path }) {
         </section>
 
         <section className="panel report-panel">
-          {status === "idle" && !report && !fleetResults && !fleetLoading ? (
-            <IntroSteps />
-          ) : fleetResults ? (
+          {fleetReady ? (
             <>
               <h2>Fleet compliance report</h2>
               <FleetView results={fleetResults} progress={fleetProgress} />
             </>
+          ) : reportLoading || reportError || report ? (
+            <>
+              <h2 className="report-heading">Compliance report</h2>
+              <Report
+                report={report}
+                loading={reportLoading}
+                error={reportError}
+                audioUrl={activeAudioUrl}
+                audioRef={audioRef}
+                onSeek={onSeek}
+              />
+            </>
           ) : (
             <>
               <h2 className="report-heading">Compliance report</h2>
-              <Report report={report} audioUrl={activeAudioUrl} audioRef={audioRef} onSeek={onSeek} />
+              <Report report={null} />
+              <IntroSteps />
             </>
           )}
         </section>

@@ -427,6 +427,73 @@ body {
   max-width: 40ch;
 }
 
+.report-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 160px;
+  padding: 8px 0 16px;
+}
+
+.report-state p {
+  margin: 0;
+  max-width: 46ch;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.report-state.is-idle p,
+.report-state.is-loading p {
+  color: var(--muted);
+}
+
+.finding-status.is-idle {
+  color: var(--muted);
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+}
+
+.finding-status.is-loading {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.finding-status.is-error {
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--accent);
+}
+
+.finding-status.is-critical {
+  color: var(--paper);
+  background: var(--accent);
+}
+
+.finding-status.is-high {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+}
+
+.finding-status.is-medium {
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--accent);
+}
+
+.finding-status.is-review {
+  color: var(--ink);
+  background: var(--accent-soft);
+}
+
+.finding-status.is-clear {
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+}
+
 .report-meta {
   font-family: var(--mono);
   font-size: 12px;
@@ -726,6 +793,23 @@ body {
 
 .fleet-session-summary.is-flag {
   border-left-color: var(--flag);
+}
+
+.fleet-session-summary.is-critical {
+  border-left-color: var(--accent);
+}
+
+.fleet-session-summary.is-high {
+  border-left-color: var(--ink);
+}
+
+.fleet-session-summary.is-medium,
+.fleet-session-summary.is-review {
+  border-left-color: var(--line-strong);
+}
+
+.fleet-session-summary.is-clear {
+  border-left-color: var(--line);
 }
 
 .fleet-session-label {
