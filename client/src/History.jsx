@@ -37,8 +37,8 @@ export default function History({ navigate, path }) {
           <div className="report-empty">
             <p>
               No reports yet. Run a live call, upload audio, or analyze a sample session from{" "}
-              <a href="/dashboard" onClick={(e) => { e.preventDefault(); navigate("/dashboard"); }}>
-                Review
+              <a href="/try" onClick={(e) => { e.preventDefault(); navigate("/try"); }}>
+                Try
               </a>{" "}
               to start building history.
             </p>

@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import Landing from "./Landing";
-import Dashboard from "./Dashboard";
+import Home from "./Home";
+import Try from "./Try";
 import History from "./History";
 import SessionView from "./SessionView";
+import { matchRoute } from "./routes";
 import "./App.css";
-
-const SESSIONS_PREFIX = "/sessions/";
 
 function navigate(path) {
   window.history.pushState({}, "", path);
@@ -21,16 +21,22 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  if (path === "/dashboard") {
-    const initialView = new URLSearchParams(window.location.search).get("view");
-    return <Dashboard navigate={navigate} path={path} initialView={initialView} />;
+  const route = matchRoute(path, window.location.search);
+
+  useEffect(() => {
+    if (!route.redirect || route.redirect === path) return;
+    window.history.replaceState({}, "", route.redirect);
+    setPath(route.redirect);
+  }, [path, route.redirect]);
+
+  const viewPath = route.redirect ?? path;
+  const view = route.redirect ? matchRoute(route.redirect) : route;
+
+  if (view.name === "home") return <Home navigate={navigate} path={viewPath} />;
+  if (view.name === "try") return <Try navigate={navigate} path={viewPath} />;
+  if (view.name === "sessions") return <History navigate={navigate} path={viewPath} />;
+  if (view.name === "session") {
+    return <SessionView navigate={navigate} path={path} sessionId={view.sessionId} />;
   }
-  if (path === "/history") {
-    return <History navigate={navigate} path={path} />;
-  }
-  if (path.startsWith(SESSIONS_PREFIX)) {
-    const sessionId = decodeURIComponent(path.slice(SESSIONS_PREFIX.length));
-    return <SessionView navigate={navigate} path={path} sessionId={sessionId} />;
-  }
-  return <Landing onGetStarted={() => navigate("/dashboard?view=summary")} navigate={navigate} path={path} />;
+  return <Landing onGetStarted={() => navigate("/home")} navigate={navigate} path={path} />;
 }
