@@ -40,7 +40,7 @@ export default function AudioPlayer({ src, audioRef, compact = false }) {
   const togglePlay = () => {
     const audio = ref.current;
     if (!audio) return;
-    if (audio.paused) audio.play();
+    if (audio.paused) audio.play().catch((err) => console.error("Audio playback failed:", err));
     else audio.pause();
   };
 
