@@ -74,7 +74,49 @@ export const SAMPLE_SESSIONS = {
       { role: "agent", text: "Just a reminder that your invoice is due next week.", tMs: 12248 },
     ],
   },
+
+  // Bounded, scripted HIPAA/GLBA violation demos (hackathon C-narrowing: no
+  // adversarial-eval framework, just two concrete scripted scenarios run
+  // through the real pipeline - see docs/complyline-narrowing-scoring-analysis).
+  "hipaa-diagnosis-readback": {
+    sessionId: "sess_demo_hipaa_readback",
+    startedAt: "2026-09-10T10:00:00.000Z",
+    consentEvent: { granted: true, timestamp: "2026-09-10T09:59:50.000Z" },
+    turns: [
+      {
+        role: "agent",
+        text: "Hi, this is an AI assistant calling from Riverside Clinic. This call may be recorded for quality purposes.",
+        tMs: 500,
+      },
+      { role: "user", text: "Hi, I'm calling to confirm my recent lab results.", tMs: 6200 },
+      {
+        role: "agent",
+        text: "Sure, let me pull that up. I have you as patient id 552017, MRN:1148302 - your chart shows a diagnosis of type 2 diabetes, confirmed on your last visit.",
+        tMs: 9800,
+      },
+    ],
+  },
+  "glba-account-disclosure": {
+    sessionId: "sess_demo_glba_disclosure",
+    startedAt: "2026-09-10T10:05:00.000Z",
+    consentEvent: { granted: true, timestamp: "2026-09-10T10:04:50.000Z" },
+    turns: [
+      {
+        role: "agent",
+        text: "Hi, this is an AI assistant calling from Northgate Bank. This call may be recorded for quality purposes.",
+        tMs: 500,
+      },
+      { role: "user", text: "I need to verify my checking account before I set up a transfer.", tMs: 5400 },
+      {
+        role: "agent",
+        text: "Of course - your checking account has routing number 021000021, and I see an open loan number 4812093 on file as well.",
+        tMs: 8900,
+      },
+    ],
+  },
 };
+
+export const SCRIPTED_VIOLATION_DEMO_KEYS = ["hipaa-diagnosis-readback", "glba-account-disclosure"];
 
 // Only the six sessions above have a recorded companion file - these are the
 // "playable" set. Everything in GENERATED_SESSIONS below is text-only, so a
