@@ -1,11 +1,13 @@
 import path from "node:path";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import crypto from "node:crypto";
 import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
 import { analyzeSession } from "./checks/analyze.js";
 import { transcribeUpload } from "./checks/transcribeUpload.js";
+import { cacheKey, warmNorthstarCache } from "./warmCache.js";
+import { NORTHSTAR_SESSIONS, NORTHSTAR_SESSION_KEYS } from "../client/src/sampleSessions.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, "..", ".env") });
@@ -20,7 +22,17 @@ if (!API_KEY) {
   process.exit(1);
 }
 
-// Mints a short-lived Voice Agent token. The real API key never leaves this server.
+let bootStatus = {
+  ok: false,
+  cached: 0,
+  total: NORTHSTAR_SESSION_KEYS.length,
+  error: "Northstar cache is still warming.",
+};
+
+app.get("/v1/boot-status", (_req, res) => {
+  res.json(bootStatus);
+});
+
 app.get("/v1/token", async (_req, res) => {
   const url =
     "https://agents.assemblyai.com/v1/token?expires_in_seconds=300&max_session_duration_seconds=8640";
@@ -31,25 +43,8 @@ app.get("/v1/token", async (_req, res) => {
   res.status(resp.status).json(body);
 });
 
-// Reports are cached by a hash of the exact request (session content +
-// pattern packs) - the sample sessions are static and their verdicts never
-// change, so once a report comes back with no failed checks it never needs
-// to hit the LLM Gateway again. Live/uploaded sessions get fresh session ids
-// each time, so they naturally never collide with a cached entry.
-// ponytail: unbounded process-lifetime Map, fine at this data volume (dozens
-// of sample sessions); swap for an LRU if this ever needs to bound memory.
 const reportCache = new Map();
 
-function cacheKey(session, patternPackIds) {
-  return crypto
-    .createHash("sha256")
-    .update(JSON.stringify({ session, patternPackIds: [...patternPackIds].sort() }))
-    .digest("hex");
-}
-
-// Post-hoc compliance report for one completed (or synthetic) Voice Agent
-// session: consent-event-logged (TCPA), AI-disclosure-timing (e.g. CA AB
-// 2905), and a pluggable PII pattern-set scan. Body: { session, patternPackIds }.
 app.post("/v1/analyze-session", async (req, res) => {
   const { session, patternPackIds = ["generic"] } = req.body ?? {};
   if (!session || !Array.isArray(session.turns)) {
@@ -72,10 +67,6 @@ app.post("/v1/analyze-session", async (req, res) => {
   }
 });
 
-// Demo pipeline: transcribes an uploaded audio file (drag-and-drop, not a
-// live call) via AssemblyAI's pre-recorded STT API into the same
-// {turns: [{role, text, tMs}]} session shape a live call produces, so the
-// client can feed it into the existing /v1/analyze-session pipeline.
 app.post(
   "/v1/transcribe-upload",
   express.raw({ type: () => true, limit: "25mb" }),
@@ -100,5 +91,36 @@ app.post(
   }
 );
 
+const dist = path.join(__dirname, "..", "client", "dist");
+if (existsSync(dist)) {
+  app.use(express.static(dist));
+  app.use((req, res, next) => {
+    if (req.method !== "GET" && req.method !== "HEAD") return next();
+    if (req.path.startsWith("/v1")) return next();
+    res.sendFile(path.join(dist, "index.html"));
+  });
+}
+
 const port = process.env.PORT || 8787;
+
+const result = await warmNorthstarCache({
+  reportCache,
+  analyzeSession,
+  sessions: NORTHSTAR_SESSIONS,
+  sessionKeys: NORTHSTAR_SESSION_KEYS,
+});
+if (result.ok) {
+  bootStatus = { ok: true, cached: result.cached, total: result.total, error: null };
+  console.log(`Northstar cache: ${result.cached} of ${result.total} sessions cached.`);
+} else {
+  const detail = result.errors.map((e) => `${e.key}: ${e.error}`).join("; ");
+  bootStatus = {
+    ok: false,
+    cached: result.cached,
+    total: result.total,
+    error: `Northstar cache did not complete (${result.cached} of ${result.total}). ${detail}`,
+  };
+  console.error(`Northstar cache failed (${result.cached} of ${result.total}). ${detail}`);
+}
+
 app.listen(port, () => console.log(`R3-21 compliance report server listening on :${port}`));

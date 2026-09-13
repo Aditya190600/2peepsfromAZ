@@ -3,7 +3,7 @@ import { NORTHSTAR_SESSIONS, NORTHSTAR_SESSION_KEYS } from "./sampleSessions";
 import { Nav, Footer } from "./Chrome";
 import { saveHistoryEntry } from "./reportHistory";
 import { headlineVerdict } from "./compliance";
-import { analyze, mapWithConcurrency } from "./analyzeClient";
+import { analyze, mapWithConcurrency, fetchBootStatus } from "./analyzeClient";
 import { FleetView, Report, sampleLabel } from "./Dashboard";
 import "./App.css";
 
@@ -30,6 +30,12 @@ export default function Home({ navigate, path }) {
       setFleetResults([]);
       setFleetProgress({ done: 0, total: NORTHSTAR_SESSION_KEYS.length });
       try {
+        const boot = await fetchBootStatus();
+        if (boot && boot.ok === false) {
+          setFleetError(boot.error ?? "The Northstar program cache is not ready.");
+          setFleetResults(null);
+          return;
+        }
         const reports = await mapWithConcurrency(
           NORTHSTAR_SESSION_KEYS,
           2,

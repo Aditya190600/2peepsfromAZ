@@ -55,7 +55,7 @@ A **HIPAA identifier pattern pack** (`server/checks/patternPacks.js`'s `hipaaPac
 
 ### Regenerating playable sample audio
 
-The six MP3s under `client/public/samples/` are gitignored (`*.mp3`). They are two-speaker recordings (agent = `en-US-GuyNeural`, user = `en-US-JennyNeural`) so the upload demo's AssemblyAI `speaker_labels` diarization returns real multi-turn timestamps. Generate them locally after clone (or after editing playable scripts):
+The six playable MP3s under `client/public/samples/` are tracked in git (see the `!client/public/samples/*.mp3` exception). They are two-speaker recordings (agent = `en-US-GuyNeural`, user = `en-US-JennyNeural`) so the upload demo's AssemblyAI `speaker_labels` diarization returns real multi-turn timestamps. A clone should already have them. Regenerate locally only after editing playable scripts:
 
 ```
 pip install edge-tts   # once
@@ -64,18 +64,32 @@ python3 scripts/generate-sample-audio.py
 
 Then sync the `tMs` values in `client/src/sampleSessions.js` to the printed `manifest.json` if the generator had to push turns apart to avoid overlap.
 
+### Deploy (Replit, long-running Node)
+
+This app keeps `reportCache` as an in-process `Map`. A Vercel serverless invoke would drop that Map, so the demo host is Replit as a long-running Node process.
+
+1. Import this GitHub repo into Replit.
+2. Set the Replit Secret `ASSEMBLYAI_API_KEY`. The key stays on the server. It never goes to the browser.
+3. Replit `run` is `npm run build && npm start`. That builds the Vite client, then starts Express, which serves `client/dist` and warms the 12 Northstar sessions into `reportCache` **before** `listen`. Pack list is `["generic"]`, matching Home and an unchecked Try.
+4. If any of the 12 fail, the boot log prints an error and `GET /v1/boot-status` tells Home. Home then shows that error. It does not invent an 83 percent KPI.
+5. Live call audio is still not written to disk on the host.
+
+Public demo URL: not published yet. The operator publishes the Replit after this PR lands. Until then, run locally with `./scripts/start.sh`.
+
+`GET /v1/boot-status` returns `{ ok, cached, total, error }`.
+
 ### Architecture
 
 - `server/` - thin Node/Express. `GET /v1/token` mints a short-lived Voice Agent token server-side (the real API key never leaves this process; reused as-is from the earlier build). `POST /v1/analyze-session` runs `server/checks/analyze.js` against a submitted session log and returns a findings report.
 - `server/checks/` - the R3-21 mechanisms: `consentCheck.js`, `disclosureCheck.js` (LLM Gateway semantic judgment), `optOutCheck.js` (see `docs/tcpa-optout-check.md`), `piiScan.js` (pattern packs from `patternPacks.js` plus an LLM Gateway free-form-PII pass), `llmGateway.js` (shared LLM Gateway client), and `analyze.js` which composes them - see `docs/guardrails-llm-gateway-integration.md` for how the AssemblyAI calls work. `analyze.test.js` is the self-check, including the HIPAA-pack-as-drop-in-extension demonstration.
-- `client/` - React + Vite. `App.jsx` is a minimal hand-rolled router (no dependency): `/` renders `Landing.jsx` (splash page, "Get started" button), `/dashboard` renders `Dashboard.jsx`, which is where the actual compliance-check flow lives. `useVoiceAgent.js` connects to `wss://agents.assemblyai.com/v1/ws?token=...` (session-ingestion plumbing reused from the earlier build: `AudioWorklet` mic capture, PCM16 streaming, gapless `reply.audio` playback scheduling), logs a consent event and a timestamped transcript turn-by-turn, and hands the completed session log to `Dashboard.jsx` on `session.ended` for analysis. No live tool-calling and no domain persona - the agent config is neutral.
+- `client/` - React + Vite. `App.jsx` is a minimal hand-rolled router (no dependency): `/` is Landing, `/home` is the Northstar queue, `/sessions` is stored reports, `/try` is the lab. `useVoiceAgent.js` connects to `wss://agents.assemblyai.com/v1/ws?token=...` (session-ingestion plumbing: `AudioWorklet` mic capture, PCM16 streaming, gapless `reply.audio` playback scheduling), logs a consent event and a timestamped transcript turn-by-turn, and hands the completed session log to the Try lab on `session.ended` for analysis. No live tool-calling and no domain persona - the agent config is neutral.
 
 See `AGENTS.md` for the standing convention on verifying AssemblyAI API docs before writing integration code.
 
 ## Submission instructions
 
 1. Build the project in this repo, keeping AssemblyAI's Voice AI APIs as the core of the solution.
-2. Deploy a live demo on Streamlit, Replit, or Vercel.
+2. Deploy a live demo on Replit (long-running Node). Do not use Vercel serverless for this process-lifetime cache.
 3. Record a demo video (under 5 minutes) and prepare a short slide deck (PDF).
 4. Go to the [AssemblyAI Voice Agent Hackathon page](https://lablab.ai/ai-hackathons/assemblyai-voice-agent-hackathon) on lablab.ai and submit through the official submission flow before **Sep 30, 2026**, including: title, descriptions, tags, cover image, video link, slides, this GitHub repo link, and the live demo URL.
 5. Register with whichever email you prefer - a company email is welcome but not required.
