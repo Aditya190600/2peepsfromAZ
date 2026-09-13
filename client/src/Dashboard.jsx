@@ -3,7 +3,7 @@ import { useVoiceAgent } from "./useVoiceAgent";
 import { SAMPLE_SESSIONS, SAMPLE_AUDIO_URLS, GENERATED_SESSION_KEYS } from "./sampleSessions";
 import { Nav, Footer } from "./Chrome";
 import AudioPlayer from "./AudioPlayer";
-import { saveHistoryEntry } from "./reportHistory";
+import { saveHistoryEntry, findEntryBySessionId } from "./reportHistory";
 import {
   CHECK_LABEL,
   CHECK_CITATION,
@@ -291,7 +291,7 @@ function FleetView({ results, progress }) {
   );
 }
 
-function Report({ report, audioUrl, audioRef, onSeek }) {
+export function Report({ report, audioUrl, audioRef, onSeek }) {
   if (!report) {
     return (
       <div className="report-empty">
@@ -397,14 +397,15 @@ export default function Dashboard({ navigate, path }) {
     document.title = report ? `ComplyLine report — ${report.sessionId ?? "session"}` : "ComplyLine";
   }, [report]);
 
-  const recordHistory = (label, sessionId, findings) => {
-    const verdict = headlineVerdict(findings);
+  const recordHistory = (label, report) => {
+    const verdict = headlineVerdict(report.findings);
     saveHistoryEntry({
       timestamp: new Date().toISOString(),
       label,
-      sessionId,
+      sessionId: report.sessionId,
       verdictLevel: verdict.level,
       verdictLabel: verdict.label,
+      report,
     });
   };
 
@@ -418,7 +419,7 @@ export default function Dashboard({ navigate, path }) {
     try {
       const nextReport = await analyze(lastSession, patternPackIds);
       setReport(nextReport);
-      recordHistory("Live call", nextReport.sessionId, nextReport.findings);
+      recordHistory("Live call", nextReport);
     } catch (err) {
       setLiveError(err.message ?? "Something went wrong generating this report.");
     } finally {
@@ -435,7 +436,7 @@ export default function Dashboard({ navigate, path }) {
     try {
       const nextReport = await analyze(SAMPLE_SESSIONS[key], patternPackIds);
       setReport(nextReport);
-      recordHistory(sampleLabel(key), nextReport.sessionId, nextReport.findings);
+      recordHistory(sampleLabel(key), nextReport);
     } catch (err) {
       setSampleError(err.message ?? "Something went wrong generating this report.");
       setReport(null);
@@ -461,7 +462,7 @@ export default function Dashboard({ navigate, path }) {
       const results = keys.map((key, i) => ({ key, report: reports[i] }));
       setFleetResults(results);
       for (const { key, report: r } of results) {
-        recordHistory(sampleLabel(key), r.sessionId, r.findings);
+        recordHistory(sampleLabel(key), r);
       }
     } catch (err) {
       setFleetError(err.message ?? "Something went wrong running the fleet analysis.");
@@ -491,7 +492,7 @@ export default function Dashboard({ navigate, path }) {
         patternPackIds
       );
       setReport(nextReport);
-      recordHistory(label, nextReport.sessionId, nextReport.findings);
+      recordHistory(label, nextReport);
       setUploadStatus("idle");
     } catch (err) {
       setUploadStatus("error");
@@ -521,6 +522,19 @@ export default function Dashboard({ navigate, path }) {
     } finally {
       setSampleLoadingKey(null);
     }
+  };
+
+  const openStoredOrRunSample = (key) => {
+    const entry = findEntryBySessionId(SAMPLE_SESSIONS[key]?.sessionId);
+    if (!entry?.report) {
+      runSample(key);
+      return;
+    }
+    setFleetResults(null);
+    setFleetError(null);
+    setSampleError(null);
+    setActiveAudioUrl(null);
+    setReport(entry.report);
   };
 
   const onDrop = (e) => {
@@ -714,7 +728,7 @@ export default function Dashboard({ navigate, path }) {
                 <li key={key}>
                   <button
                     className="sample-library-item"
-                    onClick={() => runSample(key)}
+                    onClick={() => openStoredOrRunSample(key)}
                     disabled={sampleLoadingKey === key}
                   >
                     {sampleLoadingKey === key ? "Analyzing…" : sampleLabel(key)}
