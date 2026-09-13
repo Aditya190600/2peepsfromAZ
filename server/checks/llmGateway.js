@@ -35,7 +35,24 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function callLlmGateway(messages, options = {}) {
+// Process-wide mutex: a cold multi-session demo run fires this from several
+// concurrent checks/callers at once, and the account's Gateway rate limit is
+// tight (~2 calls/30s) - see AGENTS.md. Queue everyone onto one call at a
+// time rather than letting them all race the 429 retry loop simultaneously.
+// ponytail: single global queue serializes ALL callers even across unrelated
+// sessions; per-API-key sharding if throughput ever needs it.
+let gatewayQueue = Promise.resolve();
+
+export function callLlmGateway(messages, options = {}) {
+  const result = gatewayQueue.then(() => callLlmGatewayNow(messages, options));
+  gatewayQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
+async function callLlmGatewayNow(messages, options = {}) {
   const {
     apiKey = process.env.ASSEMBLYAI_API_KEY,
     model = DEFAULT_MODEL,

@@ -5,7 +5,15 @@ function redact(match) {
   return match.slice(0, 2) + "*".repeat(match.length - 4) + match.slice(-2);
 }
 
-const NER_SYSTEM_PROMPT = `You will be given a phone-call transcript as a JSON array of turns, each shaped {"turnIndex": number, "role": "agent"|"user", "text": string}. Identify personally identifiable information mentioned anywhere in the text: person names, organization names, email addresses, phone numbers, and full street addresses. Respond with ONLY a JSON object, no other text: {"items": [{"turnIndex": number, "type": "person_name"|"organization"|"email"|"phone_number"|"address", "text": "<exact substring as it appears in that turn>"}]}. Return {"items": []} if none are found. Do not report SSNs, credit card numbers, or account numbers - those are covered separately.`;
+const NER_SYSTEM_PROMPT = `You will be given a phone-call transcript as a JSON array of turns, each shaped {"turnIndex": number, "role": "agent"|"user", "text": string}. Identify personally identifiable information mentioned anywhere in the text: person names, email addresses, phone numbers, and full street addresses. Respond with ONLY a JSON object, no other text: {"items": [{"turnIndex": number, "type": "person_name"|"email"|"phone_number"|"address", "text": "<exact substring as it appears in that turn>"}]}. Return {"items": []} if none are found. Do not report SSNs, credit card numbers, or account numbers - those are covered separately. Do NOT report business/organization names, brand names, or support-desk greeting names (e.g. "Acme Support", "TechCorp Billing") - those are not PII.`;
+
+// Backstop for the org-name carve-out above: even if the model mislabels a
+// business/support-desk name as person_name, drop it here rather than
+// weakening detection of genuine person names in the prompt.
+const ORG_SUFFIX_RE = /\b(support|billing|helpdesk|help desk|service|services|team|department|dept\.?|sales|inc\.?|llc|corp\.?|co\.?)\b/i;
+function looksLikeOrgName(text) {
+  return ORG_SUFFIX_RE.test(text);
+}
 
 // Free-form PII (names, orgs, emails, addresses) that regex can't reliably
 // catch. Runs one LLM Gateway call over the whole session - see
@@ -33,6 +41,7 @@ async function llmPiiScan(session, llmGateway) {
 
   return items
     .filter((item) => turns[item.turnIndex] && typeof item.text === "string" && item.text.length > 0)
+    .filter((item) => !(item.type === "person_name" && looksLikeOrgName(item.text)))
     .map((item) => ({
       turnIndex: item.turnIndex,
       tMs: turns[item.turnIndex].tMs,
