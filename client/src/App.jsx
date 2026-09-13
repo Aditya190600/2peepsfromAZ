@@ -22,7 +22,8 @@ export default function App() {
   }, []);
 
   if (path === "/dashboard") {
-    return <Dashboard navigate={navigate} path={path} />;
+    const initialView = new URLSearchParams(window.location.search).get("view");
+    return <Dashboard navigate={navigate} path={path} initialView={initialView} />;
   }
   if (path === "/history") {
     return <History navigate={navigate} path={path} />;
@@ -31,5 +32,5 @@ export default function App() {
     const sessionId = decodeURIComponent(path.slice(SESSIONS_PREFIX.length));
     return <SessionView navigate={navigate} path={path} sessionId={sessionId} />;
   }
-  return <Landing onGetStarted={() => navigate("/dashboard")} navigate={navigate} path={path} />;
+  return <Landing onGetStarted={() => navigate("/dashboard?view=summary")} navigate={navigate} path={path} />;
 }

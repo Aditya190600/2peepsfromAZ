@@ -361,13 +361,13 @@ function DataHandlingPanel() {
   );
 }
 
-export default function Dashboard({ navigate, path }) {
+export default function Dashboard({ navigate, path, initialView }) {
   const { status, transcript, lastSession, micSilent, connect, disconnect } = useVoiceAgent();
   const [consent, setConsent] = useState(false);
   const [selectedPacks, setSelectedPacks] = useState([]);
   const [report, setReport] = useState(null);
-  const [fleetResults, setFleetResults] = useState(null);
-  const [fleetLoading, setFleetLoading] = useState(false);
+  const [fleetResults, setFleetResults] = useState(initialView === "summary" ? [] : null);
+  const [fleetLoading, setFleetLoading] = useState(initialView === "summary");
   const [fleetProgress, setFleetProgress] = useState(null);
   const [fleetError, setFleetError] = useState(null);
   const [activeAudioUrl, setActiveAudioUrl] = useState(null);
@@ -537,6 +537,14 @@ export default function Dashboard({ navigate, path }) {
     setActiveAudioUrl(null);
     setReport(entry.report);
   };
+
+  const ranInitialSummary = useRef(false);
+  useEffect(() => {
+    if (initialView !== "summary" || ranInitialSummary.current) return;
+    ranInitialSummary.current = true;
+    runFleetOn(NORTHSTAR_SESSION_KEYS);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialView]);
 
   const onDrop = (e) => {
     e.preventDefault();
