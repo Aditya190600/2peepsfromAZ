@@ -29,7 +29,14 @@ export class LlmGatewayRateLimitError extends Error {
   }
 }
 
-const RETRYABLE_429_DELAYS_MS = [500, 1500, 3500];
+// The account's real Gateway limit is tight (~2 calls/30s, see AGENTS.md).
+// With the mutex above, 429s are no longer caused by overlapping callers -
+// they mean the account has exhausted its window and just needs to wait for
+// it to roll over. A short backoff (previously 500/1500/3500ms, ~5.5s total)
+// gives up well before that, so a cold multi-session run still errors out.
+// Push the budget past a full window: worst case ~61s of waiting is fine,
+// since callers are already serialized and queued behind each other.
+const RETRYABLE_429_DELAYS_MS = [1000, 2000, 4000, 8000, 16000, 30000];
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
