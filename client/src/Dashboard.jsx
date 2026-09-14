@@ -370,12 +370,19 @@ export default function Dashboard({ navigate, path }) {
     });
   };
 
+  const clearLabErrors = () => {
+    setLiveError(null);
+    setSampleError(null);
+    setUploadError(null);
+    setUploadStatus("idle");
+    setFleetError(null);
+  };
+
   const runLiveReport = async () => {
     if (!lastSession) return;
     setFleetResults(null);
-    setFleetError(null);
     setActiveAudioUrl(null); // live calls aren't recorded/stored - no audio to play back
-    setLiveError(null);
+    clearLabErrors();
     setLiveLoading(true);
     try {
       const nextReport = await analyze(lastSession, patternPackIds);
@@ -390,8 +397,7 @@ export default function Dashboard({ navigate, path }) {
 
   const runSample = async (key) => {
     setFleetResults(null);
-    setFleetError(null);
-    setSampleError(null);
+    clearLabErrors();
     setSampleLoadingKey(key);
     setActiveAudioUrl(SAMPLE_AUDIO_URLS[key] && PLAYABLE_SAMPLE_LABEL[key] ? SAMPLE_AUDIO_URLS[key] : null);
     try {
@@ -408,7 +414,7 @@ export default function Dashboard({ navigate, path }) {
 
   const runFleetOn = async (keys) => {
     setFleetLoading(true);
-    setFleetError(null);
+    clearLabErrors();
     setReport(null);
     setActiveAudioUrl(null);
     setFleetResults([]);
@@ -437,10 +443,8 @@ export default function Dashboard({ navigate, path }) {
   const runUpload = async (file, { label = "Uploaded audio", consentEvent } = {}) => {
     if (!file) return;
     setFleetResults(null);
-    setFleetError(null);
     setReport(null);
-    setUploadError(null);
-    setSampleError(null);
+    clearLabErrors();
     setUploadStatus("uploading");
     setActiveAudioUrl(URL.createObjectURL(file));
     try {
@@ -492,8 +496,7 @@ export default function Dashboard({ navigate, path }) {
       return;
     }
     setFleetResults(null);
-    setFleetError(null);
-    setSampleError(null);
+    clearLabErrors();
     setActiveAudioUrl(null);
     setReport(entry.report);
   };

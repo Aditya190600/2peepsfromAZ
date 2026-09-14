@@ -452,7 +452,7 @@ body {
 .finding-status.is-idle {
   color: var(--muted);
   background: var(--paper);
-  border: 1px solid var(--line-strong);
+  border: 1px dashed var(--line-strong);
 }
 
 .finding-status.is-loading {

@@ -31,6 +31,20 @@ test("error wins over loading and a leftover report", () => {
   assert.match(view.message, /upstream down/);
 });
 
+test("dropping a leftover error lets a later ready report paint", () => {
+  const masked = reportView({
+    report: { findings: [{ status: "pass", check: "consent" }] },
+    error: "live failed",
+  });
+  assert.equal(masked.kind, "error");
+
+  const afterClear = reportView({
+    report: { findings: [{ status: "pass", check: "consent" }] },
+  });
+  assert.equal(afterClear.kind, "ready");
+  assert.equal(afterClear.className, VERDICT_CLASS.clear);
+});
+
 test("pinned session findings map to Critical, High, and Clear classes", () => {
   const tcpa04 = headlineVerdict([{ status: "flag", check: "consent" }]);
   const late01 = headlineVerdict([{ status: "flag", check: "ai_disclosure" }]);
