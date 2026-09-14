@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { NORTHSTAR_SESSIONS, NORTHSTAR_SESSION_KEYS } from "./sampleSessions";
-import { Nav, Footer } from "./Chrome";
+import { AppShell, OpenTasksRail } from "./Chrome";
 import { saveHistoryEntry } from "./reportHistory";
 import { headlineVerdict } from "./compliance";
 import { analyze, mapWithConcurrency, fetchBootStatus } from "./analyzeClient";
 import { FleetView, Report, sampleLabel } from "./Dashboard";
+import { flaggedTaskItems } from "./fleetStats";
 import "./App.css";
 
 const GENERIC_PACKS = ["generic"];
@@ -15,6 +16,7 @@ export default function Home({ navigate, path }) {
   const [fleetProgress, setFleetProgress] = useState({ done: 0, total: NORTHSTAR_SESSION_KEYS.length });
   const [fleetError, setFleetError] = useState(null);
   const [bootWarning, setBootWarning] = useState(null);
+  const [showTasks, setShowTasks] = useState(true);
   const started = useRef(false);
 
   useEffect(() => {
@@ -82,38 +84,43 @@ export default function Home({ navigate, path }) {
     runNorthstar();
   }, []);
 
-  return (
-    <div className="page">
-      <Nav path={path} navigate={navigate} />
-      <header className="masthead">
-        <p className="tenant-line">
-          Reviewing sessions for <strong>Northstar Voice</strong> ·{" "}
-          <span className="tenant-contact">legal@northstarvoice.com</span>
-        </p>
-        <p className="tagline">
-          Post-call compliance review for AI voice agents. This page is the program queue. Live
-          calls, uploads, and samples live on Try.
-        </p>
-      </header>
+  const tasks = Array.isArray(fleetResults) ? flaggedTaskItems(fleetResults, sampleLabel) : [];
+  const openSession = (sessionId) => {
+    if (!sessionId) return;
+    navigate(`/sessions/${encodeURIComponent(sessionId)}`);
+  };
 
-      <main className="layout">
-        <section className="panel report-panel">
-          <h2>Fleet compliance report</h2>
-          {bootWarning && fleetResults?.length > 0 && (
-            <p className="error-banner">{bootWarning}</p>
-          )}
-          {fleetError ? (
-            <Report report={null} error={fleetError} />
-          ) : fleetLoading && fleetResults.length === 0 ? (
-            <Report report={null} loading />
-          ) : fleetResults?.length ? (
-            <FleetView results={fleetResults} progress={fleetProgress} />
-          ) : (
-            <Report report={null} idleMessage="The program could not be analyzed." />
-          )}
-        </section>
-      </main>
-      <Footer />
-    </div>
+  return (
+    <AppShell
+      path={path}
+      navigate={navigate}
+      title="Home"
+      actions={
+        Array.isArray(fleetResults) && fleetResults.length > 0 ? (
+          <button type="button" className="btn btn-outline" onClick={() => setShowTasks((open) => !open)}>
+            {showTasks ? "Hide tasks" : "Show tasks"}
+          </button>
+        ) : null
+      }
+      rail={
+        showTasks && Array.isArray(fleetResults) && fleetResults.length > 0 ? (
+          <OpenTasksRail items={tasks} onHide={() => setShowTasks(false)} onOpen={openSession} />
+        ) : null
+      }
+    >
+      <p className="app-lede">
+        Program queue for Northstar Voice. Live calls, uploads, and samples live on Try.
+      </p>
+      {bootWarning && fleetResults?.length > 0 && <p className="error-banner">{bootWarning}</p>}
+      {fleetError ? (
+        <Report report={null} error={fleetError} />
+      ) : fleetLoading && fleetResults.length === 0 ? (
+        <Report report={null} loading />
+      ) : fleetResults?.length ? (
+        <FleetView results={fleetResults} progress={fleetProgress} navigate={navigate} />
+      ) : (
+        <Report report={null} idleMessage="The program could not be analyzed." />
+      )}
+    </AppShell>
   );
 }

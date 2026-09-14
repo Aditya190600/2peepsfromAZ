@@ -1,51 +1,29 @@
-// Shared site chrome: top nav (brand-as-landing-link + Home/Sessions/Try) and
-// footer (data-handling + repo link). See judging-criteria-and-enterprise-gap-assessment.md
-// item 10 - previously there was no way back to "/" and no footer anywhere.
+import { PRODUCT_NAV } from "./chromeNav.js";
+
+function go(navigate, href, event) {
+  event.preventDefault();
+  navigate(href);
+}
+
 export function Nav({ path, navigate }) {
   return (
     <nav className="site-nav">
-      <a
-        className="brand"
-        href="/"
-        onClick={(e) => {
-          e.preventDefault();
-          navigate("/");
-        }}
-      >
+      <a className="brand" href="/" onClick={(e) => go(navigate, "/", e)}>
         <span className="brand-mark" aria-hidden="true" />
         <h1>ComplyLine</h1>
       </a>
       <div className="site-nav-links">
-        <a
-          className={`site-nav-link ${path === "/home" ? "is-active" : ""}`}
-          href="/home"
-          onClick={(e) => {
-            e.preventDefault();
-            navigate("/home");
-          }}
-        >
-          Home
-        </a>
-        <a
-          className={`site-nav-link ${path === "/sessions" || path.startsWith("/sessions/") ? "is-active" : ""}`}
-          href="/sessions"
-          onClick={(e) => {
-            e.preventDefault();
-            navigate("/sessions");
-          }}
-        >
-          Sessions
-        </a>
-        <a
-          className={`site-nav-link ${path === "/try" ? "is-active" : ""}`}
-          href="/try"
-          onClick={(e) => {
-            e.preventDefault();
-            navigate("/try");
-          }}
-        >
-          Try
-        </a>
+        {PRODUCT_NAV.map((item) => (
+          <a
+            key={item.href}
+            className={`site-nav-link ${item.match(path) ? "is-active" : ""}`}
+            href={item.href}
+            aria-current={item.match(path) ? "page" : undefined}
+            onClick={(e) => go(navigate, item.href, e)}
+          >
+            {item.label}
+          </a>
+        ))}
       </div>
     </nav>
   );
@@ -66,5 +44,76 @@ export function Footer() {
         <span>ComplyLine — automated pattern-based screening, not legal advice.</span>
       </p>
     </footer>
+  );
+}
+
+export function AppShell({ path, navigate, title, actions, rail, children }) {
+  return (
+    <div className={`app-shell ${rail ? "has-rail" : ""}`}>
+      <header className="app-topbar">
+        <a className="app-brand" href="/" onClick={(e) => go(navigate, "/", e)}>
+          <span className="brand-mark" aria-hidden="true" />
+          <span>ComplyLine</span>
+        </a>
+      </header>
+      <div className="app-body">
+        <aside className="app-sidebar">
+          <p className="app-tenant">
+            Northstar Voice
+            <span className="app-tenant-mail">legal@northstarvoice.com</span>
+          </p>
+          <nav className="app-nav" aria-label="Product">
+            {PRODUCT_NAV.map((item) => (
+              <a
+                key={item.href}
+                className={`app-nav-link ${item.match(path) ? "is-active" : ""}`}
+                href={item.href}
+                aria-current={item.match(path) ? "page" : undefined}
+                onClick={(e) => go(navigate, item.href, e)}
+              >
+                {item.label}
+              </a>
+            ))}
+          </nav>
+        </aside>
+        <div className="app-main">
+          <header className="app-pagehead">
+            <h1>{title}</h1>
+            {actions}
+          </header>
+          <div className="app-content">{children}</div>
+          <Footer />
+        </div>
+        {rail}
+      </div>
+    </div>
+  );
+}
+
+export function OpenTasksRail({ items, onHide, onOpen }) {
+  return (
+    <aside className="app-rail" aria-label="Open tasks">
+      <div className="app-rail-head">
+        <h2>Open Tasks</h2>
+        <button type="button" className="app-rail-close" onClick={onHide} aria-label="Hide tasks">
+          ×
+        </button>
+      </div>
+      <p className="app-rail-meta">Flagged sessions</p>
+      {items.length === 0 ? (
+        <p className="app-rail-empty">No flagged sessions in this program.</p>
+      ) : (
+        <ul className="app-rail-list">
+          {items.map((item) => (
+            <li key={item.sessionId ?? item.key}>
+              <button type="button" onClick={() => onOpen(item.sessionId)}>
+                <span className="app-rail-label">{item.label}</span>
+                <span className="app-rail-id">{item.sessionId}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </aside>
   );
 }
