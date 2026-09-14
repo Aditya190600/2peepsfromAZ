@@ -97,7 +97,7 @@ if (!uiOnly) {
 const client = spawnDetached(process.execPath, [viteBin, "--host", "127.0.0.1", "--port", String(FRONTEND_PORT), "--strictPort"], path.join(repoRoot, "client"), clientFd);
 
 try {
-  if (!uiOnly) await waitForPort(BACKEND_PORT, "backend");
+  if (!uiOnly) await waitForPort(BACKEND_PORT, "backend", 600000);
   await waitForPort(FRONTEND_PORT, "frontend");
 } catch (err) {
   try {

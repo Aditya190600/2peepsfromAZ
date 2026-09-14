@@ -1,5 +1,15 @@
 export class ApiError extends Error {}
 
+export async function fetchBootStatus() {
+  try {
+    const resp = await fetch("/v1/boot-status");
+    if (!resp.ok) return null;
+    return resp.json();
+  } catch {
+    return null;
+  }
+}
+
 export async function analyze(session, patternPackIds) {
   const resp = await fetch("/v1/analyze-session", {
     method: "POST",
