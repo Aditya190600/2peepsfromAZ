@@ -35,6 +35,7 @@ export function monitorTiles(perCheck) {
       flag: counts.flag,
       pass: counts.pass,
       error: counts.error,
+      na: counts.na,
       total: denom,
     };
   });
