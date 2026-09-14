@@ -1,0 +1,37 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { matchRoute } from "./routes.js";
+
+test("landing is the default", () => {
+  assert.deepEqual(matchRoute("/"), { name: "landing" });
+  assert.deepEqual(matchRoute("/unknown"), { name: "landing" });
+});
+
+test("named product routes", () => {
+  assert.deepEqual(matchRoute("/home"), { name: "home" });
+  assert.deepEqual(matchRoute("/try"), { name: "try" });
+  assert.deepEqual(matchRoute("/sessions"), { name: "sessions" });
+  assert.deepEqual(matchRoute("/sessions/"), { name: "sessions" });
+});
+
+test("session id is decoded after the sessions prefix", () => {
+  assert.deepEqual(matchRoute("/sessions/sess_tcpa_04"), {
+    name: "session",
+    sessionId: "sess_tcpa_04",
+  });
+});
+
+test("legacy dashboard summary lands on home", () => {
+  assert.deepEqual(matchRoute("/dashboard", "?view=summary"), {
+    name: "home",
+    redirect: "/home",
+  });
+});
+
+test("legacy dashboard lab lands on try", () => {
+  assert.deepEqual(matchRoute("/dashboard"), { name: "try", redirect: "/try" });
+});
+
+test("legacy history lands on sessions", () => {
+  assert.deepEqual(matchRoute("/history"), { name: "sessions", redirect: "/sessions" });
+});

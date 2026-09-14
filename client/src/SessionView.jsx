@@ -28,13 +28,13 @@ export default function SessionView({ navigate, path, sessionId }) {
               </p>
               <p>
                 <a
-                  href="/history"
+                  href="/sessions"
                   onClick={(e) => {
                     e.preventDefault();
-                    navigate("/history");
+                    navigate("/sessions");
                   }}
                 >
-                  Back to history
+                  Back to sessions
                 </a>
               </p>
             </div>
