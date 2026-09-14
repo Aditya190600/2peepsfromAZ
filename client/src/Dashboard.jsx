@@ -380,6 +380,7 @@ export default function Dashboard({ navigate, path }) {
     setUploadError(null);
     setUploadStatus("idle");
     setFleetError(null);
+    setPasteError(null);
   };
 
   const runLiveReport = async () => {
@@ -448,16 +449,13 @@ export default function Dashboard({ navigate, path }) {
     if (!consent) return;
     const parsed = parseSessionPaste(pasteText);
     setFleetResults(null);
-    setFleetError(null);
     setActiveAudioUrl(null);
-    setSampleError(null);
-    setLiveError(null);
+    clearLabErrors();
     if (!parsed.ok) {
       setPasteError(parsed.error);
       setReport(null);
       return;
     }
-    setPasteError(null);
     setPasteLoading(true);
     try {
       const nextReport = await analyze(parsed.session, patternPackIds);
