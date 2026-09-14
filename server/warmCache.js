@@ -13,11 +13,18 @@ export async function warmNorthstarCache({
   sessions,
   sessionKeys,
   patternPackIds = ["generic"],
+  persist,
 }) {
   const errors = [];
   let cached = 0;
   for (const key of sessionKeys) {
     const session = sessions[key];
+    const hash = cacheKey(session, patternPackIds);
+    if (reportCache.has(hash)) {
+      cached += 1;
+      console.log(`Northstar cache: ${key} hydrated (${cached} of ${sessionKeys.length}).`);
+      continue;
+    }
     try {
       const report = await analyzeSession(session, { patternPackIds });
       const hasErroredCheck = (report.findings ?? []).some((f) => f.status === "error");
@@ -26,7 +33,16 @@ export async function warmNorthstarCache({
         console.error(`Northstar cache: ${key} skipped (a check returned status error).`);
         continue;
       }
-      reportCache.set(cacheKey(session, patternPackIds), report);
+      reportCache.set(hash, report);
+      if (persist) {
+        try {
+          await persist(hash, report);
+        } catch (persistErr) {
+          console.error(
+            `Northstar cache: ${key} persist skipped (${persistErr.message ?? persistErr}).`
+          );
+        }
+      }
       cached += 1;
       console.log(`Northstar cache: ${key} cached (${cached} of ${sessionKeys.length}).`);
     } catch (err) {

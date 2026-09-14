@@ -64,17 +64,17 @@ python3 scripts/generate-sample-audio.py
 
 Then sync the `tMs` values in `client/src/sampleSessions.js` to the printed `manifest.json` if the generator had to push turns apart to avoid overlap.
 
-### Deploy (Replit, long-running Node)
+### Deploy (Railway + Supabase)
 
-This app keeps `reportCache` as an in-process `Map`. A Vercel serverless invoke would drop that Map, so the demo host is Replit as a long-running Node process.
+This app keeps `reportCache` as an in-process `Map` and optionally persists those reports to Supabase so a Railway restart does not re-run 12 LLM Gateway calls. Browser report history is still `localStorage`, not a database. Live-call audio is never stored.
 
-1. Import this GitHub repo into Replit.
-2. Set the Replit Secret `ASSEMBLYAI_API_KEY`. The key stays on the server. It never goes to the browser.
-3. Replit `run` is `npm run build && npm start`. That builds the Vite client, then starts Express, which serves `client/dist` and warms the 12 Northstar sessions into `reportCache` **before** `listen`. Pack list is `["generic"]`, matching Home and an unchecked Try.
-4. If any of the 12 fail, the boot log prints an error and `GET /v1/boot-status` tells Home. Home still POSTs the 12 sessions so cache hits render as real KPIs, and it shows the boot error as a banner. It does not invent an 83 percent KPI for a failed cache.
-5. Live call audio is still not written to disk on the host.
+1. Create a Railway service from this GitHub repo. `railway.toml` builds with `npm run build` and starts with `npm start`. Railway must set `PORT`.
+2. Set Railway variables: `ASSEMBLYAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. The AssemblyAI key stays on the server. It never goes to the browser.
+3. In Supabase, run `supabase/migrations/001_report_cache.sql`. RLS stays on; only the service role reads and writes `report_cache`.
+4. Express binds `PORT`, then hydrates the Map from Supabase, then warms any missing Northstar sessions with `patternPackIds` `["generic"]` before `GET /v1/boot-status` flips to `{ ok: true }`. Home still POSTs the 12 sessions if boot is incomplete. It does not invent an 83 percent KPI for a failed cache.
+5. Live call audio is still not written to disk or to Supabase.
 
-Public demo URL: not published yet. The operator publishes the Replit after this PR lands. Until then, run locally with `./scripts/start.sh`.
+Public demo URL: not published yet. Until then, run locally with `./scripts/start.sh`. Local dev does not need Supabase; the in-memory Map is enough.
 
 `GET /v1/boot-status` returns `{ ok, cached, total, error }`.
 
@@ -89,7 +89,7 @@ See `AGENTS.md` for the standing convention on verifying AssemblyAI API docs bef
 ## Submission instructions
 
 1. Build the project in this repo, keeping AssemblyAI's Voice AI APIs as the core of the solution.
-2. Deploy a live demo on Replit (long-running Node). Do not use Vercel serverless for this process-lifetime cache.
+2. Deploy a live demo on Railway (long-running Node) with optional Supabase persistence for the server report cache. Do not use Vercel serverless for this process-lifetime cache.
 3. Record a demo video (under 5 minutes) and prepare a short slide deck (PDF).
 4. Go to the [AssemblyAI Voice Agent Hackathon page](https://lablab.ai/ai-hackathons/assemblyai-voice-agent-hackathon) on lablab.ai and submit through the official submission flow before **Sep 30, 2026**, including: title, descriptions, tags, cover image, video link, slides, this GitHub repo link, and the live demo URL.
 5. Register with whichever email you prefer - a company email is welcome but not required.

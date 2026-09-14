@@ -7,6 +7,7 @@ import cors from "cors";
 import { analyzeSession } from "./checks/analyze.js";
 import { transcribeUpload } from "./checks/transcribeUpload.js";
 import { cacheKey, warmNorthstarCache } from "./warmCache.js";
+import { loadReportCache, supabaseConfigured, upsertReportCache } from "./supabaseCache.js";
 import { NORTHSTAR_SESSIONS, NORTHSTAR_SESSION_KEYS } from "../client/src/sampleSessions.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -60,6 +61,11 @@ app.post("/v1/analyze-session", async (req, res) => {
     const hasErroredCheck = report.findings.some((f) => f.status === "error");
     if (!hasErroredCheck) {
       reportCache.set(key, report);
+      if (supabaseConfigured()) {
+        upsertReportCache(key, report).catch((persistErr) => {
+          console.error(`Supabase persist skipped: ${persistErr.message}`);
+        });
+      }
     }
     res.json(report);
   } catch (err) {
@@ -103,11 +109,33 @@ if (existsSync(dist)) {
 
 const port = process.env.PORT || 8787;
 
+await new Promise((resolve) => {
+  app.listen(port, () => {
+    console.log(`R3-21 compliance report server listening on :${port}`);
+    resolve();
+  });
+});
+
+if (supabaseConfigured()) {
+  try {
+    const rows = await loadReportCache();
+    for (const row of rows) {
+      if (row?.cache_key && row.report) reportCache.set(row.cache_key, row.report);
+    }
+    console.log(`Northstar cache: hydrated ${reportCache.size} reports from Supabase.`);
+  } catch (err) {
+    console.error(`Northstar cache: Supabase hydrate failed (${err.message}).`);
+  }
+}
+
 const result = await warmNorthstarCache({
   reportCache,
   analyzeSession,
   sessions: NORTHSTAR_SESSIONS,
   sessionKeys: NORTHSTAR_SESSION_KEYS,
+  persist: supabaseConfigured()
+    ? (hash, report) => upsertReportCache(hash, report)
+    : undefined,
 });
 if (result.ok) {
   bootStatus = { ok: true, cached: result.cached, total: result.total, error: null };
@@ -122,5 +150,3 @@ if (result.ok) {
   };
   console.error(`Northstar cache failed (${result.cached} of ${result.total}). ${detail}`);
 }
-
-app.listen(port, () => console.log(`R3-21 compliance report server listening on :${port}`));
