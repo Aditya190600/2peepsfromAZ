@@ -23,12 +23,15 @@ export async function warmNorthstarCache({
       const hasErroredCheck = (report.findings ?? []).some((f) => f.status === "error");
       if (hasErroredCheck) {
         errors.push({ key, error: "a check returned status error" });
+        console.error(`Northstar cache: ${key} skipped (a check returned status error).`);
         continue;
       }
       reportCache.set(cacheKey(session, patternPackIds), report);
       cached += 1;
+      console.log(`Northstar cache: ${key} cached (${cached} of ${sessionKeys.length}).`);
     } catch (err) {
       errors.push({ key, error: err.message ?? String(err) });
+      console.error(`Northstar cache: ${key} failed (${err.message ?? String(err)}).`);
     }
   }
   return {

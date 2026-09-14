@@ -71,7 +71,7 @@ This app keeps `reportCache` as an in-process `Map`. A Vercel serverless invoke 
 1. Import this GitHub repo into Replit.
 2. Set the Replit Secret `ASSEMBLYAI_API_KEY`. The key stays on the server. It never goes to the browser.
 3. Replit `run` is `npm run build && npm start`. That builds the Vite client, then starts Express, which serves `client/dist` and warms the 12 Northstar sessions into `reportCache` **before** `listen`. Pack list is `["generic"]`, matching Home and an unchecked Try.
-4. If any of the 12 fail, the boot log prints an error and `GET /v1/boot-status` tells Home. Home then shows that error. It does not invent an 83 percent KPI.
+4. If any of the 12 fail, the boot log prints an error and `GET /v1/boot-status` tells Home. Home still POSTs the 12 sessions so cache hits render as real KPIs, and it shows the boot error as a banner. It does not invent an 83 percent KPI for a failed cache.
 5. Live call audio is still not written to disk on the host.
 
 Public demo URL: not published yet. The operator publishes the Replit after this PR lands. Until then, run locally with `./scripts/start.sh`.
