@@ -19,6 +19,7 @@ import {
   VERDICT_CLASS,
 } from "./compliance";
 import { analyze, transcribeUpload, mapWithConcurrency } from "./analyzeClient";
+import { parseSessionPaste } from "./sessionPaste";
 import "./App.css";
 
 function formatTMs(tMs) {
@@ -338,6 +339,9 @@ export default function Dashboard({ navigate, path }) {
   const [sampleError, setSampleError] = useState(null);
   const [liveLoading, setLiveLoading] = useState(false);
   const [liveError, setLiveError] = useState(null);
+  const [pasteText, setPasteText] = useState("");
+  const [pasteLoading, setPasteLoading] = useState(false);
+  const [pasteError, setPasteError] = useState(null);
   const audioRef = useRef(null);
 
   const patternPackIds = ["generic", ...selectedPacks];
@@ -376,6 +380,7 @@ export default function Dashboard({ navigate, path }) {
     setUploadError(null);
     setUploadStatus("idle");
     setFleetError(null);
+    setPasteError(null);
   };
 
   const runLiveReport = async () => {
@@ -440,8 +445,32 @@ export default function Dashboard({ navigate, path }) {
     }
   };
 
+  const runPaste = async () => {
+    if (!consent) return;
+    const parsed = parseSessionPaste(pasteText);
+    setFleetResults(null);
+    setActiveAudioUrl(null);
+    clearLabErrors();
+    if (!parsed.ok) {
+      setPasteError(parsed.error);
+      setReport(null);
+      return;
+    }
+    setPasteLoading(true);
+    try {
+      const nextReport = await analyze(parsed.session, patternPackIds);
+      setReport(nextReport);
+      recordHistory(`Pasted session (${parsed.session.sessionId ?? "no session id"})`, nextReport);
+    } catch (err) {
+      setPasteError(err.message ?? "Something went wrong analyzing this paste.");
+      setReport(null);
+    } finally {
+      setPasteLoading(false);
+    }
+  };
+
   const runUpload = async (file, { label = "Uploaded audio", consentEvent } = {}) => {
-    if (!file) return;
+    if (!consent || !file) return;
     setFleetResults(null);
     setReport(null);
     clearLabErrors();
@@ -469,6 +498,7 @@ export default function Dashboard({ navigate, path }) {
   // diarization pipeline (not the canned SAMPLE_SESSIONS text path), so the
   // demo can prove speaker_labels produces multi-turn timestamps.
   const runDiarizedSample = async (key) => {
+    if (!consent) return;
     const url = SAMPLE_AUDIO_URLS[key];
     if (!url) return;
     setSampleLoadingKey(key);
@@ -504,17 +534,23 @@ export default function Dashboard({ navigate, path }) {
   const onDrop = (e) => {
     e.preventDefault();
     setDragActive(false);
+    if (!consent) return;
     runUpload(e.dataTransfer.files?.[0]);
   };
 
   const playableKeys = Object.keys(PLAYABLE_SAMPLE_LABEL);
   const reportLoading =
     liveLoading ||
+    pasteLoading ||
     sampleLoadingKey != null ||
     uploadStatus === "uploading" ||
     (fleetLoading && (!fleetResults || fleetResults.length === 0));
   const reportError =
-    liveError || sampleError || (uploadStatus === "error" ? uploadError : null) || fleetError;
+    liveError ||
+    pasteError ||
+    sampleError ||
+    (uploadStatus === "error" ? uploadError : null) ||
+    fleetError;
   const fleetReady = Array.isArray(fleetResults) && fleetResults.length > 0;
 
   return (
@@ -552,10 +588,6 @@ export default function Dashboard({ navigate, path }) {
               ))}
             </div>
             <p className="pack-note">Drop-in extensions over the generic scan — no core changes.</p>
-          </div>
-
-          <div className="section-block">
-            <h3>Live call</h3>
             <label className={`check-row ${!canStart ? "disabled" : ""}`}>
               <input
                 type="checkbox"
@@ -563,13 +595,17 @@ export default function Dashboard({ navigate, path }) {
                 onChange={(e) => setConsent(e.target.checked)}
                 disabled={!canStart}
               />
-              Caller consents to this AI call being recorded and analyzed
+              I am uploading or pasting recorded content for analysis. Live call audio is not stored.
             </label>
+          </div>
 
+          <div className="section-block">
+            <h3>Live call</h3>
             <div className="call-row">
               <button
                 className={`btn ${canStart ? "btn-primary" : "btn-danger"}`}
                 onClick={canStart ? () => connect(consent) : disconnect}
+                disabled={canStart && !consent}
               >
                 {canStart ? "Start call" : "End call"}
               </button>
@@ -639,9 +675,10 @@ export default function Dashboard({ navigate, path }) {
               recordings so diarization returns real agent/user turns (not one collapsed utterance).
             </p>
             <label
-              className={`dropzone ${dragActive ? "is-active" : ""}`}
+              className={`dropzone ${dragActive ? "is-active" : ""} ${!consent ? "is-disabled" : ""}`}
               onDragOver={(e) => {
                 e.preventDefault();
+                if (!consent) return;
                 setDragActive(true);
               }}
               onDragLeave={() => setDragActive(false)}
@@ -651,13 +688,41 @@ export default function Dashboard({ navigate, path }) {
                 type="file"
                 accept="audio/*"
                 hidden
+                disabled={!consent}
                 onChange={(e) => runUpload(e.target.files?.[0])}
               />
               {uploadStatus === "uploading"
                 ? "Transcribing and analyzing…"
-                : "Drop an audio file here, or click to choose one"}
+                : consent
+                  ? "Drop an audio file here, or click to choose one"
+                  : "Check the analysis consent box to upload recorded audio"}
             </label>
             {uploadStatus === "error" && <p className="error-banner">{uploadError}</p>}
+          </div>
+
+          <div className="section-block">
+            <h3>Paste session JSON</h3>
+            <p className="pack-note">
+              Paste a completed AssemblyAI session object with a <code>turns</code> array. Same
+              shape as the samples. This is recorded-content ingest, not a live call.
+            </p>
+            <textarea
+              className="session-paste"
+              rows={8}
+              value={pasteText}
+              onChange={(e) => setPasteText(e.target.value)}
+              spellCheck={false}
+              placeholder='{"sessionId":"sess_clean_01","turns":[{"role":"agent","text":"Hi","tMs":0}]}'
+            />
+            <button
+              className="btn btn-outline generate-btn"
+              type="button"
+              onClick={runPaste}
+              disabled={!consent || pasteLoading}
+            >
+              {pasteLoading ? "Analyzing…" : "Analyze pasted session"}
+            </button>
+            {pasteError && <p className="error-banner">{pasteError}</p>}
           </div>
 
           <div className="section-block">
@@ -682,8 +747,7 @@ export default function Dashboard({ navigate, path }) {
                     <button
                       className="btn btn-outline sample-diarize-btn"
                       onClick={() => runDiarizedSample(key)}
-                      disabled={sampleLoadingKey === key || uploadStatus === "uploading"}
-                      title="Re-upload this MP3 through AssemblyAI speaker_labels diarization"
+                      disabled={!consent || sampleLoadingKey === key || uploadStatus === "uploading"}
                     >
                       {sampleLoadingKey === key && uploadStatus === "uploading"
                         ? "Diarizing…"
