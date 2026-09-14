@@ -6,7 +6,8 @@ import {
   NORTHSTAR_SESSIONS,
   SCRIPTED_VIOLATION_DEMO_KEYS,
 } from "./sampleSessions";
-import { Nav, Footer } from "./Chrome";
+import { AppShell } from "./Chrome";
+import { summarizeFleet, monitorTiles } from "./fleetStats";
 import AudioPlayer from "./AudioPlayer";
 import { saveHistoryEntry, findEntryBySessionId } from "./reportHistory";
 import {
@@ -172,52 +173,52 @@ function IntroSteps() {
 }
 
 function FleetSummary({ results, progress }) {
-  const total = results.length;
-  const passed = results.filter(
-    (r) => !r.report.findings.some((f) => f.status === "flag" || f.status === "error")
-  ).length;
-  const flagged = results.filter((r) => r.report.findings.some((f) => f.status === "flag")).length;
-  const erroredOnly = total - passed - flagged;
-  const complianceRate = total > 0 ? Math.round((passed / total) * 100) : 0;
-
-  const perCheck = {};
-  for (const r of results) {
-    for (const f of r.report.findings) {
-      perCheck[f.check] ??= { pass: 0, flag: 0, error: 0, na: 0 };
-      if (f.status === "n/a") perCheck[f.check].na += 1;
-      else perCheck[f.check][f.status] += 1;
-    }
-  }
+  const { total, passed, flagged, erroredOnly, complianceRate, perCheck } = summarizeFleet(results);
+  const tiles = monitorTiles(perCheck);
 
   return (
-    <div className="fleet-summary">
+    <div className="fleet-board">
       {progress && progress.done < progress.total && (
         <p className="fleet-progress">
           Analyzing… {progress.done} of {progress.total} sessions complete.
         </p>
       )}
-      <div className="fleet-rate">
-        <span className="fleet-rate-number">{complianceRate}%</span>
-        <span className="fleet-rate-label">compliance rate</span>
-      </div>
-      <p className="fleet-headline">
-        <strong>{passed}</strong> of <strong>{total}</strong> calls passed every check ·{" "}
-        <strong>{flagged}</strong> flagged
-        {erroredOnly > 0 && (
-          <>
-            {" "}
-            · <strong>{erroredOnly}</strong> could not be fully checked
-          </>
-        )}
-      </p>
-      <ul className="fleet-check-counts">
-        {Object.entries(perCheck).map(([check, counts]) => (
-          <li key={check}>
-            <span className="fleet-check-name">{CHECK_LABEL[check] ?? check}</span>
-            <span className="fleet-check-pass">{counts.pass} pass</span>
-            <span className="fleet-check-flag">{counts.flag} flag</span>
-            {counts.error > 0 && <span className="fleet-check-error">{counts.error} unable to run</span>}
-            {counts.na > 0 && <span className="fleet-check-na">{counts.na} n/a</span>}
+      <section className="monitor-card fleet-progress-card">
+        <p className="monitor-kicker">Voice agent fleet</p>
+        <p className="fleet-rate">
+          <span className="fleet-rate-number">{complianceRate}%</span>
+        </p>
+        <div className="app-progress-track" aria-hidden="true">
+          <div className="app-progress-fill" style={{ width: `${complianceRate}%` }} />
+        </div>
+        <p className="fleet-headline">
+          <strong>{passed}</strong> of <strong>{total}</strong> calls passed every check ·{" "}
+          <strong>{flagged}</strong> flagged
+          {erroredOnly > 0 && (
+            <>
+              {" "}
+              · <strong>{erroredOnly}</strong> could not be fully checked
+            </>
+          )}
+        </p>
+      </section>
+      <h3 className="monitor-heading">Monitoring</h3>
+      <ul className="monitor-grid">
+        {tiles.map((tile) => (
+          <li key={tile.check} className="monitor-card">
+            <p className="monitor-kicker">{tile.label}</p>
+            <p className="monitor-attention">{tile.flag > 0 ? "Needs attention" : "Clear"}</p>
+            <p className="monitor-count">{tile.flag}</p>
+            <div className="app-progress-track" aria-hidden="true">
+              <div
+                className="app-progress-fill"
+                style={{ width: tile.total ? `${Math.round((tile.pass / tile.total) * 100)}%` : "0%" }}
+              />
+            </div>
+            <p className="monitor-meta">
+              {tile.pass} pass · {tile.total} total
+              {tile.error > 0 ? ` · ${tile.error} unable to run` : ""}
+            </p>
           </li>
         ))}
       </ul>
@@ -225,31 +226,48 @@ function FleetSummary({ results, progress }) {
   );
 }
 
-export function FleetView({ results, progress }) {
+export function FleetView({ results, progress, navigate }) {
+  const openReport = (sessionId) => {
+    if (!navigate || !sessionId) return;
+    navigate(`/sessions/${encodeURIComponent(sessionId)}`);
+  };
+
   return (
     <div>
       <FleetSummary results={results} progress={progress} />
-      <ul className="fleet-session-list">
-        {results.map(({ key, report }) => {
-          const verdict = headlineVerdict(report.findings);
-          return (
-            <li key={key} className="fleet-session-item">
-              <details>
-                <summary className={`fleet-session-summary ${VERDICT_CLASS[verdict.level] ?? "is-review"}`}>
-                  <span className={`finding-status ${VERDICT_CLASS[verdict.level] ?? "is-review"}`}>
-                    {verdict.label}
-                  </span>
-                  <span className="fleet-session-label">{sampleLabel(key)}</span>
-                  <span className="fleet-session-id">{report.sessionId}</span>
-                </summary>
-                <div className="fleet-session-body">
-                  <Report report={report} />
-                </div>
-              </details>
-            </li>
-          );
-        })}
-      </ul>
+      <h3 className="monitor-heading">Sessions</h3>
+      <div className="data-table-wrap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Session</th>
+              <th>Verdict</th>
+              <th>Session ID</th>
+            </tr>
+          </thead>
+          <tbody>
+            {results.map(({ key, report }) => {
+              const verdict = headlineVerdict(report.findings);
+              const clickable = Boolean(navigate && report.sessionId);
+              return (
+                <tr
+                  key={key}
+                  className={clickable ? "is-clickable" : undefined}
+                  onClick={clickable ? () => openReport(report.sessionId) : undefined}
+                >
+                  <td>{sampleLabel(key)}</td>
+                  <td>
+                    <span className={`finding-status ${VERDICT_CLASS[verdict.level] ?? "is-review"}`}>
+                      {verdict.label}
+                    </span>
+                  </td>
+                  <td className="mono">{report.sessionId}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -554,20 +572,7 @@ export default function Dashboard({ navigate, path }) {
   const fleetReady = Array.isArray(fleetResults) && fleetResults.length > 0;
 
   return (
-    <div className="page">
-      <Nav path={path} navigate={navigate} />
-      <header className="masthead">
-        <p className="tenant-line">
-          Reviewing sessions for <strong>Northstar Voice</strong> ·{" "}
-          <span className="tenant-contact">legal@northstarvoice.com</span>
-        </p>
-        <p className="tagline">
-          Post-call compliance review for AI voice agents. Ingests one completed AssemblyAI Voice
-          Agent session and flags TCPA consent logging, AI-disclosure timing, and PII exposure —
-          ranked by severity, with a regulatory citation on every finding.
-        </p>
-      </header>
-
+    <AppShell path={path} navigate={navigate} title="Try">
       <main className="layout">
         <section className="panel session-panel">
           <DataHandlingPanel />
@@ -805,7 +810,7 @@ export default function Dashboard({ navigate, path }) {
           {fleetReady ? (
             <>
               <h2>Fleet compliance report</h2>
-              <FleetView results={fleetResults} progress={fleetProgress} />
+              <FleetView results={fleetResults} progress={fleetProgress} navigate={navigate} />
             </>
           ) : reportLoading || reportError || report ? (
             <>
@@ -828,7 +833,6 @@ export default function Dashboard({ navigate, path }) {
           )}
         </section>
       </main>
-      <Footer />
-    </div>
+    </AppShell>
   );
 }
