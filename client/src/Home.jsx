@@ -4,7 +4,7 @@ import { Nav, Footer } from "./Chrome";
 import { saveHistoryEntry } from "./reportHistory";
 import { headlineVerdict } from "./compliance";
 import { analyze, mapWithConcurrency } from "./analyzeClient";
-import { FleetView, sampleLabel } from "./Dashboard";
+import { FleetView, Report, sampleLabel } from "./Dashboard";
 import "./App.css";
 
 const GENERIC_PACKS = ["generic"];
@@ -78,11 +78,14 @@ export default function Home({ navigate, path }) {
       <main className="layout">
         <section className="panel report-panel">
           <h2>Fleet compliance report</h2>
-          {fleetError && <p className="error-banner">{fleetError}</p>}
-          {fleetResults ? (
+          {fleetError ? (
+            <Report report={null} error={fleetError} />
+          ) : fleetLoading && fleetResults.length === 0 ? (
+            <Report report={null} loading />
+          ) : fleetResults?.length ? (
             <FleetView results={fleetResults} progress={fleetProgress} />
           ) : (
-            !fleetLoading && <p className="report-empty">The program could not be analyzed.</p>
+            <Report report={null} idleMessage="The program could not be analyzed." />
           )}
         </section>
       </main>

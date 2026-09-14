@@ -72,3 +72,45 @@ export function headlineVerdict(findings) {
   }
   return { level: "clear", label: "Clear", flaggedCount: 0 };
 }
+
+export const VERDICT_CLASS = {
+  critical: "is-critical",
+  high: "is-high",
+  medium: "is-medium",
+  review: "is-review",
+  clear: "is-clear",
+};
+
+export function reportView({ report, loading = false, error = null } = {}) {
+  if (error) {
+    const message =
+      typeof error === "string" ? error : (error?.message ?? "The analysis could not be completed.");
+    return { kind: "error", label: "Error", className: "is-error", message };
+  }
+  if (loading) {
+    return {
+      kind: "loading",
+      label: "Loading",
+      className: "is-loading",
+      message: "Analyzing session…",
+    };
+  }
+  if (!report) {
+    return {
+      kind: "idle",
+      label: "Idle",
+      className: "is-idle",
+      message:
+        "No report yet. Run a live call, upload audio, or pick a sample to generate one.",
+    };
+  }
+  const verdict = headlineVerdict(report.findings ?? []);
+  return {
+    kind: "ready",
+    label: verdict.label,
+    level: verdict.level,
+    className: VERDICT_CLASS[verdict.level] ?? "is-review",
+    flaggedCount: verdict.flaggedCount,
+    message: null,
+  };
+}
