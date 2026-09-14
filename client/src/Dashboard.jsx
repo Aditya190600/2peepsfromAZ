@@ -4,7 +4,6 @@ import {
   SAMPLE_SESSIONS,
   SAMPLE_AUDIO_URLS,
   NORTHSTAR_SESSIONS,
-  NORTHSTAR_SESSION_KEYS,
   SCRIPTED_VIOLATION_DEMO_KEYS,
 } from "./sampleSessions";
 import { Nav, Footer } from "./Chrome";
@@ -17,7 +16,11 @@ import {
   PACK_CITATION,
   sortFindingsBySeverity,
   headlineVerdict,
+  reportView,
+  VERDICT_CLASS,
 } from "./compliance";
+import { analyze, transcribeUpload, mapWithConcurrency } from "./analyzeClient";
+import { parseSessionPaste } from "./sessionPaste";
 import "./App.css";
 
 function formatTMs(tMs) {
@@ -53,7 +56,7 @@ const SCRIPTED_VIOLATION_DEMO_LABEL = {
   "glba-account-disclosure": "GLBA — agent discloses routing and loan number",
 };
 
-function sampleLabel(key) {
+export function sampleLabel(key) {
   if (PLAYABLE_SAMPLE_LABEL[key]) return PLAYABLE_SAMPLE_LABEL[key];
   if (NORTHSTAR_LABEL[key]) return NORTHSTAR_LABEL[key];
   if (SCRIPTED_VIOLATION_DEMO_LABEL[key]) return SCRIPTED_VIOLATION_DEMO_LABEL[key];
@@ -70,63 +73,8 @@ function sessionByKey(key) {
   return SAMPLE_SESSIONS[key] ?? NORTHSTAR_SESSIONS[key];
 }
 
-class ApiError extends Error {}
-
-async function analyze(session, patternPackIds) {
-  const resp = await fetch("/v1/analyze-session", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ session, patternPackIds }),
-  });
-  if (!resp.ok) {
-    throw new ApiError(
-      resp.status >= 500
-        ? "The compliance server hit an error analyzing this session. Please try again."
-        : "This session couldn't be analyzed - check that it has a valid transcript and try again."
-    );
-  }
-  return resp.json();
-}
-
-async function transcribeUpload(file) {
-  const resp = await fetch("/v1/transcribe-upload", {
-    method: "POST",
-    headers: { "Content-Type": file.type || "application/octet-stream" },
-    body: file,
-  });
-  let body;
-  try {
-    body = await resp.json();
-  } catch {
-    throw new ApiError("The compliance server is unreachable right now. Please try again shortly.");
-  }
-  if (!resp.ok) throw new ApiError(body.error ?? "Transcription failed. Please try again.");
-  return body;
-}
-
-// Runs `fn` over `items` with at most `limit` in flight at once, so a fleet
-// run never fires a burst of concurrent LLM Gateway calls into the account's
-// rate limit again. Calls `onResult` as each one finishes, in item order for
-// display but not necessarily completion order.
-async function mapWithConcurrency(items, limit, fn, onProgress) {
-  const results = new Array(items.length);
-  let next = 0;
-  let done = 0;
-  async function worker() {
-    while (next < items.length) {
-      const i = next++;
-      results[i] = await fn(items[i], i);
-      done += 1;
-      onProgress?.(done, items.length);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
-}
-
 const STATUS_CLASS = { flag: "is-flag", pass: "is-pass", "n/a": "is-na", error: "is-na" };
 const STATUS_TEXT = { flag: "Flag", pass: "Pass", "n/a": "N/A", error: "Unable to run" };
-const VERDICT_CLASS = { critical: "is-flag", high: "is-flag", medium: "is-flag", review: "is-na", clear: "is-pass" };
 
 function Timestamp({ tMs, onSeek }) {
   if (tMs == null) return null;
@@ -278,7 +226,7 @@ function FleetSummary({ results, progress }) {
   );
 }
 
-function FleetView({ results, progress }) {
+export function FleetView({ results, progress }) {
   return (
     <div>
       <FleetSummary results={results} progress={progress} />
@@ -288,8 +236,10 @@ function FleetView({ results, progress }) {
           return (
             <li key={key} className="fleet-session-item">
               <details>
-                <summary className={`fleet-session-summary ${VERDICT_CLASS[verdict.level] ?? "is-na"}`}>
-                  <span className="finding-status">{verdict.label}</span>
+                <summary className={`fleet-session-summary ${VERDICT_CLASS[verdict.level] ?? "is-review"}`}>
+                  <span className={`finding-status ${VERDICT_CLASS[verdict.level] ?? "is-review"}`}>
+                    {verdict.label}
+                  </span>
                   <span className="fleet-session-label">{sampleLabel(key)}</span>
                   <span className="fleet-session-id">{report.sessionId}</span>
                 </summary>
@@ -305,14 +255,13 @@ function FleetView({ results, progress }) {
   );
 }
 
-export function Report({ report, audioUrl, audioRef, onSeek }) {
-  if (!report) {
+export function Report({ report, audioUrl, audioRef, onSeek, loading = false, error = null, idleMessage }) {
+  const view = reportView({ report, loading, error });
+  if (view.kind !== "ready") {
     return (
-      <div className="report-empty">
-        <p>
-          Run a live call, drop in an audio file, or pick a sample session to generate a
-          compliance report, ranked by severity with a regulatory citation on every finding.
-        </p>
+      <div className={`report-state ${view.className}`}>
+        <span className={`report-verdict finding-status ${view.className}`}>{view.label}</span>
+        <p>{view.kind === "idle" && idleMessage ? idleMessage : view.message}</p>
       </div>
     );
   }
@@ -325,7 +274,7 @@ export function Report({ report, audioUrl, audioRef, onSeek }) {
           <p className="report-meta">
             {report.sessionId ?? "no session id"} · generated {report.generatedAt}
           </p>
-          <span className={`report-verdict finding-status ${VERDICT_CLASS[verdict.level] ?? "is-na"}`}>
+          <span className={`report-verdict finding-status ${view.className}`}>
             {verdict.label}
           </span>
         </div>
@@ -374,14 +323,14 @@ function DataHandlingPanel() {
   );
 }
 
-export default function Dashboard({ navigate, path, initialView }) {
+export default function Dashboard({ navigate, path }) {
   const { status, transcript, lastSession, micSilent, connectError, connect, disconnect } =
     useVoiceAgent();
   const [consent, setConsent] = useState(false);
   const [selectedPacks, setSelectedPacks] = useState([]);
   const [report, setReport] = useState(null);
-  const [fleetResults, setFleetResults] = useState(initialView === "summary" ? [] : null);
-  const [fleetLoading, setFleetLoading] = useState(initialView === "summary");
+  const [fleetResults, setFleetResults] = useState(null);
+  const [fleetLoading, setFleetLoading] = useState(false);
   const [fleetProgress, setFleetProgress] = useState(null);
   const [fleetError, setFleetError] = useState(null);
   const [activeAudioUrl, setActiveAudioUrl] = useState(null);
@@ -392,6 +341,9 @@ export default function Dashboard({ navigate, path, initialView }) {
   const [sampleError, setSampleError] = useState(null);
   const [liveLoading, setLiveLoading] = useState(false);
   const [liveError, setLiveError] = useState(null);
+  const [pasteText, setPasteText] = useState("");
+  const [pasteLoading, setPasteLoading] = useState(false);
+  const [pasteError, setPasteError] = useState(null);
   const audioRef = useRef(null);
 
   const patternPackIds = ["generic", ...selectedPacks];
@@ -424,12 +376,20 @@ export default function Dashboard({ navigate, path, initialView }) {
     });
   };
 
+  const clearLabErrors = () => {
+    setLiveError(null);
+    setSampleError(null);
+    setUploadError(null);
+    setUploadStatus("idle");
+    setFleetError(null);
+    setPasteError(null);
+  };
+
   const runLiveReport = async () => {
     if (!lastSession) return;
     setFleetResults(null);
-    setFleetError(null);
     setActiveAudioUrl(null); // live calls aren't recorded/stored - no audio to play back
-    setLiveError(null);
+    clearLabErrors();
     setLiveLoading(true);
     try {
       const nextReport = await analyze(lastSession, patternPackIds);
@@ -444,8 +404,7 @@ export default function Dashboard({ navigate, path, initialView }) {
 
   const runSample = async (key) => {
     setFleetResults(null);
-    setFleetError(null);
-    setSampleError(null);
+    clearLabErrors();
     setSampleLoadingKey(key);
     setActiveAudioUrl(SAMPLE_AUDIO_URLS[key] && PLAYABLE_SAMPLE_LABEL[key] ? SAMPLE_AUDIO_URLS[key] : null);
     try {
@@ -462,7 +421,7 @@ export default function Dashboard({ navigate, path, initialView }) {
 
   const runFleetOn = async (keys) => {
     setFleetLoading(true);
-    setFleetError(null);
+    clearLabErrors();
     setReport(null);
     setActiveAudioUrl(null);
     setFleetResults([]);
@@ -488,13 +447,35 @@ export default function Dashboard({ navigate, path, initialView }) {
     }
   };
 
-  const runUpload = async (file, { label = "Uploaded audio", consentEvent } = {}) => {
-    if (!file) return;
+  const runPaste = async () => {
+    if (!consent) return;
+    const parsed = parseSessionPaste(pasteText);
     setFleetResults(null);
-    setFleetError(null);
+    setActiveAudioUrl(null);
+    clearLabErrors();
+    if (!parsed.ok) {
+      setPasteError(parsed.error);
+      setReport(null);
+      return;
+    }
+    setPasteLoading(true);
+    try {
+      const nextReport = await analyze(parsed.session, patternPackIds);
+      setReport(nextReport);
+      recordHistory(`Pasted session (${parsed.session.sessionId ?? "no session id"})`, nextReport);
+    } catch (err) {
+      setPasteError(err.message ?? "Something went wrong analyzing this paste.");
+      setReport(null);
+    } finally {
+      setPasteLoading(false);
+    }
+  };
+
+  const runUpload = async (file, { label = "Uploaded audio", consentEvent } = {}) => {
+    if (!consent || !file) return;
+    setFleetResults(null);
     setReport(null);
-    setUploadError(null);
-    setSampleError(null);
+    clearLabErrors();
     setUploadStatus("uploading");
     setActiveAudioUrl(URL.createObjectURL(file));
     try {
@@ -519,6 +500,7 @@ export default function Dashboard({ navigate, path, initialView }) {
   // diarization pipeline (not the canned SAMPLE_SESSIONS text path), so the
   // demo can prove speaker_labels produces multi-turn timestamps.
   const runDiarizedSample = async (key) => {
+    if (!consent) return;
     const url = SAMPLE_AUDIO_URLS[key];
     if (!url) return;
     setSampleLoadingKey(key);
@@ -546,27 +528,32 @@ export default function Dashboard({ navigate, path, initialView }) {
       return;
     }
     setFleetResults(null);
-    setFleetError(null);
-    setSampleError(null);
+    clearLabErrors();
     setActiveAudioUrl(null);
     setReport(entry.report);
   };
 
-  const ranInitialSummary = useRef(false);
-  useEffect(() => {
-    if (initialView !== "summary" || ranInitialSummary.current) return;
-    ranInitialSummary.current = true;
-    runFleetOn(NORTHSTAR_SESSION_KEYS);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialView]);
-
   const onDrop = (e) => {
     e.preventDefault();
     setDragActive(false);
+    if (!consent) return;
     runUpload(e.dataTransfer.files?.[0]);
   };
 
   const playableKeys = Object.keys(PLAYABLE_SAMPLE_LABEL);
+  const reportLoading =
+    liveLoading ||
+    pasteLoading ||
+    sampleLoadingKey != null ||
+    uploadStatus === "uploading" ||
+    (fleetLoading && (!fleetResults || fleetResults.length === 0));
+  const reportError =
+    liveError ||
+    pasteError ||
+    sampleError ||
+    (uploadStatus === "error" ? uploadError : null) ||
+    fleetError;
+  const fleetReady = Array.isArray(fleetResults) && fleetResults.length > 0;
 
   return (
     <div className="page">
@@ -605,10 +592,6 @@ export default function Dashboard({ navigate, path, initialView }) {
               ))}
             </div>
             <p className="pack-note">Drop-in extensions over the generic scan — no core changes.</p>
-          </div>
-
-          <div className="section-block">
-            <h3>Live call</h3>
             <label className={`check-row ${!canStart ? "disabled" : ""}`}>
               <input
                 type="checkbox"
@@ -616,13 +599,17 @@ export default function Dashboard({ navigate, path, initialView }) {
                 onChange={(e) => setConsent(e.target.checked)}
                 disabled={!canStart}
               />
-              Caller consents to this AI call being recorded and analyzed
+              I am uploading or pasting recorded content for analysis. Live call audio is not stored.
             </label>
+          </div>
 
+          <div className="section-block">
+            <h3>Live call</h3>
             <div className="call-row">
               <button
                 className={`btn ${canStart ? "btn-primary" : "btn-danger"}`}
                 onClick={canStart ? () => connect(consent) : disconnect}
+                disabled={canStart && !consent}
               >
                 {canStart ? "Start call" : "End call"}
               </button>
@@ -692,9 +679,10 @@ export default function Dashboard({ navigate, path, initialView }) {
               recordings so diarization returns real agent/user turns (not one collapsed utterance).
             </p>
             <label
-              className={`dropzone ${dragActive ? "is-active" : ""}`}
+              className={`dropzone ${dragActive ? "is-active" : ""} ${!consent ? "is-disabled" : ""}`}
               onDragOver={(e) => {
                 e.preventDefault();
+                if (!consent) return;
                 setDragActive(true);
               }}
               onDragLeave={() => setDragActive(false)}
@@ -704,13 +692,41 @@ export default function Dashboard({ navigate, path, initialView }) {
                 type="file"
                 accept="audio/*"
                 hidden
+                disabled={!consent}
                 onChange={(e) => runUpload(e.target.files?.[0])}
               />
               {uploadStatus === "uploading"
                 ? "Transcribing and analyzing…"
-                : "Drop an audio file here, or click to choose one"}
+                : consent
+                  ? "Drop an audio file here, or click to choose one"
+                  : "Check the analysis consent box to upload recorded audio"}
             </label>
             {uploadStatus === "error" && <p className="error-banner">{uploadError}</p>}
+          </div>
+
+          <div className="section-block">
+            <h3>Paste session JSON</h3>
+            <p className="pack-note">
+              Paste a completed AssemblyAI session object with a <code>turns</code> array. Same
+              shape as the samples. This is recorded-content ingest, not a live call.
+            </p>
+            <textarea
+              className="session-paste"
+              rows={8}
+              value={pasteText}
+              onChange={(e) => setPasteText(e.target.value)}
+              spellCheck={false}
+              placeholder='{"sessionId":"sess_clean_01","turns":[{"role":"agent","text":"Hi","tMs":0}]}'
+            />
+            <button
+              className="btn btn-outline generate-btn"
+              type="button"
+              onClick={runPaste}
+              disabled={!consent || pasteLoading}
+            >
+              {pasteLoading ? "Analyzing…" : "Analyze pasted session"}
+            </button>
+            {pasteError && <p className="error-banner">{pasteError}</p>}
           </div>
 
           <div className="section-block">
@@ -735,8 +751,7 @@ export default function Dashboard({ navigate, path, initialView }) {
                     <button
                       className="btn btn-outline sample-diarize-btn"
                       onClick={() => runDiarizedSample(key)}
-                      disabled={sampleLoadingKey === key || uploadStatus === "uploading"}
-                      title="Re-upload this MP3 through AssemblyAI speaker_labels diarization"
+                      disabled={!consent || sampleLoadingKey === key || uploadStatus === "uploading"}
                     >
                       {sampleLoadingKey === key && uploadStatus === "uploading"
                         ? "Diarizing…"
@@ -782,35 +797,37 @@ export default function Dashboard({ navigate, path, initialView }) {
             >
               {fleetLoading ? "Analyzing…" : `Analyze ${playableKeys.length} sample sessions`}
             </button>
-            <button
-              className="btn btn-primary generate-btn"
-              onClick={() => runFleetOn(NORTHSTAR_SESSION_KEYS)}
-              disabled={fleetLoading}
-              style={{ marginTop: 8 }}
-            >
-              {fleetLoading
-                ? "Analyzing…"
-                : `Analyze the Northstar Voice program (${NORTHSTAR_SESSION_KEYS.length} sessions)`}
-            </button>
             <p className="pack-note">
-              Aggregates pass/flag counts and compliance rate across every sample session.
+              Aggregates pass/flag counts and compliance rate across every playable sample. The
+              Northstar Voice program lives on Home.
             </p>
             {fleetError && <p className="error-banner">{fleetError}</p>}
           </div>
         </section>
 
         <section className="panel report-panel">
-          {status === "idle" && !report && !fleetResults && !fleetLoading ? (
-            <IntroSteps />
-          ) : fleetResults ? (
+          {fleetReady ? (
             <>
               <h2>Fleet compliance report</h2>
               <FleetView results={fleetResults} progress={fleetProgress} />
             </>
+          ) : reportLoading || reportError || report ? (
+            <>
+              <h2 className="report-heading">Compliance report</h2>
+              <Report
+                report={report}
+                loading={reportLoading}
+                error={reportError}
+                audioUrl={activeAudioUrl}
+                audioRef={audioRef}
+                onSeek={onSeek}
+              />
+            </>
           ) : (
             <>
               <h2 className="report-heading">Compliance report</h2>
-              <Report report={report} audioUrl={activeAudioUrl} audioRef={audioRef} onSeek={onSeek} />
+              <Report report={null} />
+              <IntroSteps />
             </>
           )}
         </section>

@@ -21,23 +21,24 @@ export default function SessionView({ navigate, path, sessionId }) {
               <Report report={entry.report} />
             </>
           ) : (
-            <div className="report-empty">
-              <p>
-                No stored report found for session <strong>{sessionId || "(none)"}</strong>. It may
-                have been cleared from history, or never analyzed in this browser.
-              </p>
+            <>
+              <h2 className="report-heading">Compliance report</h2>
+              <Report
+                report={null}
+                idleMessage={`No stored report found for session ${sessionId || "(none)"}. It may have been cleared from history, or never analyzed in this browser.`}
+              />
               <p>
                 <a
-                  href="/history"
+                  href="/sessions"
                   onClick={(e) => {
                     e.preventDefault();
-                    navigate("/history");
+                    navigate("/sessions");
                   }}
                 >
-                  Back to history
+                  Back to sessions
                 </a>
               </p>
-            </div>
+            </>
           )}
         </section>
       </main>
