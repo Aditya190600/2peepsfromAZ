@@ -212,12 +212,18 @@ function FleetSummary({ results, progress }) {
             <div className="app-progress-track" aria-hidden="true">
               <div
                 className="app-progress-fill"
-                style={{ width: tile.total ? `${Math.round((tile.pass / tile.total) * 100)}%` : "0%" }}
+                style={{
+                  width: tile.total
+                    ? `${Math.round(((tile.total - tile.flag) / tile.total) * 100)}%`
+                    : "0%",
+                }}
               />
             </div>
             <p className="monitor-meta">
-              {tile.pass} pass · {tile.total} total
+              {tile.pass} pass
+              {tile.na > 0 ? ` · ${tile.na} n/a` : ""}
               {tile.error > 0 ? ` · ${tile.error} unable to run` : ""}
+              {` · ${tile.total} total`}
             </p>
           </li>
         ))}
