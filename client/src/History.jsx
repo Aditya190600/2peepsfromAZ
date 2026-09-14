@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { Nav, Footer } from "./Chrome";
 import { loadHistory, clearHistory } from "./reportHistory";
-import { SEVERITY_LABEL } from "./compliance";
+import { SEVERITY_LABEL, VERDICT_CLASS } from "./compliance";
+import { Report } from "./Dashboard";
 import "./App.css";
-
-const VERDICT_CLASS = { critical: "is-flag", high: "is-flag", medium: "is-flag", review: "is-na", clear: "is-pass" };
 
 function formatWhen(iso) {
   try {
@@ -34,15 +33,10 @@ export default function History({ navigate, path }) {
 
       <main className="history-panel panel">
         {entries.length === 0 ? (
-          <div className="report-empty">
-            <p>
-              No reports yet. Run a live call, upload audio, or analyze a sample session from{" "}
-              <a href="/try" onClick={(e) => { e.preventDefault(); navigate("/try"); }}>
-                Try
-              </a>{" "}
-              to start building history.
-            </p>
-          </div>
+          <Report
+            report={null}
+            idleMessage="No reports yet. Run a live call, upload audio, or analyze a sample session from Try to start building history."
+          />
         ) : (
           <>
             <div className="history-toolbar">
@@ -61,7 +55,7 @@ export default function History({ navigate, path }) {
                     className="history-item-link"
                     onClick={() => navigate(`/sessions/${encodeURIComponent(entry.sessionId ?? "")}`)}
                   >
-                    <span className={`finding-status ${VERDICT_CLASS[entry.verdictLevel] ?? "is-na"}`}>
+                    <span className={`finding-status ${VERDICT_CLASS[entry.verdictLevel] ?? "is-review"}`}>
                       {SEVERITY_LABEL[entry.verdictLevel] ?? entry.verdictLabel}
                     </span>
                     <span className="history-item-label">{entry.label}</span>
