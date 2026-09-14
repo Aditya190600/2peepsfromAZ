@@ -1,4 +1,4 @@
-// Shared site chrome: top nav (brand-as-home-link + Review/History) and
+// Shared site chrome: top nav (brand-as-landing-link + Home/Sessions/Try) and
 // footer (data-handling + repo link). See judging-criteria-and-enterprise-gap-assessment.md
 // item 10 - previously there was no way back to "/" and no footer anywhere.
 export function Nav({ path, navigate }) {
@@ -17,24 +17,34 @@ export function Nav({ path, navigate }) {
       </a>
       <div className="site-nav-links">
         <a
-          className={`site-nav-link ${path === "/dashboard" ? "is-active" : ""}`}
-          href="/dashboard"
+          className={`site-nav-link ${path === "/home" ? "is-active" : ""}`}
+          href="/home"
           onClick={(e) => {
             e.preventDefault();
-            navigate("/dashboard");
+            navigate("/home");
           }}
         >
-          Review
+          Home
         </a>
         <a
-          className={`site-nav-link ${path === "/history" ? "is-active" : ""}`}
-          href="/history"
+          className={`site-nav-link ${path === "/sessions" || path.startsWith("/sessions/") ? "is-active" : ""}`}
+          href="/sessions"
           onClick={(e) => {
             e.preventDefault();
-            navigate("/history");
+            navigate("/sessions");
           }}
         >
-          History
+          Sessions
+        </a>
+        <a
+          className={`site-nav-link ${path === "/try" ? "is-active" : ""}`}
+          href="/try"
+          onClick={(e) => {
+            e.preventDefault();
+            navigate("/try");
+          }}
+        >
+          Try
         </a>
       </div>
     </nav>

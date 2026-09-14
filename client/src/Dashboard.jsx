@@ -4,7 +4,6 @@ import {
   SAMPLE_SESSIONS,
   SAMPLE_AUDIO_URLS,
   NORTHSTAR_SESSIONS,
-  NORTHSTAR_SESSION_KEYS,
   SCRIPTED_VIOLATION_DEMO_KEYS,
 } from "./sampleSessions";
 import { Nav, Footer } from "./Chrome";
@@ -17,6 +16,7 @@ import {
   sortFindingsBySeverity,
   headlineVerdict,
 } from "./compliance";
+import { analyze, transcribeUpload, mapWithConcurrency } from "./analyzeClient";
 import "./App.css";
 
 function formatTMs(tMs) {
@@ -52,7 +52,7 @@ const SCRIPTED_VIOLATION_DEMO_LABEL = {
   "glba-account-disclosure": "GLBA — agent discloses routing and loan number",
 };
 
-function sampleLabel(key) {
+export function sampleLabel(key) {
   if (PLAYABLE_SAMPLE_LABEL[key]) return PLAYABLE_SAMPLE_LABEL[key];
   if (NORTHSTAR_LABEL[key]) return NORTHSTAR_LABEL[key];
   if (SCRIPTED_VIOLATION_DEMO_LABEL[key]) return SCRIPTED_VIOLATION_DEMO_LABEL[key];
@@ -67,60 +67,6 @@ const INDUSTRY_PACKS = [
 
 function sessionByKey(key) {
   return SAMPLE_SESSIONS[key] ?? NORTHSTAR_SESSIONS[key];
-}
-
-class ApiError extends Error {}
-
-async function analyze(session, patternPackIds) {
-  const resp = await fetch("/v1/analyze-session", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ session, patternPackIds }),
-  });
-  if (!resp.ok) {
-    throw new ApiError(
-      resp.status >= 500
-        ? "The compliance server hit an error analyzing this session. Please try again."
-        : "This session couldn't be analyzed - check that it has a valid transcript and try again."
-    );
-  }
-  return resp.json();
-}
-
-async function transcribeUpload(file) {
-  const resp = await fetch("/v1/transcribe-upload", {
-    method: "POST",
-    headers: { "Content-Type": file.type || "application/octet-stream" },
-    body: file,
-  });
-  let body;
-  try {
-    body = await resp.json();
-  } catch {
-    throw new ApiError("The compliance server is unreachable right now. Please try again shortly.");
-  }
-  if (!resp.ok) throw new ApiError(body.error ?? "Transcription failed. Please try again.");
-  return body;
-}
-
-// Runs `fn` over `items` with at most `limit` in flight at once, so a fleet
-// run never fires a burst of concurrent LLM Gateway calls into the account's
-// rate limit again. Calls `onResult` as each one finishes, in item order for
-// display but not necessarily completion order.
-async function mapWithConcurrency(items, limit, fn, onProgress) {
-  const results = new Array(items.length);
-  let next = 0;
-  let done = 0;
-  async function worker() {
-    while (next < items.length) {
-      const i = next++;
-      results[i] = await fn(items[i], i);
-      done += 1;
-      onProgress?.(done, items.length);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
 }
 
 const STATUS_CLASS = { flag: "is-flag", pass: "is-pass", "n/a": "is-na", error: "is-na" };
@@ -277,7 +223,7 @@ function FleetSummary({ results, progress }) {
   );
 }
 
-function FleetView({ results, progress }) {
+export function FleetView({ results, progress }) {
   return (
     <div>
       <FleetSummary results={results} progress={progress} />
@@ -373,13 +319,13 @@ function DataHandlingPanel() {
   );
 }
 
-export default function Dashboard({ navigate, path, initialView }) {
+export default function Dashboard({ navigate, path }) {
   const { status, transcript, lastSession, micSilent, connect, disconnect } = useVoiceAgent();
   const [consent, setConsent] = useState(false);
   const [selectedPacks, setSelectedPacks] = useState([]);
   const [report, setReport] = useState(null);
-  const [fleetResults, setFleetResults] = useState(initialView === "summary" ? [] : null);
-  const [fleetLoading, setFleetLoading] = useState(initialView === "summary");
+  const [fleetResults, setFleetResults] = useState(null);
+  const [fleetLoading, setFleetLoading] = useState(false);
   const [fleetProgress, setFleetProgress] = useState(null);
   const [fleetError, setFleetError] = useState(null);
   const [activeAudioUrl, setActiveAudioUrl] = useState(null);
@@ -549,14 +495,6 @@ export default function Dashboard({ navigate, path, initialView }) {
     setActiveAudioUrl(null);
     setReport(entry.report);
   };
-
-  const ranInitialSummary = useRef(false);
-  useEffect(() => {
-    if (initialView !== "summary" || ranInitialSummary.current) return;
-    ranInitialSummary.current = true;
-    runFleetOn(NORTHSTAR_SESSION_KEYS);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialView]);
 
   const onDrop = (e) => {
     e.preventDefault();
@@ -778,18 +716,9 @@ export default function Dashboard({ navigate, path, initialView }) {
             >
               {fleetLoading ? "Analyzing…" : `Analyze ${playableKeys.length} sample sessions`}
             </button>
-            <button
-              className="btn btn-primary generate-btn"
-              onClick={() => runFleetOn(NORTHSTAR_SESSION_KEYS)}
-              disabled={fleetLoading}
-              style={{ marginTop: 8 }}
-            >
-              {fleetLoading
-                ? "Analyzing…"
-                : `Analyze the Northstar Voice program (${NORTHSTAR_SESSION_KEYS.length} sessions)`}
-            </button>
             <p className="pack-note">
-              Aggregates pass/flag counts and compliance rate across every sample session.
+              Aggregates pass/flag counts and compliance rate across every playable sample. The
+              Northstar Voice program lives on Home.
             </p>
             {fleetError && <p className="error-banner">{fleetError}</p>}
           </div>
