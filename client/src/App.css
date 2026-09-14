@@ -931,6 +931,66 @@ body {
   gap: 8px;
 }
 
+.provider-row {
+  margin-top: 14px;
+}
+
+.provider-row:first-of-type {
+  margin-top: 4px;
+}
+
+.provider-row-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.provider-row-controls select {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+}
+
+.key-badge {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 3px 7px;
+  border-radius: var(--radius);
+  white-space: nowrap;
+}
+
+.key-badge.is-ok {
+  color: var(--pass);
+  background: var(--pass-soft);
+}
+
+.key-badge.is-missing {
+  color: var(--flag);
+  background: var(--flag-soft);
+}
+
+.provider-key-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.provider-key-form input {
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  flex: 1;
+  min-width: 0;
+}
+
 .data-handling-panel {
   background: var(--accent-soft);
   border-radius: var(--radius);

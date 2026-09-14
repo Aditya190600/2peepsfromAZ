@@ -4,3 +4,4 @@ dist/
 *.log
 *.mp3
 !client/public/samples/*.mp3
+server/providers/.provider-store.json

@@ -9,6 +9,7 @@ import {
 } from "./sampleSessions";
 import { Nav, Footer } from "./Chrome";
 import AudioPlayer from "./AudioPlayer";
+import ProviderSettings from "./ProviderSettings";
 import { saveHistoryEntry, findEntryBySessionId } from "./reportHistory";
 import {
   CHECK_LABEL,
@@ -374,7 +375,8 @@ function DataHandlingPanel() {
 }
 
 export default function Dashboard({ navigate, path, initialView }) {
-  const { status, transcript, lastSession, micSilent, connect, disconnect } = useVoiceAgent();
+  const { status, transcript, lastSession, micSilent, connectError, connect, disconnect } =
+    useVoiceAgent();
   const [consent, setConsent] = useState(false);
   const [selectedPacks, setSelectedPacks] = useState([]);
   const [report, setReport] = useState(null);
@@ -585,6 +587,8 @@ export default function Dashboard({ navigate, path, initialView }) {
         <section className="panel session-panel">
           <DataHandlingPanel />
 
+          <ProviderSettings />
+
           <div className="section-block">
             <h2>Session</h2>
             <p className="panel-label">Industry pattern packs (in addition to the generic scan)</p>
@@ -643,8 +647,8 @@ export default function Dashboard({ navigate, path, initialView }) {
 
             {status === "error" && (
               <p className="error-banner">
-                The call could not connect. Check the AssemblyAI API key on the server and try
-                again.
+                {connectError ??
+                  "The call could not connect. Check the AssemblyAI API key on the server and try again."}
               </p>
             )}
 
