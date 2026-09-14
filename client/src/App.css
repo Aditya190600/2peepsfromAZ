@@ -887,8 +887,9 @@ body {
 .error-banner {
   margin-top: 14px;
   padding: 10px 12px;
-  background: var(--flag-soft);
-  color: var(--flag);
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--accent);
   border-radius: var(--radius);
   font-size: 13px;
   line-height: 1.5;
