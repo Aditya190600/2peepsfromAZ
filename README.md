@@ -68,7 +68,7 @@ Then sync the `tMs` values in `client/src/sampleSessions.js` to the printed `man
 
 This app keeps `reportCache` as an in-process `Map` and optionally persists those reports to Supabase so a Railway restart does not re-run 12 LLM Gateway calls. Browser report history is still `localStorage`, not a database. Live-call audio is never stored.
 
-1. Create a Railway service from this GitHub repo. `railway.toml` builds with `npm run build` and starts with `npm start`. Railway must set `PORT`.
+1. New Railway services do not read `railway.toml`. From this repo, with Railway CLI 5.42.1 or newer: `railway login`, then `railway link` (or create a project), then `railway config apply`. That applies `.railway/railway.ts` (`npm run build` / `npm start`). Railway must set `PORT`. Do not add an HTTP healthcheck on `/v1/boot-status`; Express binds `PORT` before the warm.
 2. Set Railway variables: `ASSEMBLYAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. The AssemblyAI key stays on the server. It never goes to the browser.
 3. In Supabase, run `supabase/migrations/001_report_cache.sql`. RLS stays on; only the service role reads and writes `report_cache`.
 4. Express binds `PORT`, then hydrates the Map from Supabase, then warms any missing Northstar sessions with `patternPackIds` `["generic"]` before `GET /v1/boot-status` flips to `{ ok: true }`. Home still POSTs the 12 sessions if boot is incomplete. It does not invent an 83 percent KPI for a failed cache.

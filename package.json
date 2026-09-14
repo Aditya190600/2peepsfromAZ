@@ -1,6 +1,9 @@
 {
   "name": "complyline",
   "private": true,
+  "engines": {
+    "node": "20"
+  },
   "scripts": {
     "build": "npm --prefix client install && npm --prefix server install && npm --prefix client run build",
     "start": "node server/index.js"
