@@ -74,7 +74,7 @@ This app keeps `reportCache` as an in-process `Map` and optionally persists thos
 4. Express binds `PORT`, then hydrates the Map from Supabase, then warms any missing Northstar sessions with `patternPackIds` `["generic"]` before `GET /v1/boot-status` flips to `{ ok: true }`. Home still POSTs the 12 sessions if boot is incomplete. It does not invent an 83 percent KPI for a failed cache.
 5. Live call audio is still not written to disk or to Supabase.
 
-Public demo URL: not published yet. Until then, run locally with `./scripts/start.sh`. Local dev does not need Supabase; the in-memory Map is enough.
+Public demo URL: https://2peepsfromaz-production.up.railway.app (Railway project `exemplary-purpose`). Until that host is down, you can still run locally with `./scripts/start.sh`. Local dev does not need Supabase; the in-memory Map is enough.
 
 `GET /v1/boot-status` returns `{ ok, cached, total, error }`.
 
