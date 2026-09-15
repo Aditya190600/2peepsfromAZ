@@ -23,6 +23,10 @@ export function useVoiceAgent() {
   const [transcript, setTranscript] = useState([]); // {role, text}[]
   const [lastSession, setLastSession] = useState(null); // completed session log, ready to analyze
   const [micSilent, setMicSilent] = useState(false);
+  // Server-provided reason for a connect failure - e.g. a misconfigured
+  // voice provider (server/providers/voiceStub.js). Falls back to the
+  // generic "check your API key" copy when unset.
+  const [connectError, setConnectError] = useState(null);
 
   const wsRef = useRef(null);
   const audioCtxInRef = useRef(null);
@@ -91,6 +95,7 @@ export function useVoiceAgent() {
       setStatus("connecting");
       setTranscript([]);
       setLastSession(null);
+      setConnectError(null);
 
       const startedAtMs = Date.now();
       sessionRef.current = {
@@ -104,9 +109,14 @@ export function useVoiceAgent() {
       };
 
       const tokenResp = await fetch("/v1/token");
-      const { token } = await tokenResp.json();
+      const tokenBody = await tokenResp.json();
+      if (!tokenResp.ok || !tokenBody.token) {
+        setConnectError(tokenBody.error ?? "Could not start the call.");
+        setStatus("error");
+        return;
+      }
 
-      const ws = new WebSocket(`wss://agents.assemblyai.com/v1/ws?token=${token}`);
+      const ws = new WebSocket(`wss://agents.assemblyai.com/v1/ws?token=${tokenBody.token}`);
       wsRef.current = ws;
 
       audioCtxOutRef.current = new AudioContext({ sampleRate: SAMPLE_RATE });
@@ -266,5 +276,5 @@ export function useVoiceAgent() {
     setStatus("idle");
   }, [stopMic]);
 
-  return { status, transcript, lastSession, micSilent, connect, disconnect };
+  return { status, transcript, lastSession, micSilent, connectError, connect, disconnect };
 }
