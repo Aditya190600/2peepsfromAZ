@@ -6,6 +6,9 @@ import express from "express";
 import cors from "cors";
 import { analyzeSession } from "./checks/analyze.js";
 import { transcribeUpload } from "./checks/transcribeUpload.js";
+import { packCatalog } from "./packs/index.js";
+import { parsePackEvalRequest } from "./evals/wire.js";
+import { evaluatePacks } from "./evals/runPackEvals.js";
 import { cacheKey, warmNorthstarCache } from "./warmCache.js";
 import { loadReportCache, supabaseConfigured, upsertReportCache } from "./supabaseCache.js";
 import { NORTHSTAR_SESSIONS, NORTHSTAR_SESSION_KEYS } from "../client/src/sampleSessions.js";
@@ -45,6 +48,21 @@ app.get("/v1/token", async (_req, res) => {
 });
 
 const reportCache = new Map();
+
+app.get("/v1/packs", (_req, res) => {
+  res.json({ packs: packCatalog() });
+});
+
+app.post("/v1/pack-evals", async (req, res) => {
+  const parsed = parsePackEvalRequest(req.body);
+  if (!parsed.ok) return res.status(400).json({ error: parsed.error });
+  try {
+    const run = await evaluatePacks(parsed.packIds);
+    res.json(run);
+  } catch (err) {
+    res.status(502).json({ error: `Eval run failed: ${err.message}` });
+  }
+});
 
 app.post("/v1/analyze-session", async (req, res) => {
   const { session, patternPackIds = ["generic"] } = req.body ?? {};
