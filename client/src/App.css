@@ -1729,3 +1729,19 @@ body {
   color: var(--muted);
   white-space: nowrap;
 }
+
+.signin-gate {
+  max-width: 62ch;
+  margin: 96px auto;
+  padding: 0 24px;
+  text-align: center;
+}
+
+.signin-gate h1 {
+  color: var(--ink);
+}
+
+.signin-gate p {
+  color: var(--muted);
+  margin-bottom: 20px;
+}
