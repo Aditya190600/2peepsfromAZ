@@ -1,3 +1,4 @@
+import { SignedIn, UserButton } from "@clerk/clerk-react";
 import { PRODUCT_NAV } from "./chromeNav.js";
 
 function go(navigate, href, event) {
@@ -55,6 +56,11 @@ export function AppShell({ path, navigate, title, actions, rail, children }) {
           <span className="brand-mark" aria-hidden="true" />
           <span>ComplyLine</span>
         </a>
+        {import.meta.env.VITE_CLERK_PUBLISHABLE_KEY ? (
+          <SignedIn>
+            <UserButton afterSignOutUrl="/" />
+          </SignedIn>
+        ) : null}
       </header>
       <div className="app-body">
         <aside className="app-sidebar">
