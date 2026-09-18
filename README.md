@@ -79,6 +79,17 @@ Public demo URL: https://2peepsfromaz-production.up.railway.app (Railway project
 
 `GET /v1/boot-status` returns `{ ok, cached, total, error }`.
 
+### Demo credentials (Clerk sign-in)
+
+`server/scripts/demo_credentials.js` creates or removes the one demo login (`demo-judge@2peepsfromaz.dev`) handed to judges when the Clerk sign-in gate is enabled. Requires `CLERK_SECRET_KEY` set (same as the Railway variable in step 2a above).
+
+```
+node server/scripts/demo_credentials.js --add    # or -a
+node server/scripts/demo_credentials.js --clear  # or -c
+```
+
+`--add` is idempotent - a no-op if the demo user already exists. `--clear` prompts for confirmation and only deletes a user that both matches the fixed demo email and carries the `isDemo` metadata flag this script sets. The generated password is printed once on `--add` and is not stored anywhere else - save it immediately.
+
 ### Architecture
 
 - `server/` - thin Node/Express. `GET /v1/token` mints a short-lived Voice Agent token server-side (the real API key never leaves this process; reused as-is from the earlier build). `POST /v1/analyze-session` runs `server/checks/analyze.js` against a submitted session log and returns a findings report.
