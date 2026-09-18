@@ -28,7 +28,11 @@ function RequireVisitor({ children }) {
         <div className="signin-gate">
           <h1>Sign in to try ComplyLine</h1>
           <p>Each visitor gets their own trial - your history and reports stay separate from everyone else's.</p>
-          <SignInButton mode="modal" />
+          <SignInButton mode="modal">
+            <button type="button" className="btn btn-primary">
+              Sign in
+            </button>
+          </SignInButton>
         </div>
       </SignedOut>
     </>
