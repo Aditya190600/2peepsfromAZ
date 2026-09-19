@@ -1379,6 +1379,58 @@ body {
   flex: 1;
 }
 
+.section-heading {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+  margin: 0 0 8px;
+}
+
+.section-lede {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 0 0 20px;
+}
+
+.how-it-works,
+.sample-report-preview {
+  max-width: 640px;
+  margin: 56px auto 0;
+}
+
+.how-it-works-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.how-it-works-steps li {
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+
+.how-it-works-steps li:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.how-it-works-steps strong {
+  display: block;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.how-it-works-steps p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.sample-report-cta {
+  margin-top: 16px;
+}
+
 .trust-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
