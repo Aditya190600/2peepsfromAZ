@@ -81,14 +81,14 @@ Public demo URL: https://2peepsfromaz-production.up.railway.app (Railway project
 
 ### Demo credentials (Clerk sign-in)
 
-`server/scripts/demo_credentials.js` creates or removes the one demo login (`demo-judge@2peepsfromaz.dev`) handed to judges when the Clerk sign-in gate is enabled. Requires `CLERK_SECRET_KEY` set (same as the Railway variable in step 2a above).
+`server/scripts/demo_credentials.js` creates or removes the 5 demo logins handed to judges when the Clerk sign-in gate is enabled: `judge1+clerk_test@2peepsfromaz.dev` through `judge5+clerk_test@2peepsfromaz.dev`. Sign in with any of these emails and the fixed code **424242** - `+clerk_test` is Clerk's built-in test-email convention, so no real email is sent (verified working against this app's live Clerk instance). Requires `CLERK_SECRET_KEY` set (same as the Railway variable in step 2a above).
 
 ```
 node server/scripts/demo_credentials.js --add    # or -a
 node server/scripts/demo_credentials.js --clear  # or -c
 ```
 
-`--add` is idempotent - a no-op if the demo user already exists. `--clear` prompts for confirmation and only deletes a user that both matches the fixed demo email and carries the `isDemo` metadata flag this script sets. The generated password is printed once on `--add` and is not stored anywhere else - save it immediately.
+`--add` is idempotent per email - a no-op for any that already exist. `--clear` prompts once for confirmation listing all matches and only deletes users that both match one of the 5 fixed demo emails and carry the `isDemo` metadata flag this script sets.
 
 ### Architecture
 

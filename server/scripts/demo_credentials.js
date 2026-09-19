@@ -1,15 +1,21 @@
 #!/usr/bin/env node
-// One-time creation/deletion of the demo Clerk login used to hand judges a
+// One-time creation/deletion of the demo Clerk logins used to hand judges a
 // working sign-in without a real account. NOT part of any repeatable seed
 // pipeline - same pattern as sabhalog's scripts/demo_fixtures.py, adapted to
 // Clerk (this app has no user table of its own; Clerk is the entire identity
 // store, so `privateMetadata.isDemo` stands in for a DB `is_demo` column and
 // the fixed email list stands in for known slugs).
 //
-// --add is idempotent (looks up by exact email before creating). --clear
-// looks up by that *same* fixed email list AND requires privateMetadata.isDemo
-// === true on the match before deleting - never a bare metadata sweep, which
-// could one day catch a demo-flagged user this script didn't create.
+// Sign-in is email+OTP only (no passwords). Each demo email uses Clerk's
+// built-in "+clerk_test" convention (<local>+clerk_test@<domain> always
+// accepts the fixed code 424242, no real email sent) - see the "Demo
+// credentials" section in README.md.
+//
+// --add is idempotent per email (looks up by exact email before creating).
+// --clear looks up by that *same* fixed email list AND requires
+// privateMetadata.isDemo === true on each match before deleting - never a
+// bare metadata sweep, which could one day catch a demo-flagged user this
+// script didn't create.
 //
 // Usage (from repo root):
 //   node server/scripts/demo_credentials.js --add
@@ -20,7 +26,6 @@
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { randomBytes } from "node:crypto";
 import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
 import dotenv from "dotenv";
@@ -31,32 +36,33 @@ const envPath = path.join(__dirname, "..", "..", ".env");
 if (existsSync(envPath)) dotenv.config({ path: envPath });
 
 const DEMO_SCRIPT_ID = "2peepsfromaz-demo-credentials";
-const DEMO_EMAIL = "demo-judge@2peepsfromaz.dev";
+const DEMO_EMAILS = [1, 2, 3, 4, 5].map((n) => `judge${n}+clerk_test@2peepsfromaz.dev`);
 
-async function findDemoUser() {
-  const { data } = await clerkClient.users.getUserList({ emailAddress: [DEMO_EMAIL] });
+async function findDemoUser(email) {
+  const { data } = await clerkClient.users.getUserList({ emailAddress: [email] });
   return data[0] ?? null;
 }
 
 async function add() {
-  const existing = await findDemoUser();
-  if (existing) {
-    console.log(`Already exists, no-op: ${DEMO_EMAIL} (isDemo=${existing.privateMetadata?.isDemo === true})`);
-    return;
+  for (const email of DEMO_EMAILS) {
+    const existing = await findDemoUser(email);
+    if (existing) {
+      console.log(`Already exists, no-op: ${email} (isDemo=${existing.privateMetadata?.isDemo === true})`);
+      continue;
+    }
+    const user = await clerkClient.users.createUser({
+      emailAddress: [email],
+      skipPasswordRequirement: true,
+      privateMetadata: { isDemo: true, demoScriptId: DEMO_SCRIPT_ID },
+    });
+    console.log(`Created demo user: ${email} (id=${user.id})`);
   }
-  const password = randomBytes(18).toString("base64url");
-  const user = await clerkClient.users.createUser({
-    emailAddress: [DEMO_EMAIL],
-    password,
-    privateMetadata: { isDemo: true, demoScriptId: DEMO_SCRIPT_ID },
-  });
-  console.log(`Created demo user: ${DEMO_EMAIL} (id=${user.id})`);
-  console.log(`Password (shown once, not stored anywhere else): ${password}`);
+  console.log("Sign in with the fixed code 424242 (Clerk +clerk_test convention).");
 }
 
-async function confirm(user) {
+async function confirm(users) {
   console.log("About to permanently delete:");
-  console.log(`  user: ${DEMO_EMAIL} (id=${user.id})`);
+  for (const user of users) console.log(`  user: ${user.primaryEmailAddress?.emailAddress ?? user.id} (id=${user.id})`);
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const answer = (await rl.question("Proceed? [y/N]: ")).trim().toLowerCase();
   rl.close();
@@ -64,17 +70,23 @@ async function confirm(user) {
 }
 
 async function clear() {
-  const user = await findDemoUser();
-  if (!user || user.privateMetadata?.isDemo !== true) {
-    console.log("Nothing to delete - demo credential not present.");
+  const users = [];
+  for (const email of DEMO_EMAILS) {
+    const user = await findDemoUser(email);
+    if (user && user.privateMetadata?.isDemo === true) users.push(user);
+  }
+  if (users.length === 0) {
+    console.log("Nothing to delete - no demo credentials present.");
     return;
   }
-  if (!(await confirm(user))) {
+  if (!(await confirm(users))) {
     console.log("Aborted; nothing deleted.");
     return;
   }
-  await clerkClient.users.deleteUser(user.id);
-  console.log(`Deleted demo user: ${DEMO_EMAIL}`);
+  for (const user of users) {
+    await clerkClient.users.deleteUser(user.id);
+    console.log(`Deleted demo user: ${user.primaryEmailAddress?.emailAddress ?? user.id}`);
+  }
 }
 
 async function main() {
