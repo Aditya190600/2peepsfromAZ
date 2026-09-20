@@ -28,7 +28,7 @@ What the user actually does in ComplyLine today, and why they'd bother. One prod
 
 ## 5. Turn on an industry-specific PII pack
 
-**What they do:** Before analyzing a session, check "HIPAA identifiers" and/or "GLBA finance identifiers" in the pattern-pack selector. The generic SSN/credit-card/account-number scan always runs; these add on top of it.
+**What they do:** Before analyzing a session, check any of "HIPAA identifiers," "GLBA finance identifiers," or "FERPA identifiers" in the pattern-pack multi-select. The generic SSN/credit-card/account-number scan always runs; these add on top of it.
 
 **Value prop:** Shows the architecture is genuinely extensible - a healthcare or banking prospect can see their specific identifiers get caught without waiting for a bespoke build, which matters for the "will this work for my industry" objection.
 
@@ -46,6 +46,6 @@ What the user actually does in ComplyLine today, and why they'd bother. One prod
 
 ## 8. Extend the PII scan with a new pattern pack (developer workflow)
 
-**What they do:** Add a new pack object (id, name, list of `{id, label, regex}` patterns) to `server/checks/patternPacks.js`, following the existing `hipaaPack`/`financePack` shape - no changes to `piiScan.js` or `analyze.js` are needed.
+**What they do:** Add a new pack module (id, name, list of `{id, label, regex}` patterns) under `server/packs/`, following the existing `hipaa.js`/`finance.js`/`ferpa.js` shape, and register it in `server/packs/index.js` - no changes to `piiScan.js` or `analyze.js` are needed.
 
 **Value prop:** Proves the "pluggable by industry" claim isn't just marketing copy - a new vertical (e.g. a pack for a specific state's ID formats) is a five-minute addition, which matters for both scaling to new customer segments and for the judges evaluating originality/extensibility.
