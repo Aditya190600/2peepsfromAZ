@@ -4,6 +4,7 @@ import {
   createApiKey,
   listApiKeys,
   revokeApiKey,
+  updateApiKeyExpiry,
   verifyApiKey,
   hashKey,
   validateScopes,
@@ -156,4 +157,30 @@ test("revoking a key scoped to another user's id fails", async () => {
   const { fetchImpl } = fakeSupabase();
   const created = await createApiKey({ clerkUserId: "user_1", name: "A", scopes: ["hipaa"] }, ENV, fetchImpl);
   await assert.rejects(() => revokeApiKey("user_2", created.id, ENV, fetchImpl));
+});
+
+test("updateApiKeyExpiry extends an existing key's expiry and the key still verifies", async () => {
+  const { fetchImpl } = fakeSupabase();
+  const created = await createApiKey(
+    { clerkUserId: "user_1", name: "A", scopes: ["hipaa"], expiresInDays: 1 },
+    ENV,
+    fetchImpl,
+  );
+  const updated = await updateApiKeyExpiry("user_1", created.id, 365, ENV, fetchImpl);
+  assert.ok(new Date(updated.expiresAt).getTime() > new Date(created.expiresAt).getTime());
+
+  const result = await verifyApiKey(created.rawKey, ENV, fetchImpl);
+  assert.equal(result.valid, true);
+});
+
+test("updating expiry scoped to another user's id fails", async () => {
+  const { fetchImpl } = fakeSupabase();
+  const created = await createApiKey({ clerkUserId: "user_1", name: "A", scopes: ["hipaa"] }, ENV, fetchImpl);
+  await assert.rejects(() => updateApiKeyExpiry("user_2", created.id, 30, ENV, fetchImpl));
+});
+
+test("updateApiKeyExpiry rejects non-positive day counts", async () => {
+  const { fetchImpl } = fakeSupabase();
+  const created = await createApiKey({ clerkUserId: "user_1", name: "A", scopes: ["hipaa"] }, ENV, fetchImpl);
+  await assert.rejects(() => updateApiKeyExpiry("user_1", created.id, 0, ENV, fetchImpl));
 });

@@ -131,6 +131,35 @@ export async function revokeApiKey(clerkUserId, keyId, env = process.env, fetchI
   }
 }
 
+// Edits an existing key's expiry (extend or shorten). Scoped to clerkUserId
+// so one user can never edit another's key.
+export async function updateApiKeyExpiry(clerkUserId, keyId, expiresInDays, env = process.env, fetchImpl = fetch) {
+  if (!supabaseConfigured(env)) {
+    throw new Error("API key storage requires Supabase configuration (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY).");
+  }
+  if (!Number.isFinite(expiresInDays) || expiresInDays <= 0) {
+    throw new Error("expiresInDays must be a positive number");
+  }
+  const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
+  const url = restUrl(
+    env,
+    `${TABLE}?id=eq.${encodeURIComponent(keyId)}&clerk_user_id=eq.${encodeURIComponent(clerkUserId)}&select=id,name,scopes,expires_at,created_at,last_used_at,revoked_at`,
+  );
+  const resp = await fetchImpl(url, {
+    method: "PATCH",
+    headers: { ...headers(env), Prefer: "return=representation" },
+    body: JSON.stringify({ expires_at: expiresAt }),
+  });
+  if (!resp.ok) {
+    throw new Error(`Supabase update failed: ${resp.status}`);
+  }
+  const rows = await resp.json();
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new Error("Key not found");
+  }
+  return rowToMetadata(rows[0]);
+}
+
 // Verification interface for the (separate, sequenced) webhook-receiver task.
 // Call with the raw key from an incoming request's auth header/param.
 //

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "./Chrome";
 import { listIndustryPacks } from "./evalsClient";
-import { fetchApiKeys, createApiKey, revokeApiKey } from "./apiKeysClient";
+import { fetchApiKeys, createApiKey, revokeApiKey, updateApiKeyExpiry } from "./apiKeysClient";
 import "./App.css";
 
 const FALLBACK_INDUSTRY_PACKS = [
@@ -168,6 +168,46 @@ function RevealKey({ created, onDone }) {
   );
 }
 
+function EditExpiry({ apiKey, defaultExpiryDays, onSaved, onCancel }) {
+  const [expiresInDays, setExpiresInDays] = useState(defaultExpiryDays);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const onSave = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await updateApiKeyExpiry(apiKey.id, Number(expiresInDays));
+      onSaved();
+    } catch (err) {
+      setError(err.message ?? "Could not update expiry.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="call-row">
+      <input
+        type="number"
+        min="1"
+        max="3650"
+        value={expiresInDays}
+        onChange={(e) => setExpiresInDays(e.target.value)}
+        style={{ width: "5rem" }}
+      />
+      <span>days from now</span>
+      <button type="button" className="btn btn-primary" onClick={onSave} disabled={busy}>
+        Save
+      </button>
+      <button type="button" className="btn btn-outline" onClick={onCancel} disabled={busy}>
+        Cancel
+      </button>
+      {error && <p className="error-banner">{error}</p>}
+    </div>
+  );
+}
+
 export default function ApiKeys({ navigate, path }) {
   const [keys, setKeys] = useState(null);
   const [defaultExpiryDays, setDefaultExpiryDays] = useState(90);
@@ -176,6 +216,7 @@ export default function ApiKeys({ navigate, path }) {
   const [creating, setCreating] = useState(false);
   const [revealed, setRevealed] = useState(null);
   const [actionError, setActionError] = useState(null);
+  const [editingId, setEditingId] = useState(null);
 
   const load = async () => {
     try {
@@ -276,13 +317,32 @@ export default function ApiKeys({ navigate, path }) {
                     <td>
                       <span className={`finding-status ${status.cls}`}>{status.text}</span>
                     </td>
-                    <td className="muted">{formatWhen(key.expiresAt)}</td>
+                    <td className="muted">
+                      {editingId === key.id ? (
+                        <EditExpiry
+                          apiKey={key}
+                          defaultExpiryDays={defaultExpiryDays}
+                          onSaved={() => {
+                            setEditingId(null);
+                            load();
+                          }}
+                          onCancel={() => setEditingId(null)}
+                        />
+                      ) : (
+                        formatWhen(key.expiresAt)
+                      )}
+                    </td>
                     <td className="muted">{formatWhen(key.lastUsedAt)}</td>
                     <td>
-                      {!key.revokedAt && (
-                        <button type="button" className="btn btn-danger" onClick={() => onRevoke(key.id)}>
-                          Revoke
-                        </button>
+                      {!key.revokedAt && editingId !== key.id && (
+                        <>
+                          <button type="button" className="btn btn-outline" onClick={() => setEditingId(key.id)}>
+                            Edit expiry
+                          </button>
+                          <button type="button" className="btn btn-danger" onClick={() => onRevoke(key.id)}>
+                            Revoke
+                          </button>
+                        </>
                       )}
                     </td>
                   </tr>

@@ -19,6 +19,17 @@ export async function createApiKey({ name, scopes, expiresInDays }) {
   return body;
 }
 
+export async function updateApiKeyExpiry(id, expiresInDays) {
+  const resp = await fetch(`/v1/api-keys/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ expiresInDays }),
+  });
+  const body = await resp.json();
+  if (!resp.ok) throw new Error(body.error ?? "Could not update the key's expiry.");
+  return body;
+}
+
 export async function revokeApiKey(id) {
   const resp = await fetch(`/v1/api-keys/${encodeURIComponent(id)}/revoke`, { method: "POST" });
   const body = await resp.json();

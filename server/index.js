@@ -11,7 +11,7 @@ import { parsePackEvalRequest } from "./evals/wire.js";
 import { evaluatePacks } from "./evals/runPackEvals.js";
 import { cacheKey, warmNorthstarCache } from "./warmCache.js";
 import { loadReportCache, supabaseConfigured, upsertReportCache } from "./supabaseCache.js";
-import { createApiKey, listApiKeys, revokeApiKey, DEFAULT_EXPIRY_DAYS } from "./apiKeys.js";
+import { createApiKey, listApiKeys, revokeApiKey, updateApiKeyExpiry, DEFAULT_EXPIRY_DAYS } from "./apiKeys.js";
 import { NORTHSTAR_SESSIONS, NORTHSTAR_SESSION_KEYS } from "../client/src/sampleSessions.js";
 import * as providers from "./providers/registry.js";
 
@@ -145,6 +145,19 @@ app.post("/v1/api-keys", requireVisitor, async (req, res) => {
       ...(expiresInDays !== undefined ? { expiresInDays } : {}),
     });
     res.status(201).json(created);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.patch("/v1/api-keys/:id", requireVisitor, async (req, res) => {
+  if (!supabaseConfigured()) {
+    return res.status(503).json({ error: "API key storage requires Supabase configuration." });
+  }
+  const { expiresInDays } = req.body ?? {};
+  try {
+    const updated = await updateApiKeyExpiry(visitorId(req), req.params.id, Number(expiresInDays));
+    res.json(updated);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
