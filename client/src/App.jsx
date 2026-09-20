@@ -4,7 +4,7 @@ import Landing from "./Landing";
 import Home from "./Home";
 import Try from "./Try";
 import History from "./History";
-import SessionView from "./SessionView";
+import SessionInspector from "./SessionInspector";
 import { matchRoute } from "./routes";
 import "./App.css";
 
@@ -83,7 +83,7 @@ export default function App() {
   if (view.name === "session") {
     return (
       <RequireVisitor>
-        <SessionView navigate={navigate} path={path} sessionId={view.sessionId} />
+        <SessionInspector navigate={navigate} path={path} sessionId={view.sessionId} />
       </RequireVisitor>
     );
   }

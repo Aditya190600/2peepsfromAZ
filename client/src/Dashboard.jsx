@@ -11,6 +11,7 @@ import { summarizeFleet, monitorTiles } from "./fleetStats";
 import AudioPlayer from "./AudioPlayer";
 import ProviderSettings from "./ProviderSettings";
 import { saveHistoryEntry, buildHistoryEntry, findEntryBySessionId } from "./reportHistory";
+import { registerLiveAudioBlob } from "./liveAudioBlobs";
 import {
   CHECK_LABEL,
   CHECK_CITATION,
@@ -24,7 +25,7 @@ import { analyze, transcribeUpload, mapWithConcurrency } from "./analyzeClient";
 import { parseSessionPaste } from "./sessionPaste";
 import "./App.css";
 
-function formatTMs(tMs) {
+export function formatTMs(tMs) {
   const totalSeconds = Math.floor(tMs / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
@@ -77,7 +78,7 @@ function sessionByKey(key) {
 const STATUS_CLASS = { flag: "is-flag", pass: "is-pass", "n/a": "is-na", error: "is-na" };
 const STATUS_TEXT = { flag: "Flag", pass: "Pass", "n/a": "N/A", error: "Unable to run" };
 
-function Timestamp({ tMs, onSeek }) {
+export function Timestamp({ tMs, onSeek }) {
   if (tMs == null) return null;
   if (!onSeek) {
     return <span className="finding-timestamp">{formatTMs(tMs)}</span>;
@@ -413,6 +414,7 @@ export default function Dashboard({ navigate, path }) {
       setReport(nextReport);
       recordHistory("Live call", nextReport, lastSession, {
         durationMs: Date.now() - lastSession.startedAtMs,
+        source: "live",
       });
     } catch (err) {
       setLiveError(err.message ?? "Something went wrong generating this report.");
@@ -505,7 +507,8 @@ export default function Dashboard({ navigate, path }) {
     setReport(null);
     clearLabErrors();
     setUploadStatus("uploading");
-    setActiveAudioUrl(URL.createObjectURL(file));
+    const blobUrl = URL.createObjectURL(file);
+    setActiveAudioUrl(blobUrl);
     try {
       const session = await transcribeUpload(file);
       // Optional consentEvent lets the "diarize this sample" path keep the
@@ -515,6 +518,7 @@ export default function Dashboard({ navigate, path }) {
         consentEvent !== undefined ? { ...session, consentEvent } : session;
       const nextReport = await analyze(analyzedSession, patternPackIds);
       setReport(nextReport);
+      registerLiveAudioBlob(analyzedSession.sessionId, blobUrl);
       recordHistory(label, nextReport, analyzedSession);
       setUploadStatus("idle");
     } catch (err) {
