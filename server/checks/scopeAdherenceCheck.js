@@ -47,7 +47,15 @@ export async function scopeAdherenceCheck(session, { llmGateway = callLlmGateway
     };
   }
 
-  if (!verdict || verdict.inScope !== false) {
+  if (!verdict) {
+    return {
+      check: "scope_adherence",
+      status: "flag",
+      detail: "Scope-adherence check could not parse the semantic model's response.",
+    };
+  }
+
+  if (verdict.inScope !== false) {
     return {
       check: "scope_adherence",
       status: "pass",

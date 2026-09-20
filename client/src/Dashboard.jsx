@@ -22,7 +22,13 @@ import {
   reportView,
   VERDICT_CLASS,
 } from "./compliance";
-import { analyze, transcribeUpload, mapWithConcurrency, findRateLimitedFinding } from "./analyzeClient";
+import {
+  analyze,
+  transcribeUpload,
+  ingestSession,
+  mapWithConcurrency,
+  findRateLimitedFinding,
+} from "./analyzeClient";
 import { listIndustryPacks } from "./evalsClient";
 import PackEvals from "./PackEvals";
 import { parseSessionPaste } from "./sessionPaste";
@@ -372,6 +378,9 @@ export default function Dashboard({ navigate, path }) {
   const [seedViolation, setSeedViolation] = useState(false);
   const [recordCall, setRecordCall] = useState(false);
   const [recordingUrl, setRecordingUrl] = useState(null);
+  const [webhookApiKey, setWebhookApiKey] = useState("");
+  const [webhookStatus, setWebhookStatus] = useState("idle"); // idle | sending | sent | error
+  const [webhookError, setWebhookError] = useState(null);
   const [report, setReport] = useState(null);
   const [fleetResults, setFleetResults] = useState(null);
   const [fleetLoading, setFleetLoading] = useState(false);
@@ -474,6 +483,25 @@ export default function Dashboard({ navigate, path }) {
       setLiveError(err.message ?? "Something went wrong generating this report.");
     } finally {
       setLiveLoading(false);
+    }
+  };
+
+  // Try-as-webhook-sandbox: the persona picker's own action for sending the
+  // persona call's transcript through the same /v1/ingest/:apiKey path a
+  // real customer integration would use, instead of the direct
+  // /v1/analyze-session path above. Ingest acks immediately and analyzes
+  // async server-side, so there is no report to show inline here - this
+  // genuinely exercises the webhook receiver, not a synchronous report.
+  const runWebhookSandbox = async () => {
+    if (!lastSession || !webhookApiKey.trim()) return;
+    setWebhookStatus("sending");
+    setWebhookError(null);
+    try {
+      await ingestSession(webhookApiKey.trim(), lastSession);
+      setWebhookStatus("sent");
+    } catch (err) {
+      setWebhookStatus("error");
+      setWebhookError(err.message ?? "Something went wrong sending this call to the webhook receiver.");
     }
   };
 
@@ -795,6 +823,44 @@ export default function Dashboard({ navigate, path }) {
               </button>
             )}
             {liveError && <p className="error-banner">{liveError}</p>}
+
+            {lastSession && personaId !== "neutral" && (
+              <div className="section-block webhook-sandbox-block">
+                <h4>Try as webhook sandbox</h4>
+                <p className="pack-note">
+                  Send this persona call's transcript through{" "}
+                  <code>POST /v1/ingest/:apiKey</code> - the same webhook receiver a real
+                  customer integration posts to, instead of analyzing it directly here. Needs a
+                  ComplyLine API key with the right pack scopes;{" "}
+                  <a href="#" onClick={(e) => { e.preventDefault(); navigate("/api-keys"); }}>
+                    create one
+                  </a>
+                  .
+                </p>
+                <input
+                  type="text"
+                  placeholder="ComplyLine API key"
+                  value={webhookApiKey}
+                  onChange={(e) => setWebhookApiKey(e.target.value)}
+                />
+                <button
+                  className="btn btn-outline"
+                  onClick={runWebhookSandbox}
+                  disabled={!webhookApiKey.trim() || webhookStatus === "sending"}
+                >
+                  {webhookStatus === "sending" ? "Sending…" : "Send to webhook receiver"}
+                </button>
+                {webhookStatus === "sent" && (
+                  <p className="pack-note">
+                    Sent - the ingest endpoint acked and is analyzing asynchronously, same as a
+                    real customer's inbound webhook. No inline report here by design.
+                  </p>
+                )}
+                {webhookStatus === "error" && webhookError && (
+                  <p className="error-banner">{webhookError}</p>
+                )}
+              </div>
+            )}
 
             {recordingUrl && (
               <div className="section-block recording-block">
