@@ -7,6 +7,16 @@ export function cacheKey(session, patternPackIds) {
     .digest("hex");
 }
 
+// Suffixes the base cacheKey with the model provider, except for the default
+// AssemblyAI path, so a non-default provider selection can't collide with
+// (or serve stale results from) the shared Northstar boot-warm cache. Shared
+// by the manual /v1/analyze-session route and the webhook receiver so both
+// land reports in the same reportCache under the same key.
+export function requestCacheKey(session, patternPackIds, modelProviderId) {
+  const base = cacheKey(session, patternPackIds);
+  return modelProviderId === "assemblyai-gateway" ? base : `${base}:${modelProviderId}`;
+}
+
 export async function warmNorthstarCache({
   reportCache,
   analyzeSession,

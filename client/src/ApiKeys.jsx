@@ -166,6 +166,22 @@ function RevealKey({ created, onDone }) {
           Done
         </button>
       </div>
+
+      <h4>Webhook setup</h4>
+      <p className="key-reveal-value">
+        {window.location.origin}/v1/webhooks/assemblyai/{created.rawKey}
+      </p>
+      <p className="pack-note">
+        On your AssemblyAI account, register a webhook subscription (
+        <code>POST /v1/webhook-subscriptions</code>) with this URL, subscribed to{" "}
+        <code>session.completed</code>, and set its <code>secret</code> to this same key.
+      </p>
+      <p className="error-banner">
+        Demo/single-account build: this receiver reads the completed session with ComplyLine's own
+        AssemblyAI key, so it only works for sessions run on ComplyLine's own AssemblyAI account
+        (e.g. the Try tab). To check calls from your own AssemblyAI account in production, ComplyLine
+        needs to store your AssemblyAI API key too - that isn't wired up yet.
+      </p>
     </div>
   );
 }

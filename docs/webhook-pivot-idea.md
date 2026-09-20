@@ -4,7 +4,7 @@ Status: brainstorm, not yet implemented. Captured from a captain discussion on 2
 
 ## The core idea
 
-Stop requiring a human to open ComplyLine and click "Analyze." Instead, the voice agent platform itself notifies ComplyLine automatically the instant a call ends, via a webhook the platform already supports natively. An enterprise developer plugs in a ComplyLine API key and a webhook URL when they configure their voice agent session - that's the entire integration cost. No custom hook code, no SDK, no manual step.
+Stop requiring a human to open ComplyLine and click "Analyze." Instead, the voice agent platform itself notifies ComplyLine automatically the instant a call ends, via a webhook the platform already supports natively. An enterprise developer registers a ComplyLine-pointed webhook URL and their ComplyLine API key once, as a webhook subscription on their AssemblyAI account (not a per-session config field - see "Proposed workflow" below) - that's the entire integration cost. No custom hook code, no SDK, no manual step.
 
 ## Current workflow (as shipped today)
 
@@ -13,15 +13,25 @@ A human opens the app, records a live call or uploads audio/a transcript in the 
 ## Proposed workflow
 
 1. A developer builds a voice agent on a platform (AssemblyAI, or others - see "how standard is this" below).
-2. They add one config field when creating the session: a webhook URL pointing at ComplyLine, plus an auth header carrying their ComplyLine API key.
+2. They register one webhook subscription against their AssemblyAI account: a webhook URL pointing at ComplyLine (with their ComplyLine API key embedded in it) and a secret (also their ComplyLine API key) - a one-time setup step, not a per-session config field. See "Confirmed" below for why it's a subscription, not a session parameter.
 3. A real call happens.
 4. The call ends. The platform itself POSTs the transcript to ComplyLine's webhook receiver - no code the developer has to write beyond that one config field.
-5. ComplyLine's receiver acknowledges within the platform's timeout window (verified for AssemblyAI: 10 seconds, retried on failure - see below), then runs the existing compliance checks asynchronously, off the acknowledgment path.
+5. ComplyLine's receiver acknowledges within the platform's timeout window (verified for AssemblyAI: 15 seconds, retried on failure - see below), then runs the existing compliance checks asynchronously, off the acknowledgment path.
 6. The report is stored and surfaced in the web console. Critical/High findings flag for human review.
 
 ## Confirmed: AssemblyAI's Voice Agent API supports this natively
 
-Verified directly against AssemblyAI's docs (2026-09-20): the Voice Agent API lets you register a webhook URL plus custom `webhook_auth_header_name`/`webhook_auth_header_value` params when creating a session. AssemblyAI POSTs the full transcript as JSON when the session ends (also exposed as a `session.completed` WebSocket event), signed, and retries up to 10 times if a 2xx isn't received within 10 seconds. Source: [AssemblyAI Voice Agent API webhooks](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/webhooks), [AssemblyAI streaming webhooks](https://www.assemblyai.com/docs/streaming/webhooks).
+Re-verified directly against AssemblyAI's docs while building the receiver (2026-09-20); corrects two claims from the first pass above, which described the separate pre-recorded-audio product's webhook contract, not the Voice Agent API's:
+
+- **Auth is a signature, not a passthrough header.** You register a webhook subscription (`POST /v1/webhook-subscriptions`) with a `url`, `events`, and a `secret` you choose. Every delivery carries `X-AAI-Signature: t=<unix-seconds>,v1=<hex hmac-sha256>`, computed over `"{t}."` + the raw request body, keyed with that secret. There is no `webhook_auth_header_name`/`webhook_auth_header_value` for this product - that mechanism belongs to the pre-recorded-audio transcription API. ComplyLine's receiver has the customer set the subscription `secret` to their ComplyLine API key, so one credential both identifies the account (from the webhook URL) and authenticates the delivery (via the signature) - see `server/webhooks/assemblyaiWebhook.js`.
+- **The payload does not carry the transcript.** `session.completed` fires with session metadata only (duration, close reason, timestamps) - `s3_prefix` is `null` at that point. The transcript ("timeline") and recording are written separately and typically appear within ~90s; the receiver polls `GET /v1/sessions/{session_id}` until `artifacts` is populated, then downloads the pre-signed `timeline` artifact and flattens its `turns` into `analyzeSession`'s `session.turns` shape.
+- **Timeout is 15 seconds**, not 10. Delivery is at-least-once with retries on `5xx`/timeout/connection errors (not on `4xx`), so the receiver also dedupes naturally via the same content-addressed `reportCache` key the manual analyze path uses.
+
+Source: [AssemblyAI Voice Agent API webhooks](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/webhooks), [Recordings & transcripts](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/session-history).
+
+## Webhook receiver (built)
+
+`POST /v1/webhooks/assemblyai/:apiKey` (`server/webhooks/assemblyaiWebhook.js`, wired into `server/index.js` ahead of the global `express.json()` middleware since signature verification needs the raw body bytes). Flow: verify the API key (`verifyApiKey` from `server/apiKeys.js`) and the HMAC signature synchronously, ack `2xx` immediately, then - only for `session.completed` events - dispatch the artifact-poll + transcript-fetch + `analyzeSession` pipeline asynchronously, off the response path. A scoped key's packs (or every pack, for the `"all"` sentinel) become that report's `patternPackIds`. Results land in the same `reportCache`/`report_cache` Supabase table the manual `/v1/analyze-session` path uses, under the same key scheme (`requestCacheKey`, now shared via `server/warmCache.js`); a failed async run is `console.error`-logged with the session id rather than swallowed - there's no per-account report inbox yet (see "What does the web console become?" below), so this gives it the same visibility the manual path already has.
 
 ## How standard is this pattern across the industry?
 
@@ -39,8 +49,8 @@ Checked two other major voice-agent platforms directly rather than relying on ge
 Medium, not a rewrite. The entire analysis engine - consent/disclosure/PII checks, pattern packs, citations, severity ranking, report storage/history - is input-agnostic: it operates on a transcript object and doesn't care whether that transcript arrived via manual upload or a webhook. All of that is 100% reused.
 
 What's genuinely new:
-- **Webhook receiver endpoint** - doesn't exist today. Needs signature/auth verification, a fast acknowledgment, and async dispatch into the existing analysis pipeline (cannot run the LLM Gateway checks inline before acking, given the 10-second window).
-- **API key issuance/storage** - doesn't exist today. Current auth (Clerk) is for a human signing into the app, not a machine credential a voice platform authenticates with.
+- **Webhook receiver endpoint** - built, see "Webhook receiver (built)" above. Needed signature/auth verification, a fast acknowledgment, and async dispatch into the existing analysis pipeline (cannot run the LLM Gateway checks inline before acking, given the 15-second window).
+- **API key issuance/storage** - built (`server/apiKeys.js`, see AGENTS.md). Existing auth (Clerk) is for a human signing into the app, not a machine credential a voice platform authenticates with.
 
 What's repurposed, not rebuilt: the Try tab (live mic / upload) stops being the primary path and becomes a setup-testing sandbox - see below.
 
