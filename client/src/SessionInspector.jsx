@@ -5,7 +5,7 @@ import { SAMPLE_AUDIO_URLS } from "./sampleSessions";
 import { getLiveAudioBlob } from "./liveAudioBlobs";
 import { Report, Timestamp, formatTMs } from "./Dashboard";
 import AudioPlayer from "./AudioPlayer";
-import { SEVERITY_LABEL, VERDICT_CLASS } from "./compliance";
+import { VERDICT_CLASS } from "./compliance";
 import "./App.css";
 
 function formatWhen(iso) {
@@ -131,7 +131,7 @@ export default function SessionInspector({ navigate, path, sessionId }) {
               {entry.turnCount ?? (entry.turns ?? []).length} turns
             </p>
             <span className={`finding-status ${VERDICT_CLASS[entry.verdictLevel] ?? "is-review"}`}>
-              {SEVERITY_LABEL[entry.verdictLevel] ?? entry.verdictLabel}
+              {entry.verdictLabel}
             </span>
           </div>
           <div className="sample-actions">
