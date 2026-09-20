@@ -41,6 +41,26 @@ export async function analyze(session, patternPackIds) {
   return resp.json();
 }
 
+// Exercises the real webhook/ingest path (POST /v1/ingest/:apiKey) a
+// customer integration would use, instead of the direct /v1/analyze-session
+// call. Acks immediately with {ok:true}; the report is generated
+// asynchronously server-side, so there is no report to return here.
+export async function ingestSession(apiKey, session) {
+  const resp = await fetch(`/v1/ingest/${encodeURIComponent(apiKey)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session }),
+  });
+  let body;
+  try {
+    body = await resp.json();
+  } catch {
+    throw new ApiError("The compliance server is unreachable right now. Please try again shortly.");
+  }
+  if (!resp.ok) throw new ApiError(body.error ?? "Webhook ingest failed. Please try again.");
+  return body;
+}
+
 export async function transcribeUpload(file) {
   const resp = await fetch("/v1/transcribe-upload", {
     method: "POST",

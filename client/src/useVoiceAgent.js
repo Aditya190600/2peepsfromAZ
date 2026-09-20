@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { PERSONAS, resolvePersonaCallConfig } from "./personas";
 
 const SAMPLE_RATE = 24000;
 
@@ -11,11 +12,6 @@ const SILENCE_AMPLITUDE_THRESHOLD = 200;
 // only when the input device is truly producing nothing.
 const SILENCE_WARNING_MS = 15000;
 
-// Neutral, industry-agnostic session config - no domain persona, no tools.
-// This is only the session-ingestion plumbing R3-21 analyzes after the fact.
-const SYSTEM_PROMPT =
-  "You are a helpful voice assistant. Start every call by disclosing, in your first sentence, that the caller is talking to an AI / automated assistant, not a human.";
-const GREETING = "Hi, this is an AI assistant. How can I help you today?";
 const KEYTERMS = [];
 
 export function useVoiceAgent() {
@@ -27,6 +23,9 @@ export function useVoiceAgent() {
   // voice provider (server/providers/voiceStub.js). Falls back to the
   // generic "check your API key" copy when unset.
   const [connectError, setConnectError] = useState(null);
+  // Recorded copy of the call (mic + agent reply), opt-in via the record
+  // checkbox - null unless recordCall was true for the last connect().
+  const [recordedBlob, setRecordedBlob] = useState(null);
 
   const wsRef = useRef(null);
   const audioCtxInRef = useRef(null);
@@ -38,6 +37,11 @@ export function useVoiceAgent() {
   const sessionRef = useRef(null); // {sessionId, startedAt, consentEvent, turns}
   const lastAudibleAtRef = useRef(0);
   const silenceCheckIntervalRef = useRef(null);
+  const recordCallRef = useRef(false);
+  const recordDestInRef = useRef(null); // MediaStreamAudioDestinationNode, mic side
+  const recordDestOutRef = useRef(null); // MediaStreamAudioDestinationNode, agent-reply side
+  const mediaRecorderRef = useRef(null);
+  const recordedChunksRef = useRef([]);
 
   const appendTranscript = useCallback((role, text) => {
     setTranscript((prev) => [...prev, { role, text }]);
@@ -77,6 +81,7 @@ export function useVoiceAgent() {
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(ctx.destination);
+    if (recordDestOutRef.current) source.connect(recordDestOutRef.current);
 
     // Schedule back-to-back against context time (no sleep-based timing) so the
     // browser's own audio buffer absorbs network jitter between chunks.
@@ -91,11 +96,14 @@ export function useVoiceAgent() {
   }, []);
 
   const connect = useCallback(
-    async (consentGranted) => {
+    async (consentGranted, persona = PERSONAS[0], seedViolation = false, recordCall = false) => {
       setStatus("connecting");
       setTranscript([]);
       setLastSession(null);
       setConnectError(null);
+      setRecordedBlob(null);
+      recordCallRef.current = recordCall;
+      recordedChunksRef.current = [];
 
       const startedAtMs = Date.now();
       sessionRef.current = {
@@ -106,6 +114,7 @@ export function useVoiceAgent() {
           ? { granted: true, timestamp: new Date(startedAtMs - 1000).toISOString() }
           : null,
         turns: [],
+        persona: { id: persona.id, label: persona.label, scope: persona.scope, seedViolation },
       };
 
       const tokenResp = await fetch("/v1/token");
@@ -121,14 +130,18 @@ export function useVoiceAgent() {
 
       audioCtxOutRef.current = new AudioContext({ sampleRate: SAMPLE_RATE });
       nextPlaybackTimeRef.current = 0;
+      if (recordCall) {
+        recordDestOutRef.current = audioCtxOutRef.current.createMediaStreamDestination();
+      }
 
       ws.onopen = () => {
+        const callConfig = resolvePersonaCallConfig(persona, seedViolation);
         ws.send(
           JSON.stringify({
             type: "session.update",
             session: {
-              system_prompt: SYSTEM_PROMPT,
-              greeting: GREETING,
+              system_prompt: callConfig.systemPrompt,
+              greeting: callConfig.greeting,
               input: {
                 format: { encoding: "audio/pcm" },
                 keyterms: KEYTERMS,
@@ -140,7 +153,7 @@ export function useVoiceAgent() {
                 },
               },
               output: {
-                voice: "anna",
+                voice: callConfig.voice,
                 format: { encoding: "audio/pcm" },
               },
             },
@@ -237,11 +250,40 @@ export function useVoiceAgent() {
 
     source.connect(worklet);
 
+    if (recordCallRef.current) {
+      recordDestInRef.current = ctx.createMediaStreamDestination();
+      source.connect(recordDestInRef.current);
+      startRecorder();
+    }
+
     lastAudibleAtRef.current = Date.now();
     setMicSilent(false);
     silenceCheckIntervalRef.current = setInterval(() => {
       setMicSilent(Date.now() - lastAudibleAtRef.current > SILENCE_WARNING_MS);
     }, 1000);
+  }, []);
+
+  // Mixes the mic-tap and agent-reply-tap MediaStreamAudioDestinationNodes
+  // (set up above and in connect()) into one MediaRecorder - a copy of what's
+  // already flowing through the live call, not a second capture path.
+  const startRecorder = useCallback(() => {
+    const micStream = recordDestInRef.current?.stream;
+    const agentStream = recordDestOutRef.current?.stream;
+    if (!micStream && !agentStream) return;
+    const tracks = [...(micStream?.getAudioTracks() ?? []), ...(agentStream?.getAudioTracks() ?? [])];
+    if (tracks.length === 0) return;
+    const combined = new MediaStream(tracks);
+    const recorder = new MediaRecorder(combined);
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) recordedChunksRef.current.push(e.data);
+    };
+    recorder.onstop = () => {
+      if (recordedChunksRef.current.length > 0) {
+        setRecordedBlob(new Blob(recordedChunksRef.current, { type: recorder.mimeType || "audio/webm" }));
+      }
+    };
+    mediaRecorderRef.current = recorder;
+    recorder.start();
   }, []);
 
   const stopMic = useCallback(() => {
@@ -255,6 +297,11 @@ export function useVoiceAgent() {
     micStreamRef.current = null;
     audioCtxInRef.current?.close();
     audioCtxInRef.current = null;
+    recordDestInRef.current = null;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    mediaRecorderRef.current = null;
   }, []);
 
   const disconnect = useCallback(() => {
@@ -273,8 +320,18 @@ export function useVoiceAgent() {
     stopMic();
     audioCtxOutRef.current?.close();
     audioCtxOutRef.current = null;
+    recordDestOutRef.current = null;
     setStatus("idle");
   }, [stopMic]);
 
-  return { status, transcript, lastSession, micSilent, connectError, connect, disconnect };
+  return {
+    status,
+    transcript,
+    lastSession,
+    micSilent,
+    connectError,
+    recordedBlob,
+    connect,
+    disconnect,
+  };
 }
