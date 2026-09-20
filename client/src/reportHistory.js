@@ -13,6 +13,29 @@ export function loadHistory() {
   }
 }
 
+// Builds the conversation-record fields (issue #72) shared by every
+// saveHistoryEntry call site, from the session that was analyzed and the
+// report it produced. `audioKey` must be a SAMPLE_AUDIO_URLS key - never a
+// blob URL, which isn't valid across a reload/localStorage round-trip.
+export function buildHistoryEntry({ label, session, report, audioKey, durationMs, verdict }) {
+  const turns = (session?.turns ?? []).map(({ role, text, tMs }) => ({ role, text, tMs }));
+  const lastTurnMs = turns.length ? turns[turns.length - 1].tMs : 0;
+  return {
+    timestamp: new Date().toISOString(),
+    label,
+    sessionId: report.sessionId,
+    verdictLevel: verdict?.level,
+    verdictLabel: verdict?.label,
+    report,
+    turns,
+    startedAt: session?.startedAt ?? null,
+    durationMs: durationMs ?? lastTurnMs,
+    turnCount: turns.length,
+    ...(audioKey ? { audioKey } : {}),
+    findings: report.findings,
+  };
+}
+
 export function saveHistoryEntry(entry) {
   try {
     const history = loadHistory();

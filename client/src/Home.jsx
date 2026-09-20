@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NORTHSTAR_SESSIONS, NORTHSTAR_SESSION_KEYS } from "./sampleSessions";
 import { AppShell, OpenTasksRail } from "./Chrome";
-import { saveHistoryEntry } from "./reportHistory";
+import { saveHistoryEntry, buildHistoryEntry } from "./reportHistory";
 import { headlineVerdict } from "./compliance";
 import { analyze, mapWithConcurrency, fetchBootStatus } from "./analyzeClient";
 import { FleetView, Report, sampleLabel } from "./Dashboard";
@@ -63,14 +63,9 @@ export default function Home({ navigate, path }) {
         setFleetResults(results);
         for (const { key, report } of results) {
           const verdict = headlineVerdict(report.findings);
-          saveHistoryEntry({
-            timestamp: new Date().toISOString(),
-            label: sampleLabel(key),
-            sessionId: report.sessionId,
-            verdictLevel: verdict.level,
-            verdictLabel: verdict.label,
-            report,
-          });
+          saveHistoryEntry(
+            buildHistoryEntry({ label: sampleLabel(key), report, session: NORTHSTAR_SESSIONS[key], verdict })
+          );
         }
       } catch (err) {
         setFleetError(err.message ?? "Something went wrong running the fleet analysis.");
