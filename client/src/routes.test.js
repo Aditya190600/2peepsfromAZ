@@ -12,6 +12,7 @@ test("named product routes", () => {
   assert.deepEqual(matchRoute("/try"), { name: "try" });
   assert.deepEqual(matchRoute("/sessions"), { name: "sessions" });
   assert.deepEqual(matchRoute("/sessions/"), { name: "sessions" });
+  assert.deepEqual(matchRoute("/api-keys"), { name: "api-keys" });
 });
 
 test("session id is decoded after the sessions prefix", () => {
