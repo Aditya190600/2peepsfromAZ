@@ -564,14 +564,6 @@ button.site-nav-link {
   gap: 12px;
 }
 
-.site-footer-handling {
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: var(--muted);
-  max-width: 56ch;
-}
-
 .site-footer-links {
   margin: 0;
   font-size: 12.5px;
@@ -1655,44 +1647,6 @@ button.site-nav-link {
 
 .pack-evals-fail-detail {
   color: var(--muted);
-}
-
-.data-handling-panel {
-  background: var(--accent-soft);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-  margin-top: 0;
-  padding-top: 14px;
-  border-top: none;
-}
-
-.data-handling-panel h3 {
-  color: var(--accent);
-  margin-bottom: 8px;
-}
-
-.data-handling-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.data-handling-list li {
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--accent);
-  padding-left: 14px;
-  position: relative;
-}
-
-.data-handling-list li::before {
-  content: "✓";
-  position: absolute;
-  left: 0;
-  font-weight: 700;
 }
 
 .finding-citation {
