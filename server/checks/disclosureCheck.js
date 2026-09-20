@@ -44,6 +44,7 @@ export async function disclosureCheck(session, { llmGateway = callLlmGateway } =
       status: "error",
       detail,
       llmGatewayError: err.message,
+      rateLimited: err instanceof LlmGatewayRateLimitError,
     };
   }
 

@@ -1,5 +1,20 @@
 export class ApiError extends Error {}
 
+// AssemblyAI's LLM Gateway rate limit (~2 calls/30s) is easy to hit, and a
+// rate-limited check comes back as a normal 200 response with a
+// `status: "error"` finding (see server/checks/llmGateway.js's
+// LlmGatewayRateLimitError, caught per-check in disclosureCheck.js/piiScan.js
+// rather than thrown up to the route) - never an HTTP error `analyze()` would
+// reject on. Callers must inspect the resolved report's findings.
+export const GATEWAY_RATE_LIMIT_MESSAGE =
+  "AssemblyAI's LLM Gateway rate limit was hit, so part of this report couldn't be generated. " +
+  "Wait a minute or two and retry, avoid running many sessions or checks back-to-back, and if " +
+  "this keeps happening, check your account's usage and plan limits on the AssemblyAI dashboard.";
+
+export function findRateLimitedFinding(report) {
+  return report?.findings?.find((f) => f.status === "error" && f.rateLimited) ?? null;
+}
+
 export async function fetchBootStatus() {
   try {
     const resp = await fetch("/v1/boot-status");

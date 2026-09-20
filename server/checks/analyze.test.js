@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { analyzeSession } from "./analyze.js";
+import { LlmGatewayRateLimitError } from "./llmGateway.js";
 
 const cleanSession = {
   sessionId: "sess_clean",
@@ -253,4 +254,25 @@ test("PII scan still reports pattern-pack matches and notes the error when the L
   assert.equal(pii.status, "flag");
   assert.equal(pii.items[0].patternId, "ssn");
   assert.ok(pii.llmGatewayError.includes("upstream unavailable"));
+});
+
+test("disclosure check flags rateLimited:true specifically for a gateway rate-limit failure, not a generic error", async () => {
+  const llmGateway = async () => {
+    throw new LlmGatewayRateLimitError(429, "too many requests for this action");
+  };
+  const report = await analyzeSession(cleanSession, { llmGateway });
+  const disclosure = report.findings.find((f) => f.check === "ai_disclosure");
+  assert.equal(disclosure.status, "error");
+  assert.equal(disclosure.rateLimited, true);
+});
+
+test("PII scan flags rateLimited:true specifically for a gateway rate-limit failure, not a generic error", async () => {
+  const llmGateway = async (messages) => {
+    if (messages[0].content.includes("disclos")) return JSON.stringify({ disclosed: true, turnIndex: 0, quote: "hi" });
+    throw new LlmGatewayRateLimitError(429, "too many requests for this action");
+  };
+  const report = await analyzeSession(cleanSession, { llmGateway });
+  const pii = report.findings.find((f) => f.check === "pii_scan");
+  assert.equal(pii.status, "error");
+  assert.equal(pii.rateLimited, true);
 });

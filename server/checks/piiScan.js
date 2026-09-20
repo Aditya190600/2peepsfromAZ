@@ -103,7 +103,7 @@ export async function piiScan(session, patternPacks, { llmGateway = callLlmGatew
     status,
     detail,
     patternPacksUsed: patternPacks.map((p) => p.id),
-    ...(llmGatewayError ? { llmGatewayError } : {}),
+    ...(llmGatewayError ? { llmGatewayError, rateLimited } : {}),
     items,
   };
 }
