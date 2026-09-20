@@ -114,10 +114,6 @@ export function Nav({ path, navigate }) {
 export function Footer() {
   return (
     <footer className="site-footer">
-      <p className="site-footer-handling">
-        Live call audio is never written to disk. Transcripts exist only in your browser's memory
-        and are discarded on reload. Your AssemblyAI API key never leaves the server.
-      </p>
       <p className="site-footer-links">
         <a href="https://github.com/Aditya190600/2peepsfromAZ" target="_blank" rel="noreferrer">
           Source on GitHub
