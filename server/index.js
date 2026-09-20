@@ -123,7 +123,20 @@ app.get("/v1/packs", requireVisitor, (_req, res) => {
 // API key management for the signed-in human, via the web console. This is
 // NOT the webhook auth path - verifyApiKey (server/apiKeys.js) is what a
 // future webhook receiver calls to authenticate an inbound machine request.
-app.get("/v1/api-keys", requireVisitor, async (req, res) => {
+//
+// These routes require real Clerk sign-in even when the rest of the app's
+// Clerk gate is a no-op (CLERK_ENABLED false): without it, every visitor
+// would share the "anon" visitorId and pool real customer credentials under
+// one account - unacceptable for production API keys, unlike the anonymous
+// demo behavior everywhere else in this file.
+function requireRealAccount(_req, res, next) {
+  if (!CLERK_ENABLED) {
+    return res.status(503).json({ error: "API key management requires sign-in (Clerk) to be configured." });
+  }
+  next();
+}
+
+app.get("/v1/api-keys", requireVisitor, requireRealAccount, async (req, res) => {
   try {
     const keys = await listApiKeys(visitorId(req));
     res.json({ keys, defaultExpiryDays: DEFAULT_EXPIRY_DAYS });
@@ -132,7 +145,7 @@ app.get("/v1/api-keys", requireVisitor, async (req, res) => {
   }
 });
 
-app.post("/v1/api-keys", requireVisitor, async (req, res) => {
+app.post("/v1/api-keys", requireVisitor, requireRealAccount, async (req, res) => {
   if (!supabaseConfigured()) {
     return res.status(503).json({ error: "API key storage requires Supabase configuration." });
   }
@@ -150,7 +163,7 @@ app.post("/v1/api-keys", requireVisitor, async (req, res) => {
   }
 });
 
-app.patch("/v1/api-keys/:id", requireVisitor, async (req, res) => {
+app.patch("/v1/api-keys/:id", requireVisitor, requireRealAccount, async (req, res) => {
   if (!supabaseConfigured()) {
     return res.status(503).json({ error: "API key storage requires Supabase configuration." });
   }
@@ -163,7 +176,7 @@ app.patch("/v1/api-keys/:id", requireVisitor, async (req, res) => {
   }
 });
 
-app.post("/v1/api-keys/:id/revoke", requireVisitor, async (req, res) => {
+app.post("/v1/api-keys/:id/revoke", requireVisitor, requireRealAccount, async (req, res) => {
   if (!supabaseConfigured()) {
     return res.status(503).json({ error: "API key storage requires Supabase configuration." });
   }

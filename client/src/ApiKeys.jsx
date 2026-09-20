@@ -4,6 +4,8 @@ import { listIndustryPacks } from "./evalsClient";
 import { fetchApiKeys, createApiKey, revokeApiKey, updateApiKeyExpiry } from "./apiKeysClient";
 import "./App.css";
 
+const CLERK_ENABLED = Boolean(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
+
 const FALLBACK_INDUSTRY_PACKS = [
   { id: "hipaa", name: "HIPAA identifiers (healthcare)" },
   { id: "finance", name: "GLBA finance identifiers (banking)" },
@@ -208,6 +210,19 @@ function EditExpiry({ apiKey, defaultExpiryDays, onSaved, onCancel }) {
   );
 }
 
+function SignInRequired({ navigate, path }) {
+  return (
+    <AppShell path={path} navigate={navigate} title="API Keys">
+      <p className="app-lede">
+        API key management requires sign-in to be configured for this deployment - pooling real
+        customer credentials under one shared anonymous visitor isn't acceptable. Set
+        `CLERK_SECRET_KEY`/`CLERK_PUBLISHABLE_KEY` (server) and `VITE_CLERK_PUBLISHABLE_KEY`
+        (client) to enable this page.
+      </p>
+    </AppShell>
+  );
+}
+
 export default function ApiKeys({ navigate, path }) {
   const [keys, setKeys] = useState(null);
   const [defaultExpiryDays, setDefaultExpiryDays] = useState(90);
@@ -230,6 +245,7 @@ export default function ApiKeys({ navigate, path }) {
   };
 
   useEffect(() => {
+    if (!CLERK_ENABLED) return;
     load();
     listIndustryPacks()
       .then((packs) => {
@@ -253,6 +269,10 @@ export default function ApiKeys({ navigate, path }) {
       setActionError(err.message ?? "Could not revoke the key.");
     }
   };
+
+  if (!CLERK_ENABLED) {
+    return <SignInRequired navigate={navigate} path={path} />;
+  }
 
   const packsById = Object.fromEntries(industryPacks.map((p) => [p.id, p]));
 

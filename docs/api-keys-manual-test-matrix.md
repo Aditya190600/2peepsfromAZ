@@ -40,7 +40,14 @@ returns 503, which is itself worth confirming once.
    (`cl_live_` prefix included).
 9. **Nav** - "API Keys" appears in the left rail alongside Home/Sessions/Try,
    highlights active on `/api-keys`, and is reachable from a fresh sign-in.
+10. **Sign-in not configured** - unset `VITE_CLERK_PUBLISHABLE_KEY` (client)
+    and `CLERK_SECRET_KEY`/`CLERK_PUBLISHABLE_KEY` (server), reload `/api-keys`.
+    Page shows the "sign-in required" message, not the create form or key
+    list, and issues no `/v1/api-keys` request. Hitting `GET /v1/api-keys`,
+    `POST /v1/api-keys`, `PATCH /v1/api-keys/:id`, or `POST
+    /v1/api-keys/:id/revoke` directly (curl) returns 503 - real API keys must
+    never pool under the shared anonymous demo visitor.
 
-All nine must pass with the raw key value appearing in exactly one network
+All ten must pass with the raw key value appearing in exactly one network
 response body (`POST /v1/api-keys`) - confirm via devtools network tab that
 `GET /v1/api-keys` never includes a raw key field.
