@@ -118,11 +118,24 @@ export const SAMPLE_SESSIONS = {
 
 export const SCRIPTED_VIOLATION_DEMO_KEYS = ["hipaa-diagnosis-readback", "glba-account-disclosure"];
 
-// Only the six sessions above have a recorded companion file - these are the
-// "playable" set. Everything in GENERATED_SESSIONS below is text-only, so a
-// fleet reads as a program under review (~50 calls) rather than 6 fixtures.
+// Only these six sessions have a recorded companion file in public/samples -
+// the "playable" set (see the file header comment). The two scripted
+// HIPAA/GLBA violation demos above and everything in GENERATED_SESSIONS below
+// are text-only, so a fleet reads as a program under review (~50 calls)
+// rather than 6 fixtures. Keep this list literal rather than derived from
+// SAMPLE_SESSIONS' keys - deriving it silently mapped every session (including
+// ones with no mp3) to a dead /samples/<key>.mp3 URL.
+export const PLAYABLE_SAMPLE_KEYS = [
+  "clean-call",
+  "tcpa-violation",
+  "optout-ignored",
+  "healthcare-hipaa",
+  "late-disclosure",
+  "clean-call-2",
+];
+
 export const SAMPLE_AUDIO_URLS = Object.fromEntries(
-  Object.keys(SAMPLE_SESSIONS).map((key) => [key, `/samples/${key}.mp3`])
+  PLAYABLE_SAMPLE_KEYS.map((key) => [key, `/samples/${key}.mp3`])
 );
 
 // Northstar Voice: the default Home-path demo catalog (issue #32). Exactly
