@@ -70,6 +70,7 @@ This app keeps `reportCache` as an in-process `Map` and optionally persists thos
 
 1. New Railway services do not read `railway.toml`. From this repo, with Railway CLI 5.42.1 or newer: `railway login`, then `railway link` (or create a project), then `railway config apply`. That applies `.railway/railway.ts` (`npm run build` / `npm start`). Railway must set `PORT`. Do not add an HTTP healthcheck on `/v1/boot-status`; Express binds `PORT` before the warm.
 2. Set Railway variables: `ASSEMBLYAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. The AssemblyAI key stays on the server. It never goes to the browser.
+2a. Optional - per-visitor sign-in for a public demo: set `CLERK_SECRET_KEY` and `CLERK_PUBLISHABLE_KEY` on the server, and `VITE_CLERK_PUBLISHABLE_KEY` (same publishable key) as a client build-time env var. Both unset means no sign-in gate - anyone hitting the URL shares one anonymous trial, exactly as before. Both set gates `/home`, `/try`, `/sessions`, and the analyze/token/transcribe routes behind a Clerk sign-in, so each visitor gets their own trial.
 3. In Supabase, run `supabase/migrations/001_report_cache.sql`. RLS stays on; only the service role reads and writes `report_cache`.
 4. Express binds `PORT`, then hydrates the Map from Supabase, then warms any missing Northstar sessions with `patternPackIds` `["generic"]` before `GET /v1/boot-status` flips to `{ ok: true }`. Home still POSTs the 12 sessions if boot is incomplete. It does not invent an 83 percent KPI for a failed cache.
 5. Live call audio is still not written to disk or to Supabase.
@@ -78,11 +79,22 @@ Public demo URL: https://2peepsfromaz-production.up.railway.app (Railway project
 
 `GET /v1/boot-status` returns `{ ok, cached, total, error }`.
 
+### Demo credentials (Clerk sign-in)
+
+`server/scripts/demo_credentials.js` creates or removes the 5 demo logins handed to judges when the Clerk sign-in gate is enabled: `judge1+clerk_test@2peepsfromaz.dev` through `judge5+clerk_test@2peepsfromaz.dev`. Sign in with any of these emails and the fixed code **424242** - `+clerk_test` is Clerk's built-in test-email convention, so no real email is sent (verified working against this app's live Clerk instance). Requires `CLERK_SECRET_KEY` set (same as the Railway variable in step 2a above).
+
+```
+node server/scripts/demo_credentials.js --add    # or -a
+node server/scripts/demo_credentials.js --clear  # or -c
+```
+
+`--add` is idempotent per email - a no-op for any that already exist. `--clear` prompts once for confirmation listing all matches and only deletes users that both match one of the 5 fixed demo emails and carry the `isDemo` metadata flag this script sets.
+
 ### Architecture
 
 - `server/` - thin Node/Express. `GET /v1/token` mints a short-lived Voice Agent token server-side (the real API key never leaves this process; reused as-is from the earlier build). `POST /v1/analyze-session` runs `server/checks/analyze.js` against a submitted session log and returns a findings report.
 - `server/checks/` - the R3-21 mechanisms: `consentCheck.js`, `disclosureCheck.js` (LLM Gateway semantic judgment), `optOutCheck.js` (see `docs/tcpa-optout-check.md`), `piiScan.js` (pattern packs from `patternPacks.js` plus an LLM Gateway free-form-PII pass), `llmGateway.js` (shared LLM Gateway client), and `analyze.js` which composes them - see `docs/guardrails-llm-gateway-integration.md` for how the AssemblyAI calls work. `analyze.test.js` is the self-check, including the HIPAA-pack-as-drop-in-extension demonstration.
-- `client/` - React + Vite. `App.jsx` is a minimal hand-rolled router (no dependency): `/` is Landing, `/home` is the Northstar queue, `/sessions` is stored reports, `/try` is the lab. `useVoiceAgent.js` connects to `wss://agents.assemblyai.com/v1/ws?token=...` (session-ingestion plumbing: `AudioWorklet` mic capture, PCM16 streaming, gapless `reply.audio` playback scheduling), logs a consent event and a timestamped transcript turn-by-turn, and hands the completed session log to the Try lab on `session.ended` for analysis. No live tool-calling and no domain persona - the agent config is neutral.
+- `client/` - React + Vite. `App.jsx` is a minimal hand-rolled router (no dependency): `/` is Landing, `/home` is the Northstar queue, `/sessions` is stored reports, `/sessions/:sessionId` reopens one stored session (`SessionInspector.jsx`, Call/Evaluation tabs, no re-analysis), `/try` is the lab. `useVoiceAgent.js` connects to `wss://agents.assemblyai.com/v1/ws?token=...` (session-ingestion plumbing: `AudioWorklet` mic capture, PCM16 streaming, gapless `reply.audio` playback scheduling), logs a consent event and a timestamped transcript turn-by-turn, and hands the completed session log to the Try lab on `session.ended` for analysis. No live tool-calling and no domain persona - the agent config is neutral.
 
 See `AGENTS.md` for the standing convention on verifying AssemblyAI API docs before writing integration code.
 

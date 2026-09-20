@@ -10,7 +10,8 @@ import { AppShell } from "./Chrome";
 import { summarizeFleet, monitorTiles } from "./fleetStats";
 import AudioPlayer from "./AudioPlayer";
 import ProviderSettings from "./ProviderSettings";
-import { saveHistoryEntry, findEntryBySessionId } from "./reportHistory";
+import { saveHistoryEntry, buildHistoryEntry, findEntryBySessionId } from "./reportHistory";
+import { registerLiveAudioBlob } from "./liveAudioBlobs";
 import {
   CHECK_LABEL,
   CHECK_CITATION,
@@ -26,7 +27,7 @@ import PackEvals from "./PackEvals";
 import { parseSessionPaste } from "./sessionPaste";
 import "./App.css";
 
-function formatTMs(tMs) {
+export function formatTMs(tMs) {
   const totalSeconds = Math.floor(tMs / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
@@ -79,7 +80,7 @@ function sessionByKey(key) {
 const STATUS_CLASS = { flag: "is-flag", pass: "is-pass", "n/a": "is-na", error: "is-na" };
 const STATUS_TEXT = { flag: "Flag", pass: "Pass", "n/a": "N/A", error: "Unable to run" };
 
-function Timestamp({ tMs, onSeek }) {
+export function Timestamp({ tMs, onSeek }) {
   if (tMs == null) return null;
   if (!onSeek) {
     return <span className="finding-timestamp">{formatTMs(tMs)}</span>;
@@ -406,16 +407,9 @@ export default function Dashboard({ navigate, path }) {
     };
   }, []);
 
-  const recordHistory = (label, report) => {
+  const recordHistory = (label, report, session, opts = {}) => {
     const verdict = headlineVerdict(report.findings);
-    saveHistoryEntry({
-      timestamp: new Date().toISOString(),
-      label,
-      sessionId: report.sessionId,
-      verdictLevel: verdict.level,
-      verdictLabel: verdict.label,
-      report,
-    });
+    saveHistoryEntry(buildHistoryEntry({ label, report, session, verdict, ...opts }));
   };
 
   const clearLabErrors = () => {
@@ -436,7 +430,10 @@ export default function Dashboard({ navigate, path }) {
     try {
       const nextReport = await analyze(lastSession, patternPackIds);
       setReport(nextReport);
-      recordHistory("Live call", nextReport);
+      recordHistory("Live call", nextReport, lastSession, {
+        durationMs: Date.now() - lastSession.startedAtMs,
+        source: "live",
+      });
     } catch (err) {
       setLiveError(err.message ?? "Something went wrong generating this report.");
     } finally {
@@ -450,9 +447,12 @@ export default function Dashboard({ navigate, path }) {
     setSampleLoadingKey(key);
     setActiveAudioUrl(SAMPLE_AUDIO_URLS[key] && PLAYABLE_SAMPLE_LABEL[key] ? SAMPLE_AUDIO_URLS[key] : null);
     try {
-      const nextReport = await analyze(sessionByKey(key), patternPackIds);
+      const session = sessionByKey(key);
+      const nextReport = await analyze(session, patternPackIds);
       setReport(nextReport);
-      recordHistory(sampleLabel(key), nextReport);
+      recordHistory(sampleLabel(key), nextReport, session, {
+        audioKey: PLAYABLE_SAMPLE_LABEL[key] ? key : undefined,
+      });
     } catch (err) {
       setSampleError(err.message ?? "Something went wrong generating this report.");
       setReport(null);
@@ -478,7 +478,9 @@ export default function Dashboard({ navigate, path }) {
       const results = keys.map((key, i) => ({ key, report: reports[i] }));
       setFleetResults(results);
       for (const { key, report: r } of results) {
-        recordHistory(sampleLabel(key), r);
+        recordHistory(sampleLabel(key), r, sessionByKey(key), {
+          audioKey: PLAYABLE_SAMPLE_LABEL[key] ? key : undefined,
+        });
       }
     } catch (err) {
       setFleetError(err.message ?? "Something went wrong running the fleet analysis.");
@@ -504,7 +506,11 @@ export default function Dashboard({ navigate, path }) {
     try {
       const nextReport = await analyze(parsed.session, patternPackIds);
       setReport(nextReport);
-      recordHistory(`Pasted session (${parsed.session.sessionId ?? "no session id"})`, nextReport);
+      recordHistory(
+        `Pasted session (${parsed.session.sessionId ?? "no session id"})`,
+        nextReport,
+        parsed.session
+      );
     } catch (err) {
       setPasteError(err.message ?? "Something went wrong analyzing this paste.");
       setReport(null);
@@ -519,18 +525,19 @@ export default function Dashboard({ navigate, path }) {
     setReport(null);
     clearLabErrors();
     setUploadStatus("uploading");
-    setActiveAudioUrl(URL.createObjectURL(file));
+    const blobUrl = URL.createObjectURL(file);
+    setActiveAudioUrl(blobUrl);
     try {
       const session = await transcribeUpload(file);
       // Optional consentEvent lets the "diarize this sample" path keep the
       // fixture's TCPA consent flag while still going through real STT +
       // speaker_labels. Raw drag-and-drop uploads leave it undefined → null.
-      const nextReport = await analyze(
-        consentEvent !== undefined ? { ...session, consentEvent } : session,
-        patternPackIds
-      );
+      const analyzedSession =
+        consentEvent !== undefined ? { ...session, consentEvent } : session;
+      const nextReport = await analyze(analyzedSession, patternPackIds);
       setReport(nextReport);
-      recordHistory(label, nextReport);
+      registerLiveAudioBlob(analyzedSession.sessionId, blobUrl);
+      recordHistory(label, nextReport, analyzedSession);
       setUploadStatus("idle");
     } catch (err) {
       setUploadStatus("error");
@@ -571,7 +578,7 @@ export default function Dashboard({ navigate, path }) {
     }
     setFleetResults(null);
     clearLabErrors();
-    setActiveAudioUrl(null);
+    setActiveAudioUrl(entry.audioKey ? SAMPLE_AUDIO_URLS[entry.audioKey] ?? null : null);
     setReport(entry.report);
   };
 
@@ -601,6 +608,12 @@ export default function Dashboard({ navigate, path }) {
     <AppShell path={path} navigate={navigate} title="Try">
       <main className="layout">
         <section className="panel session-panel">
+          <p className="app-lede">
+            Try is the analysis lab: run a live mic call against the AssemblyAI Voice Agent, upload a
+            recorded call, or pick a sample session - then check the industry pattern packs you want
+            layered on top of the generic scan before generating a report.
+          </p>
+
           <DataHandlingPanel />
 
           <ProviderSettings />

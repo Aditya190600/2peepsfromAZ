@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
+import { clerkMiddleware, requireAuth } from "@clerk/express";
 import { analyzeSession } from "./checks/analyze.js";
 import { packCatalog } from "./packs/index.js";
 import { parsePackEvalRequest } from "./evals/wire.js";
@@ -19,6 +20,16 @@ dotenv.config({ path: path.join(__dirname, "..", ".env") });
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
+
+// Per-visitor separation for the public demo, opt-in via both Clerk keys so a
+// fresh clone/local dev/test run needs no Clerk account (same opt-in pattern
+// as server/providers/ and Supabase caching). When unset, every request is
+// treated as one shared anonymous visitor, matching today's single-tenant
+// behavior exactly. Requiring both keys (rather than just the secret key)
+// avoids clerkMiddleware() throwing on every request when only one is set.
+const CLERK_ENABLED = Boolean(process.env.CLERK_SECRET_KEY && process.env.CLERK_PUBLISHABLE_KEY);
+if (CLERK_ENABLED) app.use(clerkMiddleware());
+const requireVisitor = CLERK_ENABLED ? requireAuth() : (_req, _res, next) => next();
 
 const API_KEY = process.env.ASSEMBLYAI_API_KEY;
 if (!API_KEY) {
@@ -40,7 +51,7 @@ app.get("/v1/boot-status", (_req, res) => {
 // Mints a short-lived Voice Agent token via whichever voice provider is
 // currently selected (server/providers/registry.js). The real API key never
 // leaves this server.
-app.get("/v1/token", async (_req, res) => {
+app.get("/v1/token", requireVisitor, async (_req, res) => {
   const { status, body } = await providers.getVoice().mintToken();
   res.status(status).json(body);
 });
@@ -101,7 +112,7 @@ function requestCacheKey(session, patternPackIds, modelProviderId) {
 // Post-hoc compliance report for one completed (or synthetic) Voice Agent
 // session: consent-event-logged (TCPA), AI-disclosure-timing (e.g. CA AB
 // 2905), and a pluggable PII pattern-set scan. Body: { session, patternPackIds }.
-app.post("/v1/analyze-session", async (req, res) => {
+app.post("/v1/analyze-session", requireVisitor, async (req, res) => {
   const { session, patternPackIds = ["generic"] } = req.body ?? {};
   if (!session || !Array.isArray(session.turns)) {
     return res.status(400).json({ error: "session with a turns array is required" });
@@ -147,6 +158,7 @@ app.post("/v1/pack-evals", async (req, res) => {
 
 app.post(
   "/v1/transcribe-upload",
+  requireVisitor,
   express.raw({ type: () => true, limit: "25mb" }),
   async (req, res) => {
     if (!Buffer.isBuffer(req.body) || req.body.length === 0) {

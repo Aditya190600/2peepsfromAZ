@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NORTHSTAR_SESSIONS, NORTHSTAR_SESSION_KEYS } from "./sampleSessions";
 import { AppShell, OpenTasksRail } from "./Chrome";
-import { saveHistoryEntry } from "./reportHistory";
+import { saveHistoryEntry, buildHistoryEntry } from "./reportHistory";
 import { headlineVerdict } from "./compliance";
 import { analyze, mapWithConcurrency, fetchBootStatus } from "./analyzeClient";
 import { FleetView, Report, sampleLabel } from "./Dashboard";
@@ -63,14 +63,9 @@ export default function Home({ navigate, path }) {
         setFleetResults(results);
         for (const { key, report } of results) {
           const verdict = headlineVerdict(report.findings);
-          saveHistoryEntry({
-            timestamp: new Date().toISOString(),
-            label: sampleLabel(key),
-            sessionId: report.sessionId,
-            verdictLevel: verdict.level,
-            verdictLabel: verdict.label,
-            report,
-          });
+          saveHistoryEntry(
+            buildHistoryEntry({ label: sampleLabel(key), report, session: NORTHSTAR_SESSIONS[key], verdict })
+          );
         }
       } catch (err) {
         setFleetError(err.message ?? "Something went wrong running the fleet analysis.");
@@ -109,7 +104,10 @@ export default function Home({ navigate, path }) {
       }
     >
       <p className="app-lede">
-        Program queue for Northstar Voice. Live calls, uploads, and samples live on Try.
+        Home auto-runs a compliance sweep across the Northstar Voice program's fleet of sample
+        sessions the moment you land here - no setup required. What you can do: watch the fleet
+        queue analyze in real time, open any flagged task to jump straight to its session, and hide
+        the task rail when you just want the scoreboard. To analyze your own call, head to Try.
       </p>
       {bootWarning && fleetResults?.length > 0 && <p className="error-banner">{bootWarning}</p>}
       {fleetError ? (
