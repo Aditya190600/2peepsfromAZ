@@ -9,6 +9,7 @@ export const CHECK_LABEL = {
   recording_consent: "Recording-consent disclosure",
   opt_out: "Opt-out honored (TCPA)",
   pii_scan: "PII pattern scan",
+  scope_adherence: "Stayed within persona scope",
 };
 
 export const CHECK_CITATION = {
@@ -17,6 +18,8 @@ export const CHECK_CITATION = {
   recording_consent: "State two-party consent (wiretap) statutes, e.g. Cal. Penal Code §632 — notice required before recording a call.",
   opt_out: "TCPA, 47 CFR §64.1200(d) — do-not-call requests must be honored.",
   pii_scan: "Pattern pack dependent — see citation on each matched pack below.",
+  scope_adherence:
+    "Unauthorized disclosure of information outside the agent's declared authority (e.g. FERPA §99.31 third-party disclosure limits, HIPAA minimum-necessary standard) depending on the persona.",
 };
 
 export const PACK_CITATION = {
@@ -36,6 +39,7 @@ export const CHECK_SEVERITY = {
   ai_disclosure: "high",
   recording_consent: "medium",
   opt_out: "high",
+  scope_adherence: "critical",
 };
 
 export const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };

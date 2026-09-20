@@ -26,6 +26,7 @@ import { analyze, transcribeUpload, mapWithConcurrency, findRateLimitedFinding }
 import { listIndustryPacks } from "./evalsClient";
 import PackEvals from "./PackEvals";
 import { parseSessionPaste } from "./sessionPaste";
+import { PERSONAS, findPersona } from "./personas";
 import "./App.css";
 
 export function formatTMs(tMs) {
@@ -355,10 +356,22 @@ export function Report({ report, audioUrl, audioRef, onSeek, loading = false, er
 }
 
 export default function Dashboard({ navigate, path }) {
-  const { status, transcript, lastSession, micSilent, connectError, connect, disconnect } =
-    useVoiceAgent();
+  const {
+    status,
+    transcript,
+    lastSession,
+    micSilent,
+    connectError,
+    recordedBlob,
+    connect,
+    disconnect,
+  } = useVoiceAgent();
   const [consent, setConsent] = useState(false);
   const [selectedPacks, setSelectedPacks] = useState([]);
+  const [personaId, setPersonaId] = useState("neutral");
+  const [seedViolation, setSeedViolation] = useState(false);
+  const [recordCall, setRecordCall] = useState(false);
+  const [recordingUrl, setRecordingUrl] = useState(null);
   const [report, setReport] = useState(null);
   const [fleetResults, setFleetResults] = useState(null);
   const [fleetLoading, setFleetLoading] = useState(false);
@@ -381,10 +394,29 @@ export default function Dashboard({ navigate, path }) {
 
   const patternPackIds = ["generic", ...selectedPacks];
   const canStart = status === "idle" || status === "error";
+  const selectedPersona = findPersona(personaId);
 
   const togglePack = (id) => {
     setSelectedPacks((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]));
   };
+
+  // Persona choice auto-selects (opt-out, not opt-in) the industry pattern
+  // pack that matches its domain - the user can still uncheck it above.
+  const selectPersona = (id) => {
+    setPersonaId(id);
+    setSeedViolation(false);
+    setSelectedPacks(findPersona(id).packIds);
+  };
+
+  useEffect(() => {
+    if (!recordedBlob) {
+      setRecordingUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(recordedBlob);
+    setRecordingUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [recordedBlob]);
 
   const onSeek = (tMs) => {
     const audio = audioRef.current;
@@ -654,11 +686,56 @@ export default function Dashboard({ navigate, path }) {
           </div>
 
           <div className="section-block">
+            <h3>Persona</h3>
+            <p className="pack-note">
+              Pick who the AI agent plays for this call - each persona has an explicit CAN/CANNOT
+              scope and its own failure-mode boundary. Picking a persona auto-selects its matching
+              pattern pack above (uncheck it if you don't want it).
+            </p>
+            <div className="pack-select">
+              {PERSONAS.map((persona) => (
+                <label className={`check-row ${!canStart ? "disabled" : ""}`} key={persona.id}>
+                  <input
+                    type="radio"
+                    name="persona"
+                    checked={personaId === persona.id}
+                    onChange={() => selectPersona(persona.id)}
+                    disabled={!canStart}
+                  />
+                  <strong>{persona.label}</strong> — {persona.description}
+                </label>
+              ))}
+            </div>
+            {selectedPersona.violation && (
+              <label className={`check-row ${!canStart ? "disabled" : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={seedViolation}
+                  onChange={(e) => setSeedViolation(e.target.checked)}
+                  disabled={!canStart}
+                />
+                Seed a compliance violation on this call ({selectedPersona.violation.label}) — demos
+                the report catching a failure instead of a clean pass.
+              </label>
+            )}
+          </div>
+
+          <div className="section-block">
             <h3>Live call</h3>
+            <label className={`check-row ${!canStart ? "disabled" : ""}`}>
+              <input
+                type="checkbox"
+                checked={recordCall}
+                onChange={(e) => setRecordCall(e.target.checked)}
+                disabled={!canStart}
+              />
+              Record this call. Off by default — live call audio is never stored unless you check
+              this. A recording stays local until you choose to analyze or download it.
+            </label>
             <div className="call-row">
               <button
                 className={`btn ${canStart ? "btn-primary" : "btn-danger"}`}
-                onClick={canStart ? () => connect(consent) : disconnect}
+                onClick={canStart ? () => connect(consent, selectedPersona, seedViolation, recordCall) : disconnect}
                 disabled={canStart && !consent}
               >
                 {canStart ? "Start call" : "End call"}
@@ -718,6 +795,33 @@ export default function Dashboard({ navigate, path }) {
               </button>
             )}
             {liveError && <p className="error-banner">{liveError}</p>}
+
+            {recordingUrl && (
+              <div className="section-block recording-block">
+                <h4>Recording</h4>
+                <AudioPlayer src={recordingUrl} compact />
+                <div className="call-row">
+                  <a className="btn btn-outline" href={recordingUrl} download={`complyline-call-${Date.now()}.webm`}>
+                    Download recording
+                  </a>
+                  <button
+                    className="btn btn-outline"
+                    disabled={!consent || uploadStatus === "uploading"}
+                    onClick={() =>
+                      runUpload(new File([recordedBlob], "recording.webm", { type: recordedBlob.type }), {
+                        label: `${selectedPersona.label} — recorded call`,
+                      })
+                    }
+                  >
+                    {uploadStatus === "uploading" ? "Analyzing…" : "Analyze this recording"}
+                  </button>
+                </div>
+                <p className="pack-note">
+                  Download stays separate from analyze — analyzing sends the recording to the same
+                  upload pipeline as the sample audio below; download never does.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="section-block">
