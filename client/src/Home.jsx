@@ -109,7 +109,10 @@ export default function Home({ navigate, path }) {
       }
     >
       <p className="app-lede">
-        Program queue for Northstar Voice. Live calls, uploads, and samples live on Try.
+        Home auto-runs a compliance sweep across the Northstar Voice program's fleet of sample
+        sessions the moment you land here - no setup required. What you can do: watch the fleet
+        queue analyze in real time, open any flagged task to jump straight to its session, and hide
+        the task rail when you just want the scoreboard. To analyze your own call, head to Try.
       </p>
       {bootWarning && fleetResults?.length > 0 && <p className="error-banner">{bootWarning}</p>}
       {fleetError ? (

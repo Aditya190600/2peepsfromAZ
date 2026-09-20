@@ -34,6 +34,12 @@ export default function History({ navigate, path }) {
         ) : null
       }
     >
+      <p className="app-lede">
+        Sessions is a history list, stored in this browser's localStorage, not a shared database - it
+        won't follow you to another device or browser. Every report you've run lands here, most
+        recent first. Click any row to reopen that session's full report, or copy a session's URL to
+        deep-link straight to it later.
+      </p>
       {entries.length === 0 ? (
         <Report
           report={null}
@@ -41,10 +47,6 @@ export default function History({ navigate, path }) {
         />
       ) : (
         <div className="data-table-wrap">
-          <p className="app-lede">
-            Every report run in this browser, most recent first. Local to this browser, not a synced
-            database.
-          </p>
           <table className="data-table">
             <thead>
               <tr>
