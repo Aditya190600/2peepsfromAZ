@@ -3,6 +3,7 @@ export function matchRoute(pathname, search = "") {
 
   if (pathname === "/home") return { name: "home" };
   if (pathname === "/try") return { name: "try" };
+  if (pathname === "/api-keys") return { name: "api-keys" };
   if (pathname === "/sessions" || pathname === "/sessions/") {
     return { name: "sessions" };
   }

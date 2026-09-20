@@ -59,6 +59,6 @@ If the primary flow is headless (platform to webhook to report, no human click),
 
 - For the hackathon demo specifically: demo the real webhook round-trip live, or narrate it while showing the console (lower risk for a taped 4-minute demo)?
 - Does the in-progress live-persona-selector design (separate Lavish review) still matter as a customer-facing feature under this pivot, or does it become purely a sandbox tool for testing webhook setup?
-- API key security model: one key per account, or one per deployed voice agent?
+- ~~API key security model: one key per account, or one per deployed voice agent?~~ Resolved: multiple pack-scoped keys per account (see `server/apiKeys.js`, AGENTS.md).
 - Given the runway left before the deadline, is the webhook receiver + API keys worth building for real now, or does the deck/demo present this as the vision while the actual demo still runs the manual flow?
 - Worth a real docs check on Deepgram/LiveKit/Bland.ai before committing to a multi-platform-agnostic receiver design, if that direction is pursued.
