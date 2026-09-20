@@ -583,6 +583,12 @@ export default function Dashboard({ navigate, path }) {
     <AppShell path={path} navigate={navigate} title="Try">
       <main className="layout">
         <section className="panel session-panel">
+          <p className="app-lede">
+            Try is the analysis lab: run a live mic call against the AssemblyAI Voice Agent, upload a
+            recorded call, or pick a sample session - then check the industry pattern packs you want
+            layered on top of the generic scan before generating a report.
+          </p>
+
           <DataHandlingPanel />
 
           <ProviderSettings />
