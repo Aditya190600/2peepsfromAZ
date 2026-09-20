@@ -102,6 +102,8 @@ body {
   text-transform: none;
   letter-spacing: 0;
   font-size: 11px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .app-nav {
