@@ -121,6 +121,15 @@ export async function buildSessionFromWebhook(sessionId, opts) {
 // session id so it's discoverable rather than silently swallowed - there's
 // no per-account report inbox yet (see docs/webhook-pivot-idea.md), so this
 // gives the same visibility the manual /v1/analyze-session path already has.
+//
+// Demo/single-account limitation (captain-approved, 2026-09-20): the
+// artifact poll below authenticates with ComplyLine's own ASSEMBLYAI_API_KEY,
+// which only has read access to sessions on ComplyLine's own AssemblyAI
+// account (e.g. the Try tab). A customer's own AssemblyAI account sessions
+// are not readable with this key - production would need to capture and
+// store each customer's own AssemblyAI key too, which isn't built yet. See
+// the webhook-setup copy in client/src/ApiKeys.jsx for the customer-facing
+// version of this caveat.
 export async function processWebhookSession(
   { sessionId, scopes },
   {
