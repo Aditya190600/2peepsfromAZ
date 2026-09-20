@@ -9,7 +9,13 @@ globalThis.localStorage = {
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { saveHistoryEntry, buildHistoryEntry, loadHistory, clearHistory } from "./reportHistory.js";
+import {
+  saveHistoryEntry,
+  buildHistoryEntry,
+  loadHistory,
+  clearHistory,
+  findEntryBySessionId,
+} from "./reportHistory.js";
 
 const FINDINGS = [{ status: "pass", check: "consent" }];
 
@@ -70,4 +76,37 @@ test("sample entry stores audioKey; upload entry never does", () => {
   assert.equal(sampleEntry.audioKey, "clean-call");
   assert.equal(sampleEntry.durationMs, 3000); // falls back to last turn's tMs
   assert.equal("audioKey" in uploadEntry, false);
+});
+
+test("live-call source tag round-trips for SessionInspector's 'never stored' copy", () => {
+  clearHistory();
+  const liveSession = session([{ role: "agent", text: "Hi", tMs: 0 }]);
+  const report = { sessionId: "sess_1", findings: FINDINGS };
+  saveHistoryEntry(
+    buildHistoryEntry({
+      label: "Live call",
+      report,
+      session: liveSession,
+      verdict: { level: "clear", label: "Clear" },
+      source: "live",
+    })
+  );
+  saveHistoryEntry(
+    buildHistoryEntry({
+      label: "Uploaded audio",
+      report,
+      session: liveSession,
+      verdict: { level: "clear", label: "Clear" },
+    })
+  );
+
+  const [uploadEntry, liveEntry] = loadHistory();
+  assert.equal(liveEntry.source, "live");
+  assert.equal("source" in uploadEntry, false);
+});
+
+test("findEntryBySessionId returns null for an unknown id, not a throw", () => {
+  clearHistory();
+  assert.equal(findEntryBySessionId("sess_does_not_exist"), null);
+  assert.equal(findEntryBySessionId(undefined), null);
 });
