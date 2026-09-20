@@ -9,10 +9,10 @@ import { PACKS } from "../packs/index.js";
 test("parsePackEvalRequest rejects empty, generic, and unknown ids", () => {
   assert.equal(parsePackEvalRequest({ packIds: [] }).ok, false);
   assert.equal(parsePackEvalRequest({ packIds: ["generic"] }).ok, false);
-  assert.equal(parsePackEvalRequest({ packIds: ["ferpa"] }).ok, false);
-  const ok = parsePackEvalRequest({ packIds: ["finance", "hipaa", "hipaa"] });
+  assert.equal(parsePackEvalRequest({ packIds: ["pci"] }).ok, false);
+  const ok = parsePackEvalRequest({ packIds: ["ferpa", "finance", "hipaa", "hipaa"] });
   assert.equal(ok.ok, true);
-  assert.deepEqual(ok.packIds, ["hipaa", "finance"]);
+  assert.deepEqual(ok.packIds, ["hipaa", "finance", "ferpa"]);
 });
 
 test("HIPAA suite passes with the offline gateway", async () => {
@@ -48,12 +48,29 @@ test("finance suite passes with the offline gateway", async () => {
   assert.equal(run.suites[0].packId, "finance");
 });
 
+test("FERPA suite passes with the offline gateway", async () => {
+  const run = await evaluatePacks(["ferpa"]);
+  assert.equal(run.failed, 0);
+  assert.ok(run.passed > 0);
+  assert.equal(run.suites.length, 1);
+  assert.equal(run.suites[0].packId, "ferpa");
+  assert.match(run.suites[0].asserts, /not a FERPA compliance determination/i);
+});
+
 test("HIPAA+GLBA omitted trial keeps the other pack enabled", async () => {
   const run = await evaluatePacks(["hipaa", "finance"]);
   assert.equal(run.failed, 0);
   const hipaaCase = run.suites.find((s) => s.packId === "hipaa").cases[0];
   assert.deepEqual(hipaaCase.enabled.patternPackIds, ["generic", "hipaa", "finance"]);
   assert.deepEqual(hipaaCase.ownerOmitted.patternPackIds, ["generic", "finance"]);
+});
+
+test("FERPA omitted trial keeps the other selected packs enabled", async () => {
+  const run = await evaluatePacks(["hipaa", "finance", "ferpa"]);
+  assert.equal(run.failed, 0);
+  const ferpaCase = run.suites.find((s) => s.packId === "ferpa").cases[0];
+  assert.deepEqual(ferpaCase.enabled.patternPackIds, ["generic", "hipaa", "finance", "ferpa"]);
+  assert.deepEqual(ferpaCase.ownerOmitted.patternPackIds, ["generic", "hipaa", "finance"]);
 });
 
 test("evaluatePacks and the pack-evals handler do not touch report cache", async () => {

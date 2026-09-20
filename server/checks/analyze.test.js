@@ -164,6 +164,41 @@ test("generic scan alone misses finance identifiers; finance pack catches them a
   assert.ok(financePii.items.some((i) => i.patternId === "loan_number"));
 });
 
+const ferpaSession = {
+  sessionId: "sess_ferpa",
+  startedAt: "2026-09-03T10:00:00.000Z",
+  consentEvent: { granted: true, timestamp: "2026-09-03T09:59:00.000Z" },
+  turns: [
+    { role: "agent", text: "Hi, this is an automated assistant from the school.", tMs: 200 },
+    {
+      role: "user",
+      text: "The student number is STU-4829017 and the student's date of birth is 04/17/2009.",
+      tMs: 3000,
+    },
+  ],
+};
+
+test("generic scan alone misses FERPA identifiers; FERPA pack catches them as a drop-in extension", async () => {
+  const llmGateway = fakeLlmGateway({
+    disclosed: { disclosed: true, turnIndex: 0, quote: "automated assistant" },
+  });
+  const genericOnly = await analyzeSession(ferpaSession, {
+    patternPackIds: ["generic"],
+    llmGateway,
+  });
+  const withFerpa = await analyzeSession(ferpaSession, {
+    patternPackIds: ["generic", "ferpa"],
+    llmGateway,
+  });
+
+  const genericPii = genericOnly.findings.find((f) => f.check === "pii_scan");
+  const ferpaPii = withFerpa.findings.find((f) => f.check === "pii_scan");
+
+  assert.equal(genericPii.items.length, 0);
+  assert.ok(ferpaPii.items.some((i) => i.patternId === "student_number"));
+  assert.ok(ferpaPii.items.some((i) => i.patternId === "student_dob"));
+});
+
 test("LLM Gateway disclosure check catches a paraphrase the old hardcoded phrase list would have missed", async () => {
   const llmGateway = fakeLlmGateway({
     disclosed: { disclosed: true, turnIndex: 0, quote: "I'm a computer program helping you today" },
