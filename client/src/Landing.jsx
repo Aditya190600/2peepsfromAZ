@@ -85,10 +85,6 @@ export default function Landing({ onGetStarted, navigate, path }) {
 
       <section className="trust-strip">
         <div className="trust-strip-item">
-          <strong>No data retention risk.</strong>
-          <p>Live call audio is never written to disk; transcripts live only in browser memory.</p>
-        </div>
-        <div className="trust-strip-item">
           <strong>Built on real citations.</strong>
           <p>Every finding traces to the statute it checks — TCPA, state AI-disclosure law, HIPAA, GLBA.</p>
         </div>
