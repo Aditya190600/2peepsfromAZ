@@ -1,14 +1,16 @@
 import { genericPack } from "./generic.js";
 import { hipaaPack } from "./hipaa.js";
 import { financePack } from "./finance.js";
+import { ferpaPack } from "./ferpa.js";
 
-export { genericPack, hipaaPack, financePack };
+export { genericPack, hipaaPack, financePack, ferpaPack };
 
 /** @type {Record<string, object>} */
 export const PACKS = {
   generic: genericPack,
   hipaa: hipaaPack,
   finance: financePack,
+  ferpa: ferpaPack,
 };
 
 export const PACK_IDS = Object.keys(PACKS);

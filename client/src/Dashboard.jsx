@@ -72,6 +72,7 @@ export function sampleLabel(key) {
 const INDUSTRY_PACKS = [
   { id: "hipaa", name: "HIPAA identifiers (healthcare)" },
   { id: "finance", name: "GLBA finance identifiers (banking)" },
+  { id: "ferpa", name: "FERPA identifiers (education)" },
 ];
 
 function sessionByKey(key) {
