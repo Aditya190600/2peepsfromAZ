@@ -4,7 +4,7 @@ Status: brainstorm, not yet implemented. Captured from a captain discussion on 2
 
 ## The core idea
 
-Stop requiring a human to open ComplyLine and click "Analyze." Instead, the voice agent platform itself notifies ComplyLine automatically the instant a call ends, via a webhook the platform already supports natively. An enterprise developer plugs in a ComplyLine API key and a webhook URL when they configure their voice agent session - that's the entire integration cost. No custom hook code, no SDK, no manual step.
+Stop requiring a human to open ComplyLine and click "Analyze." Instead, the voice agent platform itself notifies ComplyLine automatically the instant a call ends, via a webhook the platform already supports natively. An enterprise developer registers a ComplyLine-pointed webhook URL and their ComplyLine API key once, as a webhook subscription on their AssemblyAI account (not a per-session config field - see "Proposed workflow" below) - that's the entire integration cost. No custom hook code, no SDK, no manual step.
 
 ## Current workflow (as shipped today)
 
@@ -16,7 +16,7 @@ A human opens the app, records a live call or uploads audio/a transcript in the 
 2. They register one webhook subscription against their AssemblyAI account: a webhook URL pointing at ComplyLine (with their ComplyLine API key embedded in it) and a secret (also their ComplyLine API key) - a one-time setup step, not a per-session config field. See "Confirmed" below for why it's a subscription, not a session parameter.
 3. A real call happens.
 4. The call ends. The platform itself POSTs the transcript to ComplyLine's webhook receiver - no code the developer has to write beyond that one config field.
-5. ComplyLine's receiver acknowledges within the platform's timeout window (verified for AssemblyAI: 10 seconds, retried on failure - see below), then runs the existing compliance checks asynchronously, off the acknowledgment path.
+5. ComplyLine's receiver acknowledges within the platform's timeout window (verified for AssemblyAI: 15 seconds, retried on failure - see below), then runs the existing compliance checks asynchronously, off the acknowledgment path.
 6. The report is stored and surfaced in the web console. Critical/High findings flag for human review.
 
 ## Confirmed: AssemblyAI's Voice Agent API supports this natively
@@ -49,8 +49,8 @@ Checked two other major voice-agent platforms directly rather than relying on ge
 Medium, not a rewrite. The entire analysis engine - consent/disclosure/PII checks, pattern packs, citations, severity ranking, report storage/history - is input-agnostic: it operates on a transcript object and doesn't care whether that transcript arrived via manual upload or a webhook. All of that is 100% reused.
 
 What's genuinely new:
-- **Webhook receiver endpoint** - doesn't exist today. Needs signature/auth verification, a fast acknowledgment, and async dispatch into the existing analysis pipeline (cannot run the LLM Gateway checks inline before acking, given the 10-second window).
-- **API key issuance/storage** - doesn't exist today. Current auth (Clerk) is for a human signing into the app, not a machine credential a voice platform authenticates with.
+- **Webhook receiver endpoint** - built, see "Webhook receiver (built)" above. Needed signature/auth verification, a fast acknowledgment, and async dispatch into the existing analysis pipeline (cannot run the LLM Gateway checks inline before acking, given the 15-second window).
+- **API key issuance/storage** - built (`server/apiKeys.js`, see AGENTS.md). Existing auth (Clerk) is for a human signing into the app, not a machine credential a voice platform authenticates with.
 
 What's repurposed, not rebuilt: the Try tab (live mic / upload) stops being the primary path and becomes a setup-testing sandbox - see below.
 
