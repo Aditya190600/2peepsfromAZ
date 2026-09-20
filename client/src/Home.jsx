@@ -12,22 +12,24 @@ const GENERIC_PACKS = ["generic"];
 
 export default function Home({ navigate, path }) {
   const [fleetResults, setFleetResults] = useState([]);
-  const [fleetLoading, setFleetLoading] = useState(true);
-  const [fleetProgress, setFleetProgress] = useState({ done: 0, total: NORTHSTAR_SESSION_KEYS.length });
+  const [fleetLoading, setFleetLoading] = useState(false);
+  const [fleetProgress, setFleetProgress] = useState(null);
   const [fleetError, setFleetError] = useState(null);
   const [bootWarning, setBootWarning] = useState(null);
   const [showTasks, setShowTasks] = useState(true);
+  const [hasRun, setHasRun] = useState(false);
   const started = useRef(false);
 
   useEffect(() => {
     document.title = "ComplyLine";
   }, []);
 
-  useEffect(() => {
+  function runNorthstar() {
     if (started.current) return;
     started.current = true;
+    setHasRun(true);
 
-    async function runNorthstar() {
+    (async () => {
       setFleetLoading(true);
       setFleetError(null);
       setFleetResults([]);
@@ -73,11 +75,10 @@ export default function Home({ navigate, path }) {
       } finally {
         setFleetLoading(false);
         setFleetProgress(null);
+        started.current = false;
       }
-    }
-
-    runNorthstar();
-  }, []);
+    })();
+  }
 
   const tasks = Array.isArray(fleetResults) ? flaggedTaskItems(fleetResults, sampleLabel) : [];
   const openSession = (sessionId) => {
@@ -91,11 +92,16 @@ export default function Home({ navigate, path }) {
       navigate={navigate}
       title="Home"
       actions={
-        Array.isArray(fleetResults) && fleetResults.length > 0 ? (
-          <button type="button" className="btn btn-outline" onClick={() => setShowTasks((open) => !open)}>
-            {showTasks ? "Hide tasks" : "Show tasks"}
+        <>
+          <button type="button" className="btn btn-primary" onClick={runNorthstar} disabled={fleetLoading}>
+            {fleetLoading ? "Running..." : hasRun ? "Run compliance sweep again" : "Run compliance sweep"}
           </button>
-        ) : null
+          {Array.isArray(fleetResults) && fleetResults.length > 0 ? (
+            <button type="button" className="btn btn-outline" onClick={() => setShowTasks((open) => !open)}>
+              {showTasks ? "Hide tasks" : "Show tasks"}
+            </button>
+          ) : null}
+        </>
       }
       rail={
         showTasks && Array.isArray(fleetResults) && fleetResults.length > 0 ? (
@@ -104,10 +110,10 @@ export default function Home({ navigate, path }) {
       }
     >
       <p className="app-lede">
-        Home auto-runs a compliance sweep across the Northstar Voice program's fleet of sample
-        sessions the moment you land here - no setup required. What you can do: watch the fleet
-        queue analyze in real time, open any flagged task to jump straight to its session, and hide
-        the task rail when you just want the scoreboard. To analyze your own call, head to Try.
+        Click "Run compliance sweep" to analyze the Northstar Voice program's fleet of sample
+        sessions. What you can do: watch the fleet queue analyze in real time, open any flagged
+        task to jump straight to its session, and hide the task rail when you just want the
+        scoreboard. To analyze your own call, head to Try.
       </p>
       {bootWarning && fleetResults?.length > 0 && <p className="error-banner">{bootWarning}</p>}
       {fleetError ? (
@@ -116,6 +122,8 @@ export default function Home({ navigate, path }) {
         <Report report={null} loading />
       ) : fleetResults?.length ? (
         <FleetView results={fleetResults} progress={fleetProgress} navigate={navigate} />
+      ) : !hasRun ? (
+        <Report report={null} idleMessage="No compliance sweep has been run yet. Click 'Run compliance sweep' to start." />
       ) : (
         <Report report={null} idleMessage="The program could not be analyzed." />
       )}
