@@ -12,7 +12,7 @@ export const GATEWAY_RATE_LIMIT_MESSAGE =
   "this keeps happening, check your account's usage and plan limits on the AssemblyAI dashboard.";
 
 export function findRateLimitedFinding(report) {
-  return report?.findings?.find((f) => f.status === "error" && f.rateLimited) ?? null;
+  return report?.findings?.find((f) => f.rateLimited) ?? null;
 }
 
 export async function fetchBootStatus() {
