@@ -33,6 +33,7 @@ export function buildHistoryEntry({ label, session, report, audioKey, durationMs
     turnCount: turns.length,
     ...(audioKey ? { audioKey } : {}),
     ...(source ? { source } : {}),
+    ...(session?.persona ? { persona: session.persona } : {}),
     findings: report.findings,
   };
 }

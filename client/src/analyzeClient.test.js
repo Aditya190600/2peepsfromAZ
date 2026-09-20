@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { analyze, ApiError, GATEWAY_RATE_LIMIT_MESSAGE, findRateLimitedFinding } from "./analyzeClient.js";
+import {
+  analyze,
+  ingestSession,
+  ApiError,
+  GATEWAY_RATE_LIMIT_MESSAGE,
+  findRateLimitedFinding,
+} from "./analyzeClient.js";
 
 function mockJsonResponse(status, body) {
   return {
@@ -74,4 +80,27 @@ test("analyze() still throws ApiError for a genuine non-ok HTTP response, distin
   global.fetch = async () => mockJsonResponse(502, { error: "boom" });
 
   await assert.rejects(() => analyze({ turns: [] }, ["generic"]), ApiError);
+});
+
+test("ingestSession() POSTs the session to /v1/ingest/:apiKey (the webhook receiver path), not /v1/analyze-session", async () => {
+  let capturedUrl;
+  let capturedBody;
+  global.fetch = async (url, opts) => {
+    capturedUrl = url;
+    capturedBody = JSON.parse(opts.body);
+    return mockJsonResponse(200, { ok: true });
+  };
+
+  const session = { sessionId: "sess_1", turns: [{ role: "agent", text: "hi", tMs: 0 }] };
+  const result = await ingestSession("cl_live_abc123", session);
+
+  assert.equal(capturedUrl, "/v1/ingest/cl_live_abc123");
+  assert.deepEqual(capturedBody, { session });
+  assert.deepEqual(result, { ok: true });
+});
+
+test("ingestSession() throws ApiError on a non-ok response (e.g. bad API key)", async () => {
+  global.fetch = async () => mockJsonResponse(401, { error: "invalid api key" });
+
+  await assert.rejects(() => ingestSession("bad-key", { turns: [] }), ApiError);
 });
