@@ -20,20 +20,27 @@ returns 503, which is itself worth confirming once.
    Generate button stays disabled until at least one pack is checked.
 4. **Custom expiry** - set expiry to 1 day at creation. Row's Expires column
    shows a date ~1 day out, status Active.
-5. **Revoke** - click Revoke on an active key. Row updates to status Revoked
-   with no further Revoke button. Confirm the underlying key now fails
-   `verifyApiKey` (via `server/apiKeys.test.js`'s revoked-key case, or a
-   direct call once the webhook receiver lands).
-6. **Expired key** - manually backdate a row's `expires_at` in Supabase (or
+5. **Edit expiry** - click "Edit expiry" on an active key. An inline row
+   swaps in with a days-from-now input (default the account's
+   `defaultExpiryDays`), Save, and Cancel. Save calls `PATCH
+   /v1/api-keys/:id` and the Expires column updates to the new date; Cancel
+   discards the edit with no request sent. Editing one row's expiry does not
+   change the key value or any other row.
+6. **Revoke** - click Revoke on an active key. Row updates to status Revoked
+   with no further Revoke or Edit expiry button. Confirm the underlying key
+   now fails `verifyApiKey` (via `server/apiKeys.test.js`'s revoked-key case,
+   or a direct call once the webhook receiver lands).
+7. **Expired key** - manually backdate a row's `expires_at` in Supabase (or
    wait out a short test expiry). Reload the list: status shows Expired, not
-   Active. Revoke still shows (expiry and revocation are independent - an
-   expired key can still be explicitly revoked for the audit trail).
-7. **Copy button** - click "Copy to clipboard" on a freshly created key,
+   Active. Revoke and Edit expiry still show (expiry and revocation are
+   independent - an expired key can still be explicitly revoked or have its
+   expiry extended for the audit trail).
+8. **Copy button** - click "Copy to clipboard" on a freshly created key,
    paste elsewhere, confirm it matches the displayed raw key exactly
    (`cl_live_` prefix included).
-8. **Nav** - "API Keys" appears in the left rail alongside Home/Sessions/Try,
+9. **Nav** - "API Keys" appears in the left rail alongside Home/Sessions/Try,
    highlights active on `/api-keys`, and is reachable from a fresh sign-in.
 
-All eight must pass with the raw key value appearing in exactly one network
+All nine must pass with the raw key value appearing in exactly one network
 response body (`POST /v1/api-keys`) - confirm via devtools network tab that
 `GET /v1/api-keys` never includes a raw key field.
