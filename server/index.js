@@ -6,6 +6,9 @@ import express from "express";
 import cors from "cors";
 import { clerkMiddleware, requireAuth } from "@clerk/express";
 import { analyzeSession } from "./checks/analyze.js";
+import { packCatalog } from "./packs/index.js";
+import { parsePackEvalRequest } from "./evals/wire.js";
+import { evaluatePacks } from "./evals/runPackEvals.js";
 import { cacheKey, warmNorthstarCache } from "./warmCache.js";
 import { loadReportCache, supabaseConfigured, upsertReportCache } from "./supabaseCache.js";
 import { NORTHSTAR_SESSIONS, NORTHSTAR_SESSION_KEYS } from "../client/src/sampleSessions.js";
@@ -105,6 +108,21 @@ function requestCacheKey(session, patternPackIds, modelProviderId) {
   const base = cacheKey(session, patternPackIds);
   return modelProviderId === "assemblyai-gateway" ? base : `${base}:${modelProviderId}`;
 }
+
+app.get("/v1/packs", requireVisitor, (_req, res) => {
+  res.json({ packs: packCatalog() });
+});
+
+app.post("/v1/pack-evals", requireVisitor, async (req, res) => {
+  const parsed = parsePackEvalRequest(req.body);
+  if (!parsed.ok) return res.status(400).json({ error: parsed.error });
+  try {
+    const run = await evaluatePacks(parsed.packIds);
+    res.json(run);
+  } catch (err) {
+    res.status(502).json({ error: `Eval run failed: ${err.message}` });
+  }
+});
 
 // Post-hoc compliance report for one completed (or synthetic) Voice Agent
 // session: consent-event-logged (TCPA), AI-disclosure-timing (e.g. CA AB

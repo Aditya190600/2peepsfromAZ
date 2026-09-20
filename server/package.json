@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node index.js",
-    "test": "node --test checks/*.test.js providers/*.test.js"
+    "test": "node --test checks/*.test.js providers/*.test.js evals/*.test.js packs/*.test.js"
   },
   "dependencies": {
     "@clerk/express": "^2.1.69",
