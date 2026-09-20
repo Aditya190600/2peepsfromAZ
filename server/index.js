@@ -9,9 +9,10 @@ import { analyzeSession } from "./checks/analyze.js";
 import { packCatalog } from "./packs/index.js";
 import { parsePackEvalRequest } from "./evals/wire.js";
 import { evaluatePacks } from "./evals/runPackEvals.js";
-import { cacheKey, warmNorthstarCache } from "./warmCache.js";
+import { requestCacheKey, warmNorthstarCache } from "./warmCache.js";
 import { loadReportCache, supabaseConfigured, upsertReportCache } from "./supabaseCache.js";
 import { createApiKey, listApiKeys, revokeApiKey, updateApiKeyExpiry, DEFAULT_EXPIRY_DAYS } from "./apiKeys.js";
+import { handleAssemblyaiWebhook, rawBodyParser } from "./webhooks/assemblyaiWebhook.js";
 import { NORTHSTAR_SESSIONS, NORTHSTAR_SESSION_KEYS } from "../client/src/sampleSessions.js";
 import * as providers from "./providers/registry.js";
 
@@ -20,6 +21,15 @@ dotenv.config({ path: path.join(__dirname, "..", ".env") });
 
 const app = express();
 app.use(cors());
+
+const reportCache = new Map();
+
+// Mounted before express.json() below: AssemblyAI signs the exact request
+// body bytes, so this route needs express.raw (see rawBodyParser), not the
+// globally-parsed JSON body every other route gets. See
+// docs/webhook-pivot-idea.md and server/webhooks/assemblyaiWebhook.js.
+app.post("/v1/webhooks/assemblyai/:apiKey", rawBodyParser, handleAssemblyaiWebhook(reportCache));
+
 app.use(express.json({ limit: "2mb" }));
 
 // Per-visitor separation for the public demo, opt-in via both Clerk keys so a
@@ -102,19 +112,6 @@ app.put("/v1/providers/credentials", (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
-
-const reportCache = new Map();
-
-// The Northstar boot-warm cache below always runs the default AssemblyAI
-// model path (see the plain `cacheKey` call in warmNorthstarCache), so a
-// live request only reuses a warmed entry when it's also on the default
-// model provider - the modelProviderId suffix here keeps a non-default
-// provider from colliding with (or serving stale results from) that shared
-// cache, without changing the key for the default demo path at all.
-function requestCacheKey(session, patternPackIds, modelProviderId) {
-  const base = cacheKey(session, patternPackIds);
-  return modelProviderId === "assemblyai-gateway" ? base : `${base}:${modelProviderId}`;
-}
 
 app.get("/v1/packs", requireVisitor, (_req, res) => {
   res.json({ packs: packCatalog() });
