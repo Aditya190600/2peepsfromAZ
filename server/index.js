@@ -12,7 +12,7 @@ import { evaluatePacks } from "./evals/runPackEvals.js";
 import { requestCacheKey, warmNorthstarCache } from "./warmCache.js";
 import { loadReportCache, supabaseConfigured, upsertReportCache } from "./supabaseCache.js";
 import { createApiKey, listApiKeys, revokeApiKey, updateApiKeyExpiry, DEFAULT_EXPIRY_DAYS } from "./apiKeys.js";
-import { handleAssemblyaiWebhook, rawBodyParser } from "./webhooks/assemblyaiWebhook.js";
+import { handleIngest } from "./webhooks/ingest.js";
 import { NORTHSTAR_SESSIONS, NORTHSTAR_SESSION_KEYS } from "../client/src/sampleSessions.js";
 import * as providers from "./providers/registry.js";
 
@@ -24,13 +24,13 @@ app.use(cors());
 
 const reportCache = new Map();
 
-// Mounted before express.json() below: AssemblyAI signs the exact request
-// body bytes, so this route needs express.raw (see rawBodyParser), not the
-// globally-parsed JSON body every other route gets. See
-// docs/webhook-pivot-idea.md and server/webhooks/assemblyaiWebhook.js.
-app.post("/v1/webhooks/assemblyai/:apiKey", rawBodyParser, handleAssemblyaiWebhook(reportCache));
-
 app.use(express.json({ limit: "2mb" }));
+
+// POST /v1/ingest/:apiKey - vendor-agnostic transcript ingest. The
+// customer's own backend POSTs a transcript here after their call ends,
+// authenticated by their ComplyLine API key. See docs/webhook-pivot-idea.md
+// and server/webhooks/ingest.js.
+app.post("/v1/ingest/:apiKey", handleIngest(reportCache));
 
 // Per-visitor separation for the public demo, opt-in via both Clerk keys so a
 // fresh clone/local dev/test run needs no Clerk account (same opt-in pattern

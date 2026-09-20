@@ -4,7 +4,9 @@ Status: brainstorm, not yet implemented. Captured from a captain discussion on 2
 
 ## The core idea
 
-Stop requiring a human to open ComplyLine and click "Analyze." Instead, the voice agent platform itself notifies ComplyLine automatically the instant a call ends, via a webhook the platform already supports natively. An enterprise developer registers a ComplyLine-pointed webhook URL and their ComplyLine API key once, as a webhook subscription on their AssemblyAI account (not a per-session config field - see "Proposed workflow" below) - that's the entire integration cost. No custom hook code, no SDK, no manual step.
+Stop requiring a human to open ComplyLine and click "Analyze." Instead, the customer's own backend - the code that already runs their voice agent and already has the transcript in hand when a call ends - POSTs that transcript straight to ComplyLine's ingest endpoint the instant the call ends, authenticated with their ComplyLine API key. This is a push from the customer, not a subscription to the voice platform's webhook: ComplyLine never talks to AssemblyAI (or any other voice platform) at all, and never stores or needs a voice-platform credential.
+
+(Revised 2026-09-20 from the original design below, which had ComplyLine subscribe to AssemblyAI's own webhook and poll AssemblyAI's API for the transcript using a ComplyLine-owned AssemblyAI key. That design only worked for sessions on ComplyLine's own AssemblyAI account - see "Webhook receiver (built)" for why.)
 
 ## Current workflow (as shipped today)
 
@@ -12,26 +14,23 @@ A human opens the app, records a live call or uploads audio/a transcript in the 
 
 ## Proposed workflow
 
-1. A developer builds a voice agent on a platform (AssemblyAI, or others - see "how standard is this" below).
-2. They register one webhook subscription against their AssemblyAI account: a webhook URL pointing at ComplyLine (with their ComplyLine API key embedded in it) and a secret (also their ComplyLine API key) - a one-time setup step, not a per-session config field. See "Confirmed" below for why it's a subscription, not a session parameter.
-3. A real call happens.
-4. The call ends. The platform itself POSTs the transcript to ComplyLine's webhook receiver - no code the developer has to write beyond that one config field.
-5. ComplyLine's receiver acknowledges within the platform's timeout window (verified for AssemblyAI: 15 seconds, retried on failure - see below), then runs the existing compliance checks asynchronously, off the acknowledgment path.
-6. The report is stored and surfaced in the web console. Critical/High findings flag for human review.
+1. A developer builds a voice agent on any platform (AssemblyAI, Vapi, Retell, or others - see "how standard is this" below). They already have code that receives the transcript when a call ends, since that's how they run their own agent.
+2. In that same call-ended handler, they add one `POST` to ComplyLine's ingest endpoint, with their ComplyLine API key and the transcript - a few lines of code, not a platform-side subscription.
+3. A real call happens. The call ends. The developer's own backend POSTs the transcript to ComplyLine.
+4. ComplyLine's receiver verifies the API key, acknowledges immediately, then runs the existing compliance checks asynchronously, off the acknowledgment path.
+5. The report is stored and surfaced in the web console. Critical/High findings flag for human review.
 
-## Confirmed: AssemblyAI's Voice Agent API supports this natively
+## Why push, not a platform webhook subscription
 
-Re-verified directly against AssemblyAI's docs while building the receiver (2026-09-20); corrects two claims from the first pass above, which described the separate pre-recorded-audio product's webhook contract, not the Voice Agent API's:
+The original design (see git history) had ComplyLine subscribe to AssemblyAI's own `session.completed` webhook and poll `GET /v1/sessions/{id}` for the transcript, authenticated with a ComplyLine-owned AssemblyAI API key. That worked, but two problems: (1) it only worked for sessions on the AssemblyAI account that key belonged to - a real customer's own AssemblyAI account sessions were never readable with it, since AssemblyAI scopes session/artifact access per account, and capturing/storing each customer's own AssemblyAI key was unbuilt follow-up work; and (2) it was AssemblyAI-specific, so a Vapi- or Retell-built agent couldn't use it at all.
 
-- **Auth is a signature, not a passthrough header.** You register a webhook subscription (`POST /v1/webhook-subscriptions`) with a `url`, `events`, and a `secret` you choose. Every delivery carries `X-AAI-Signature: t=<unix-seconds>,v1=<hex hmac-sha256>`, computed over `"{t}."` + the raw request body, keyed with that secret. There is no `webhook_auth_header_name`/`webhook_auth_header_value` for this product - that mechanism belongs to the pre-recorded-audio transcription API. ComplyLine's receiver has the customer set the subscription `secret` to their ComplyLine API key, so one credential both identifies the account (from the webhook URL) and authenticates the delivery (via the signature) - see `server/webhooks/assemblyaiWebhook.js`.
-- **The payload does not carry the transcript.** `session.completed` fires with session metadata only (duration, close reason, timestamps) - `s3_prefix` is `null` at that point. The transcript ("timeline") and recording are written separately and typically appear within ~90s; the receiver polls `GET /v1/sessions/{session_id}` until `artifacts` is populated, then downloads the pre-signed `timeline` artifact and flattens its `turns` into `analyzeSession`'s `session.turns` shape.
-- **Timeout is 15 seconds**, not 10. Delivery is at-least-once with retries on `5xx`/timeout/connection errors (not on `4xx`), so the receiver also dedupes naturally via the same content-addressed `reportCache` key the manual analyze path uses.
+The customer already has the full transcript in hand the moment their call ends - they're running their own voice agent, on whichever platform. Having them push it to ComplyLine directly removes both problems at once: no per-customer voice-platform credential to capture or store, and the endpoint works for any platform's transcript shape as long as it's normalized to `{turns: [{role, text, tMs}]}` before it's sent.
 
-Source: [AssemblyAI Voice Agent API webhooks](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/webhooks), [Recordings & transcripts](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/session-history).
+## Ingest endpoint (built)
 
-## Webhook receiver (built)
+`POST /v1/ingest/:apiKey` (`server/webhooks/ingest.js`, wired into `server/index.js`). The path segment is the customer's ComplyLine API key - the only credential involved. Body: `{session: {sessionId?, startedAt?, consentEvent?, turns: [{role, text, tMs}]}}`, the same shape `analyzeSession` and `/v1/analyze-session` already consume. Flow: verify the API key (`verifyApiKey` from `server/apiKeys.js`) and validate the payload synchronously, ack `2xx` immediately, then dispatch the existing `analyzeSession` pipeline asynchronously, off the response path. A scoped key's packs (or every pack, for the `"all"` sentinel) become that report's `patternPackIds`. Results land in the same `reportCache`/`report_cache` Supabase table the manual `/v1/analyze-session` path uses, under the same key scheme (`requestCacheKey`, shared via `server/warmCache.js`); a failed async run is `console.error`-logged with the session id rather than swallowed - there's no per-account report inbox yet (see "What does the web console become?" below), so this gives it the same visibility the manual path already has.
 
-`POST /v1/webhooks/assemblyai/:apiKey` (`server/webhooks/assemblyaiWebhook.js`, wired into `server/index.js` ahead of the global `express.json()` middleware since signature verification needs the raw body bytes). Flow: verify the API key (`verifyApiKey` from `server/apiKeys.js`) and the HMAC signature synchronously, ack `2xx` immediately, then - only for `session.completed` events - dispatch the artifact-poll + transcript-fetch + `analyzeSession` pipeline asynchronously, off the response path. A scoped key's packs (or every pack, for the `"all"` sentinel) become that report's `patternPackIds`. Results land in the same `reportCache`/`report_cache` Supabase table the manual `/v1/analyze-session` path uses, under the same key scheme (`requestCacheKey`, now shared via `server/warmCache.js`); a failed async run is `console.error`-logged with the session id rather than swallowed - there's no per-account report inbox yet (see "What does the web console become?" below), so this gives it the same visibility the manual path already has.
+There is no AssemblyAI SDK call, signature verification, or AssemblyAI credential of any kind in this path.
 
 ## How standard is this pattern across the industry?
 
@@ -42,15 +41,15 @@ Checked two other major voice-agent platforms directly rather than relying on ge
 
 **Not verified in this pass** (flagging honestly rather than guessing): Deepgram's newer Voice Agent API's exact webhook contract, LiveKit, and Bland.ai. These are plausible to follow the same pattern based on how converged the field is across the two platforms actually checked, but that claim should not be treated as confirmed until checked directly - worth doing before committing ComplyLine's receiver to a specific multi-platform contract.
 
-**Implication**: this makes a case for ComplyLine's webhook receiver being built as a genuinely platform-agnostic endpoint (accept a JSON payload with a transcript + session metadata, normalize per-vendor field names at the edge) rather than an AssemblyAI-only integration - the broad shape (register URL, get signed POST with transcript on call end, ack fast) is shared across at least the three platforms checked or partially checked so far.
+**Implication**: since every platform checked already delivers the transcript to the developer's own backend when a call ends, ComplyLine doesn't need a platform-specific webhook integration at all - the developer's own call-ended handler (which they already write, regardless of platform) can POST straight to ComplyLine's vendor-agnostic ingest endpoint. This is what the ingest endpoint below implements.
 
 ## How big a pivot is this?
 
 Medium, not a rewrite. The entire analysis engine - consent/disclosure/PII checks, pattern packs, citations, severity ranking, report storage/history - is input-agnostic: it operates on a transcript object and doesn't care whether that transcript arrived via manual upload or a webhook. All of that is 100% reused.
 
 What's genuinely new:
-- **Webhook receiver endpoint** - built, see "Webhook receiver (built)" above. Needed signature/auth verification, a fast acknowledgment, and async dispatch into the existing analysis pipeline (cannot run the LLM Gateway checks inline before acking, given the 15-second window).
-- **API key issuance/storage** - built (`server/apiKeys.js`, see AGENTS.md). Existing auth (Clerk) is for a human signing into the app, not a machine credential a voice platform authenticates with.
+- **Ingest endpoint** - built, see "Ingest endpoint (built)" above. Needed API-key verification, a fast acknowledgment, and async dispatch into the existing analysis pipeline (cannot run the LLM Gateway checks inline before acking - those calls take well over a typical client HTTP timeout).
+- **API key issuance/storage** - built (`server/apiKeys.js`, see AGENTS.md). Existing auth (Clerk) is for a human signing into the app, not a machine credential the customer's own backend authenticates with.
 
 What's repurposed, not rebuilt: the Try tab (live mic / upload) stops being the primary path and becomes a setup-testing sandbox - see below.
 
@@ -58,9 +57,9 @@ What's repurposed, not rebuilt: the Try tab (live mic / upload) stops being the 
 
 If the primary flow is headless (platform to webhook to report, no human click), the console's job shifts from "run a check" to "manage and review a stream of checks that already ran":
 
-1. **Onboarding & setup** - issue the API key, show the exact webhook URL + auth header config to paste into a voice agent session.
-2. **Inbox of auto-ingested calls** - the existing fleet/Home view, repurposed: "every call your webhook has sent us," sorted by severity.
-3. **Test-before-you-ship sandbox** - Try becomes "send us a sample call so you can confirm your webhook config actually works," a debugging tool for integration rather than the main event.
+1. **Onboarding & setup** - issue the API key, show the exact ingest endpoint URL + payload shape to POST from a call-ended handler.
+2. **Inbox of auto-ingested calls** - the existing fleet/Home view, repurposed: "every call your backend has sent us," sorted by severity.
+3. **Test-before-you-ship sandbox** - Try becomes "send us a sample call so you can confirm your integration actually works," a debugging tool for integration rather than the main event.
 4. **Alerting configuration** - who gets notified on a Critical/High finding, and how (email, Slack, a downstream webhook back to the customer).
 5. **Audit trail / export** - already exists (report history); becomes more important since it's now the compliance officer's only touchpoint with a process that otherwise runs with no human in the loop.
 6. **Usage / API key management** - calls checked this month, rotate/revoke a key, multiple keys for multiple deployed agents.

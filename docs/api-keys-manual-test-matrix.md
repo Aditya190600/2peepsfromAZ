@@ -29,7 +29,7 @@ returns 503, which is itself worth confirming once.
 6. **Revoke** - click Revoke on an active key. Row updates to status Revoked
    with no further Revoke or Edit expiry button. Confirm the underlying key
    now fails `verifyApiKey` (via `server/apiKeys.test.js`'s revoked-key case,
-   or a direct POST to `/v1/webhooks/assemblyai/:apiKey`).
+   or a direct POST to `/v1/ingest/:apiKey`).
 7. **Expired key** - manually backdate a row's `expires_at` in Supabase (or
    wait out a short test expiry). Reload the list: status shows Expired, not
    Active. Revoke and Edit expiry still show (expiry and revocation are
