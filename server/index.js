@@ -4,13 +4,14 @@ import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
-import { clerkMiddleware, requireAuth } from "@clerk/express";
+import { clerkMiddleware, requireAuth, getAuth } from "@clerk/express";
 import { analyzeSession } from "./checks/analyze.js";
 import { packCatalog } from "./packs/index.js";
 import { parsePackEvalRequest } from "./evals/wire.js";
 import { evaluatePacks } from "./evals/runPackEvals.js";
 import { cacheKey, warmNorthstarCache } from "./warmCache.js";
 import { loadReportCache, supabaseConfigured, upsertReportCache } from "./supabaseCache.js";
+import { createApiKey, listApiKeys, revokeApiKey, updateApiKeyExpiry, DEFAULT_EXPIRY_DAYS } from "./apiKeys.js";
 import { NORTHSTAR_SESSIONS, NORTHSTAR_SESSION_KEYS } from "../client/src/sampleSessions.js";
 import * as providers from "./providers/registry.js";
 
@@ -30,6 +31,12 @@ app.use(express.json({ limit: "2mb" }));
 const CLERK_ENABLED = Boolean(process.env.CLERK_SECRET_KEY && process.env.CLERK_PUBLISHABLE_KEY);
 if (CLERK_ENABLED) app.use(clerkMiddleware());
 const requireVisitor = CLERK_ENABLED ? requireAuth() : (_req, _res, next) => next();
+
+// One shared "anon" account id when Clerk isn't configured, matching the
+// single-tenant local-dev default everywhere else in this file.
+function visitorId(req) {
+  return CLERK_ENABLED ? getAuth(req).userId : "anon";
+}
 
 const API_KEY = process.env.ASSEMBLYAI_API_KEY;
 if (!API_KEY) {
@@ -111,6 +118,74 @@ function requestCacheKey(session, patternPackIds, modelProviderId) {
 
 app.get("/v1/packs", requireVisitor, (_req, res) => {
   res.json({ packs: packCatalog() });
+});
+
+// API key management for the signed-in human, via the web console. This is
+// NOT the webhook auth path - verifyApiKey (server/apiKeys.js) is what a
+// future webhook receiver calls to authenticate an inbound machine request.
+//
+// These routes require real Clerk sign-in even when the rest of the app's
+// Clerk gate is a no-op (CLERK_ENABLED false): without it, every visitor
+// would share the "anon" visitorId and pool real customer credentials under
+// one account - unacceptable for production API keys, unlike the anonymous
+// demo behavior everywhere else in this file.
+function requireRealAccount(_req, res, next) {
+  if (!CLERK_ENABLED) {
+    return res.status(503).json({ error: "API key management requires sign-in (Clerk) to be configured." });
+  }
+  next();
+}
+
+app.get("/v1/api-keys", requireVisitor, requireRealAccount, async (req, res) => {
+  try {
+    const keys = await listApiKeys(visitorId(req));
+    res.json({ keys, defaultExpiryDays: DEFAULT_EXPIRY_DAYS });
+  } catch (err) {
+    res.status(503).json({ error: err.message });
+  }
+});
+
+app.post("/v1/api-keys", requireVisitor, requireRealAccount, async (req, res) => {
+  if (!supabaseConfigured()) {
+    return res.status(503).json({ error: "API key storage requires Supabase configuration." });
+  }
+  const { name, scopes, expiresInDays } = req.body ?? {};
+  try {
+    const created = await createApiKey({
+      clerkUserId: visitorId(req),
+      name,
+      scopes,
+      ...(expiresInDays !== undefined ? { expiresInDays } : {}),
+    });
+    res.status(201).json(created);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.patch("/v1/api-keys/:id", requireVisitor, requireRealAccount, async (req, res) => {
+  if (!supabaseConfigured()) {
+    return res.status(503).json({ error: "API key storage requires Supabase configuration." });
+  }
+  const { expiresInDays } = req.body ?? {};
+  try {
+    const updated = await updateApiKeyExpiry(visitorId(req), req.params.id, Number(expiresInDays));
+    res.json(updated);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post("/v1/api-keys/:id/revoke", requireVisitor, requireRealAccount, async (req, res) => {
+  if (!supabaseConfigured()) {
+    return res.status(503).json({ error: "API key storage requires Supabase configuration." });
+  }
+  try {
+    await revokeApiKey(visitorId(req), req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 app.post("/v1/pack-evals", requireVisitor, async (req, res) => {
