@@ -105,6 +105,42 @@ test("live-call source tag round-trips for SessionInspector's 'never stored' cop
   assert.equal("source" in uploadEntry, false);
 });
 
+test("persona round-trips onto the history entry from the analyzed session (captain-confirmed requirement)", () => {
+  clearHistory();
+  const personaSession = session([{ role: "agent", text: "Hi", tMs: 0 }], {
+    persona: { id: "bank", label: "Bank teller", scope: "general banking questions only", seedViolation: false },
+  });
+  const report = { sessionId: "sess_1", findings: FINDINGS };
+  saveHistoryEntry(
+    buildHistoryEntry({
+      label: "Live call",
+      report,
+      session: personaSession,
+      verdict: { level: "clear", label: "Clear" },
+      source: "live",
+    })
+  );
+  const nonPersonaSession = session([{ role: "agent", text: "Hi", tMs: 0 }]);
+  saveHistoryEntry(
+    buildHistoryEntry({
+      label: "Live call",
+      report,
+      session: nonPersonaSession,
+      verdict: { level: "clear", label: "Clear" },
+      source: "live",
+    })
+  );
+
+  const [noPersonaEntry, personaEntry] = loadHistory();
+  assert.deepEqual(personaEntry.persona, {
+    id: "bank",
+    label: "Bank teller",
+    scope: "general banking questions only",
+    seedViolation: false,
+  });
+  assert.equal("persona" in noPersonaEntry, false);
+});
+
 test("findEntryBySessionId returns null for an unknown id, not a throw", () => {
   clearHistory();
   assert.equal(findEntryBySessionId("sess_does_not_exist"), null);
