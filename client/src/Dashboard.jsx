@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import RateLimitBanner from "./RateLimitBanner";
 import { useVoiceAgent } from "./useVoiceAgent";
 import {
   SAMPLE_SESSIONS,
@@ -21,7 +22,7 @@ import {
   reportView,
   VERDICT_CLASS,
 } from "./compliance";
-import { analyze, transcribeUpload, mapWithConcurrency } from "./analyzeClient";
+import { analyze, transcribeUpload, mapWithConcurrency, findRateLimitedFinding } from "./analyzeClient";
 import { parseSessionPaste } from "./sessionPaste";
 import "./App.css";
 
@@ -235,13 +236,21 @@ function FleetSummary({ results, progress }) {
 }
 
 export function FleetView({ results, progress, navigate }) {
+  const [rateLimitDismissed, setRateLimitDismissed] = useState(false);
+  useEffect(() => setRateLimitDismissed(false), [results]);
+
   const openReport = (sessionId) => {
     if (!navigate || !sessionId) return;
     navigate(`/sessions/${encodeURIComponent(sessionId)}`);
   };
 
+  const anyRateLimited = results.some((r) => findRateLimitedFinding(r.report));
+
   return (
     <div>
+      {anyRateLimited && !rateLimitDismissed && (
+        <RateLimitBanner onDismiss={() => setRateLimitDismissed(true)} />
+      )}
       <FleetSummary results={results} progress={progress} />
       <h3 className="monitor-heading">Sessions</h3>
       <div className="data-table-wrap">
@@ -281,6 +290,9 @@ export function FleetView({ results, progress, navigate }) {
 }
 
 export function Report({ report, audioUrl, audioRef, onSeek, loading = false, error = null, idleMessage }) {
+  const [rateLimitDismissed, setRateLimitDismissed] = useState(false);
+  useEffect(() => setRateLimitDismissed(false), [report]);
+
   const view = reportView({ report, loading, error });
   if (view.kind !== "ready") {
     return (
@@ -292,8 +304,12 @@ export function Report({ report, audioUrl, audioRef, onSeek, loading = false, er
   }
   const sortedFindings = sortFindingsBySeverity(report.findings);
   const verdict = headlineVerdict(report.findings);
+  const rateLimitedFinding = findRateLimitedFinding(report);
   return (
     <div>
+      {rateLimitedFinding && !rateLimitDismissed && (
+        <RateLimitBanner onDismiss={() => setRateLimitDismissed(true)} />
+      )}
       <div className="report-toolbar">
         <div>
           <p className="report-meta">
