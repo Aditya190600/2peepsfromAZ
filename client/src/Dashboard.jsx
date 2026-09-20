@@ -838,7 +838,7 @@ export default function Dashboard({ navigate, path }) {
                   .
                 </p>
                 <input
-                  type="text"
+                  type="password"
                   placeholder="ComplyLine API key"
                   value={webhookApiKey}
                   onChange={(e) => setWebhookApiKey(e.target.value)}
