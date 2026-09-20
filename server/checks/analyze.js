@@ -3,9 +3,7 @@ import { disclosureCheck } from "./disclosureCheck.js";
 import { recordingConsentCheck } from "./recordingConsentCheck.js";
 import { optOutCheck } from "./optOutCheck.js";
 import { piiScan } from "./piiScan.js";
-import { genericPack, hipaaPack, financePack } from "./patternPacks.js";
-
-const AVAILABLE_PACKS = { generic: genericPack, hipaa: hipaaPack, finance: financePack };
+import { PACKS as AVAILABLE_PACKS } from "../packs/index.js";
 
 // session shape: { sessionId, startedAt, consentEvent: {granted, timestamp},
 //                  turns: [{role: "user"|"agent", text, tMs}] }

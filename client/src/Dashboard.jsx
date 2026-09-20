@@ -23,6 +23,8 @@ import {
   VERDICT_CLASS,
 } from "./compliance";
 import { analyze, transcribeUpload, mapWithConcurrency, findRateLimitedFinding } from "./analyzeClient";
+import { listIndustryPacks } from "./evalsClient";
+import PackEvals from "./PackEvals";
 import { parseSessionPaste } from "./sessionPaste";
 import "./App.css";
 
@@ -70,6 +72,7 @@ export function sampleLabel(key) {
 const INDUSTRY_PACKS = [
   { id: "hipaa", name: "HIPAA identifiers (healthcare)" },
   { id: "finance", name: "GLBA finance identifiers (banking)" },
+  { id: "ferpa", name: "FERPA identifiers (education)" },
 ];
 
 function sessionByKey(key) {
@@ -385,6 +388,8 @@ export default function Dashboard({ navigate, path }) {
   const [pasteText, setPasteText] = useState("");
   const [pasteLoading, setPasteLoading] = useState(false);
   const [pasteError, setPasteError] = useState(null);
+  const [industryPacks, setIndustryPacks] = useState(INDUSTRY_PACKS);
+  const [packCatalogStale, setPackCatalogStale] = useState(false);
   const audioRef = useRef(null);
 
   const patternPackIds = ["generic", ...selectedPacks];
@@ -404,6 +409,20 @@ export default function Dashboard({ navigate, path }) {
   useEffect(() => {
     document.title = report ? `ComplyLine report — ${report.sessionId ?? "session"}` : "ComplyLine";
   }, [report]);
+
+  useEffect(() => {
+    let cancelled = false;
+    listIndustryPacks()
+      .then((packs) => {
+        if (!cancelled && packs.length > 0) setIndustryPacks(packs);
+      })
+      .catch(() => {
+        if (!cancelled) setPackCatalogStale(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const recordHistory = (label, report, session, opts = {}) => {
     const verdict = headlineVerdict(report.findings);
@@ -620,7 +639,7 @@ export default function Dashboard({ navigate, path }) {
             <h2>Session</h2>
             <p className="panel-label">Industry pattern packs (in addition to the generic scan)</p>
             <div className="pack-select">
-              {INDUSTRY_PACKS.map((pack) => (
+              {industryPacks.map((pack) => (
                 <label className="check-row" key={pack.id}>
                   <input
                     type="checkbox"
@@ -632,6 +651,12 @@ export default function Dashboard({ navigate, path }) {
               ))}
             </div>
             <p className="pack-note">Drop-in extensions over the generic scan — no core changes.</p>
+            {packCatalogStale && (
+              <p className="pack-note">
+                Pack catalog did not load. Checkboxes still work. Eval coverage copy may be stale.
+              </p>
+            )}
+            <PackEvals selectedPacks={selectedPacks} catalog={industryPacks} />
             <label className={`check-row ${!canStart ? "disabled" : ""}`}>
               <input
                 type="checkbox"
