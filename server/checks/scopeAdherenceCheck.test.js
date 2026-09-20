@@ -53,6 +53,12 @@ test("reports an error status (not a false pass) when the LLM Gateway call fails
   assert.ok(result.llmGatewayError.includes("upstream unavailable"));
 });
 
+test("flags (not passes) when the LLM Gateway response is unparseable JSON", async () => {
+  const llmGateway = async () => "not valid json at all";
+  const result = await scopeAdherenceCheck(facultySession, { llmGateway });
+  assert.equal(result.status, "flag");
+});
+
 test("flags rateLimited:true specifically for a gateway rate-limit failure", async () => {
   const llmGateway = async () => {
     throw new LlmGatewayRateLimitError(429, "too many requests for this action");

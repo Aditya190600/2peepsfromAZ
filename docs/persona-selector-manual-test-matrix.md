@@ -55,3 +55,10 @@ setup.
     existing `micSilent` banner should still fire after ~15s regardless of
     which persona is active - persona wiring must not have broken the
     existing silence-detection plumbing.
+11. **Try as webhook sandbox** - start and end a call with any non-neutral
+    persona. The "Try as webhook sandbox" block appears (it's hidden for
+    "Neutral assistant"). Paste a real ComplyLine API key (mint one at
+    `/api-keys`) and click "Send to webhook receiver" - status should flip
+    to "Sent" with no inline report (the ingest endpoint acks immediately
+    and analyzes asynchronously). Retry with a bad/expired key - status
+    should flip to "error" with the server's rejection message shown.
