@@ -19,12 +19,14 @@ export class LlmGatewayModelAccessError extends Error {
   }
 }
 
-// Thrown after retries are exhausted on a 429. Kept distinct from a generic
-// failure so callers can show honest "rate limited" copy instead of a raw
-// error dump. See docs/judging-criteria-and-enterprise-gap-assessment.md #1.
+// Thrown after retries are exhausted on a 429, or on a request that timed
+// out on every attempt (see TIMEOUT_MS below). Kept distinct from a generic
+// failure so callers can show honest "temporarily unavailable" copy instead
+// of a raw error dump. See docs/judging-criteria-and-enterprise-gap-assessment.md #1.
 export class LlmGatewayRateLimitError extends Error {
   constructor(status, body) {
-    super(`LLM Gateway rate limited after retries: ${status} ${body}`);
+    const reason = status === "timeout" ? "timed out" : "rate limited";
+    super(`LLM Gateway ${reason} after retries: ${status} ${body}`);
     this.name = "LlmGatewayRateLimitError";
   }
 }
@@ -37,6 +39,12 @@ export class LlmGatewayRateLimitError extends Error {
 // Push the budget past a full window: worst case ~61s of waiting is fine,
 // since callers are already serialized and queued behind each other.
 const RETRYABLE_429_DELAYS_MS = [1000, 2000, 4000, 8000, 16000, 30000];
+
+// A hung upstream connection (no response, not even an error) previously
+// wedged the process-wide mutex below forever - every later caller queued
+// behind it and hung identically until the process restarted. Bound every
+// attempt so a hang fails fast and retries through the same ladder as a 429.
+const DEFAULT_TIMEOUT_MS = 25_000;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -65,15 +73,33 @@ async function callLlmGatewayNow(messages, options = {}) {
     model = DEFAULT_MODEL,
     maxTokens = 1000,
     temperature = 0,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
   } = options;
 
   let lastStatus, lastText;
   for (let attempt = 0; attempt <= RETRYABLE_429_DELAYS_MS.length; attempt++) {
-    const resp = await fetch(LLM_GATEWAY_URL, {
-      method: "POST",
-      headers: { authorization: apiKey, "content-type": "application/json" },
-      body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature }),
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let resp;
+    try {
+      resp = await fetch(LLM_GATEWAY_URL, {
+        method: "POST",
+        headers: { authorization: apiKey, "content-type": "application/json" },
+        body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature }),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (err.name !== "AbortError") throw err;
+      lastStatus = "timeout";
+      lastText = `no response within ${timeoutMs}ms`;
+      if (attempt < RETRYABLE_429_DELAYS_MS.length) {
+        await sleep(RETRYABLE_429_DELAYS_MS[attempt]);
+      }
+      continue;
+    } finally {
+      clearTimeout(timer);
+    }
+
     if (resp.ok) {
       const body = await resp.json();
       return body.choices[0].message.content;

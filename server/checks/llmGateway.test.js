@@ -53,3 +53,43 @@ test("callLlmGateway keeps serializing later callers after an earlier call throw
   assert.equal(results[1].status, "fulfilled");
   assert.equal(maxInFlight, 1);
 });
+
+// Repeatedly fires all pending mocked timers, yielding to microtasks between
+// rounds so newly-scheduled timers (the next retry's abort timer, its sleep)
+// get picked up too - a plain single runAll() only catches what's pending now.
+async function flushTimers(t, rounds = 20) {
+  for (let i = 0; i < rounds; i++) {
+    t.mock.timers.runAll();
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
+
+test("callLlmGateway aborts a never-resolving fetch instead of wedging the mutex forever", async (t) => {
+  global.fetch = (_url, { signal }) =>
+    new Promise((_resolve, reject) => {
+      signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+    });
+
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const promise = assert.rejects(callLlmGateway([], { apiKey: "k", timeoutMs: 20 }), /timed out/);
+  await flushTimers(t);
+  await promise;
+});
+
+test("callLlmGateway recovers after one timed-out attempt", async (t) => {
+  let call = 0;
+  global.fetch = (_url, { signal }) => {
+    call++;
+    if (call === 1) {
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      });
+    }
+    return Promise.resolve(fakeResponse("ok"));
+  };
+
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const promise = callLlmGateway([], { apiKey: "k", timeoutMs: 20 });
+  await flushTimers(t);
+  assert.equal(await promise, "ok");
+});
