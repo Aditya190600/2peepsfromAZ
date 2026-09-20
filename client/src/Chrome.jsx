@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SignedIn, SignedOut, SignInButton, useClerk } from "@clerk/clerk-react";
+import { SignedIn, SignedOut, SignInButton, useClerk, useUser } from "@clerk/clerk-react";
 import { PRODUCT_NAV } from "./chromeNav.js";
 
 const CLERK_ENABLED = Boolean(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
@@ -52,12 +52,14 @@ function SignOutConfirm({ onCancel, onConfirm }) {
   );
 }
 
-function SignedInNav({ path, navigate }) {
+// Signed-in top-right navbar: Sign out only. Home/Sessions/Try live in the
+// app shell's left rail (see AppShell below) - the navbar used to duplicate
+// them, which read as two separate, possibly-inconsistent nav sources.
+function SignedInNav({ navigate }) {
   const { signOut } = useClerk();
   const [confirming, setConfirming] = useState(false);
   return (
     <>
-      <ProductLinks path={path} navigate={navigate} />
       <button type="button" className="site-nav-link" onClick={() => setConfirming(true)}>
         Sign out
       </button>
@@ -82,14 +84,14 @@ export function AuthNav({ path, navigate }) {
   return (
     <>
       <SignedOut>
-        <SignInButton mode="modal">
+        <SignInButton mode="modal" forceRedirectUrl="/home">
           <button type="button" className="site-nav-link">
             Get started
           </button>
         </SignInButton>
       </SignedOut>
       <SignedIn>
-        <SignedInNav path={path} navigate={navigate} />
+        <SignedInNav navigate={navigate} />
       </SignedIn>
     </>
   );
@@ -127,6 +129,29 @@ export function Footer() {
   );
 }
 
+function TenantIdentity({ email }) {
+  return (
+    <p className="app-tenant">
+      Northstar Voice
+      <span className="app-tenant-mail">{email ?? "legal@northstarvoice.com"}</span>
+    </p>
+  );
+}
+
+// useUser() only mounts when Clerk is configured, so this component only
+// renders in that case - keeps the hook call unconditional within it.
+function ClerkTenantIdentity() {
+  const { user } = useUser();
+  return <TenantIdentity email={user?.primaryEmailAddress?.emailAddress} />;
+}
+
+// Shows the signed-in Clerk user's email; falls back to the static
+// "Northstar Voice" demo tenant when Clerk isn't configured, matching the
+// no-Clerk default exactly.
+function AppTenantIdentity() {
+  return CLERK_ENABLED ? <ClerkTenantIdentity /> : <TenantIdentity />;
+}
+
 export function AppShell({ path, navigate, title, actions, rail, children }) {
   return (
     <div className={`app-shell ${rail ? "has-rail" : ""}`}>
@@ -143,10 +168,7 @@ export function AppShell({ path, navigate, title, actions, rail, children }) {
       </header>
       <div className="app-body">
         <aside className="app-sidebar">
-          <p className="app-tenant">
-            Northstar Voice
-            <span className="app-tenant-mail">legal@northstarvoice.com</span>
-          </p>
+          <AppTenantIdentity />
           <nav className="app-nav" aria-label="Product">
             {PRODUCT_NAV.map((item) => (
               <a
