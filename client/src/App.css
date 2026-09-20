@@ -1363,6 +1363,19 @@ button.site-nav-link {
   line-height: 1.5;
 }
 
+.rate-limit-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rate-limit-dismiss {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
 .report-toolbar {
   display: flex;
   align-items: baseline;
