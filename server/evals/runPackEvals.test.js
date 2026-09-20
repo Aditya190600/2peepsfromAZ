@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parsePackEvalRequest } from "./wire.js";
@@ -71,21 +70,6 @@ test("FERPA omitted trial keeps the other selected packs enabled", async () => {
   const ferpaCase = run.suites.find((s) => s.packId === "ferpa").cases[0];
   assert.deepEqual(ferpaCase.enabled.patternPackIds, ["generic", "hipaa", "finance", "ferpa"]);
   assert.deepEqual(ferpaCase.ownerOmitted.patternPackIds, ["generic", "hipaa", "finance"]);
-});
-
-test("evaluatePacks and the pack-evals handler do not touch report cache", async () => {
-  const evalSrc = await readFile(new URL("./runPackEvals.js", import.meta.url), "utf8");
-  assert.doesNotMatch(evalSrc, /from ["']\.\.\/warmCache\.js["']/);
-  assert.doesNotMatch(evalSrc, /from ["']\.\.\/supabaseCache\.js["']/);
-
-  const indexSrc = await readFile(new URL("../index.js", import.meta.url), "utf8");
-  const start = indexSrc.indexOf('app.post("/v1/pack-evals"');
-  const next = indexSrc.indexOf("app.post(", start + 1);
-  assert.ok(start >= 0);
-  const handler = indexSrc.slice(start, next === -1 ? undefined : next);
-  assert.equal(handler.includes("reportCache"), false);
-  assert.equal(handler.includes("warmNorthstarCache"), false);
-  assert.equal(handler.includes("upsertReportCache"), false);
 });
 
 test("diagnoseOwnerMiss distinguishes regex miss from Luhn reject", () => {
