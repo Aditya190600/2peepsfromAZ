@@ -354,19 +354,6 @@ export function Report({ report, audioUrl, audioRef, onSeek, loading = false, er
   );
 }
 
-function DataHandlingPanel() {
-  return (
-    <div className="section-block data-handling-panel">
-      <h3>Data handling</h3>
-      <ul className="data-handling-list">
-        <li>Live call audio is never written to disk.</li>
-        <li>Transcripts exist only in your browser's memory and are discarded on reload.</li>
-        <li>Your AssemblyAI API key never leaves the server.</li>
-      </ul>
-    </div>
-  );
-}
-
 export default function Dashboard({ navigate, path }) {
   const { status, transcript, lastSession, micSilent, connectError, connect, disconnect } =
     useVoiceAgent();
@@ -630,8 +617,6 @@ export default function Dashboard({ navigate, path }) {
             recorded call, or pick a sample session - then check the industry pattern packs you want
             layered on top of the generic scan before generating a report.
           </p>
-
-          <DataHandlingPanel />
 
           <ProviderSettings />
 
