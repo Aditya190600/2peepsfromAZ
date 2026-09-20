@@ -17,7 +17,7 @@ export function loadHistory() {
 // saveHistoryEntry call site, from the session that was analyzed and the
 // report it produced. `audioKey` must be a SAMPLE_AUDIO_URLS key - never a
 // blob URL, which isn't valid across a reload/localStorage round-trip.
-export function buildHistoryEntry({ label, session, report, audioKey, durationMs, verdict }) {
+export function buildHistoryEntry({ label, session, report, audioKey, durationMs, verdict, source }) {
   const turns = (session?.turns ?? []).map(({ role, text, tMs }) => ({ role, text, tMs }));
   const lastTurnMs = turns.length ? turns[turns.length - 1].tMs : 0;
   return {
@@ -32,6 +32,7 @@ export function buildHistoryEntry({ label, session, report, audioKey, durationMs
     durationMs: durationMs ?? lastTurnMs,
     turnCount: turns.length,
     ...(audioKey ? { audioKey } : {}),
+    ...(source ? { source } : {}),
     findings: report.findings,
   };
 }
