@@ -20,7 +20,7 @@ export default function Landing({ onGetStarted, navigate, path }) {
         </p>
 
         <ul className="hero-value-list">
-          <li>Catch a missing TCPA consent record before it becomes a complaint.</li>
+          <li>Catch a missing Telephone Consumer Protection Act (TCPA) consent record before it becomes a complaint.</li>
           <li>Confirm your agent disclosed it's AI in the first few seconds, every call.</li>
           <li>Spot an SSN or account number leaking into a transcript before it spreads.</li>
           <li>Print a report you can hand to legal, not a wall of raw transcript.</li>
