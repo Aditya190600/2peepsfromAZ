@@ -11,101 +11,100 @@ import {
   ALL_SCOPES_SENTINEL,
 } from "./apiKeys.js";
 
-const ENV = { SUPABASE_URL: "https://example.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "svc-key" };
-
-function fakeSupabase(initialRows = []) {
+function fakePool(initialRows = []) {
   let rows = initialRows;
   let nextId = 1;
   const calls = [];
 
-  const fetchImpl = async (url, opts = {}) => {
-    calls.push({ url, opts });
-    const method = opts.method ?? "GET";
-    const parsed = new URL(url);
-    const params = parsed.searchParams;
+  const query = async (text, params = []) => {
+    calls.push({ text, params });
+    const sql = text.trim().toLowerCase();
 
-    if (method === "POST" && !params.has("id")) {
-      const body = JSON.parse(opts.body);
+    if (sql.startsWith("insert into api_keys")) {
+      const [clerk_user_id, name, key_hash, scopes, expires_at] = params;
       const row = {
         id: `key_${nextId++}`,
-        clerk_user_id: body.clerk_user_id,
-        name: body.name,
-        key_hash: body.key_hash,
-        scopes: body.scopes,
-        expires_at: body.expires_at,
+        clerk_user_id,
+        name,
+        key_hash,
+        scopes: JSON.parse(scopes),
+        expires_at,
         created_at: new Date().toISOString(),
         last_used_at: null,
         revoked_at: null,
       };
       rows.push(row);
-      return { ok: true, status: 201, json: async () => [row] };
+      return { rows: [row] };
     }
 
-    if (method === "PATCH") {
-      const idFilter = params.get("id")?.replace("eq.", "");
-      const userFilter = params.get("clerk_user_id")?.replace("eq.", "");
-      const body = JSON.parse(opts.body);
-      const matches = rows.filter(
-        (r) => r.id === idFilter && (userFilter === undefined || r.clerk_user_id === userFilter),
-      );
-      matches.forEach((r) => Object.assign(r, body));
-      return { ok: true, status: 200, json: async () => matches };
+    if (sql.startsWith("select") && sql.includes("clerk_user_id = $1")) {
+      const [clerkUserId] = params;
+      return { rows: rows.filter((r) => r.clerk_user_id === clerkUserId) };
     }
 
-    if (method === "GET" || method === undefined) {
-      let result = rows;
-      const userFilter = params.get("clerk_user_id")?.replace("eq.", "");
-      const hashFilter = params.get("key_hash")?.replace("eq.", "");
-      if (userFilter !== undefined && userFilter !== null) {
-        result = result.filter((r) => r.clerk_user_id === userFilter);
-      }
-      if (hashFilter !== undefined && hashFilter !== null) {
-        result = result.filter((r) => r.key_hash === hashFilter);
-      }
-      return { ok: true, status: 200, json: async () => result };
+    if (sql.startsWith("select") && sql.includes("key_hash = $1")) {
+      const [keyHash] = params;
+      return { rows: rows.filter((r) => r.key_hash === keyHash) };
     }
 
-    throw new Error(`unhandled request: ${method} ${url}`);
+    if (sql.startsWith("update api_keys set revoked_at")) {
+      const [id, clerkUserId] = params;
+      const matches = rows.filter((r) => r.id === id && r.clerk_user_id === clerkUserId);
+      matches.forEach((r) => (r.revoked_at = new Date().toISOString()));
+      return { rows: matches };
+    }
+
+    if (sql.startsWith("update api_keys set expires_at")) {
+      const [expiresAt, id, clerkUserId] = params;
+      const matches = rows.filter((r) => r.id === id && r.clerk_user_id === clerkUserId);
+      matches.forEach((r) => (r.expires_at = expiresAt));
+      return { rows: matches };
+    }
+
+    if (sql.startsWith("update api_keys set last_used_at")) {
+      const [id] = params;
+      const match = rows.find((r) => r.id === id);
+      if (match) match.last_used_at = new Date().toISOString();
+      return { rows: [] };
+    }
+
+    throw new Error(`unhandled query: ${text}`);
   };
 
-  return { fetchImpl, calls, rows: () => rows };
+  return { query, calls, rows: () => rows };
 }
 
 test("a created key verifies successfully and returns its scopes", async () => {
-  const { fetchImpl } = fakeSupabase();
-  const created = await createApiKey(
-    { clerkUserId: "user_1", name: "Prod webhook", scopes: ["hipaa"] },
-    ENV,
-    fetchImpl,
-  );
+  const pool = fakePool();
+  const created = await createApiKey({ clerkUserId: "user_1", name: "Prod webhook", scopes: ["hipaa"] }, {}, pool);
   assert.ok(created.rawKey.startsWith("cl_live_"));
 
-  const result = await verifyApiKey(created.rawKey, ENV, fetchImpl);
+  const result = await verifyApiKey(created.rawKey, {}, pool);
   assert.deepEqual(result, { valid: true, scopes: ["hipaa"], clerkUserId: "user_1" });
 });
 
 test("an unknown key fails verification", async () => {
-  const { fetchImpl } = fakeSupabase();
-  const result = await verifyApiKey("cl_live_not-a-real-key", ENV, fetchImpl);
+  const pool = fakePool();
+  const result = await verifyApiKey("cl_live_not-a-real-key", {}, pool);
   assert.deepEqual(result, { valid: false, reason: "not_found" });
 });
 
 test("a revoked key fails verification", async () => {
-  const { fetchImpl } = fakeSupabase();
+  const pool = fakePool();
   const created = await createApiKey(
     { clerkUserId: "user_1", name: "Rotated out", scopes: [ALL_SCOPES_SENTINEL] },
-    ENV,
-    fetchImpl,
+    {},
+    pool,
   );
-  await revokeApiKey("user_1", created.id, ENV, fetchImpl);
+  await revokeApiKey("user_1", created.id, {}, pool);
 
-  const result = await verifyApiKey(created.rawKey, ENV, fetchImpl);
+  const result = await verifyApiKey(created.rawKey, {}, pool);
   assert.deepEqual(result, { valid: false, reason: "revoked" });
 });
 
 test("an expired key fails verification", async () => {
   const rawKey = "cl_live_expired-key";
-  const { fetchImpl } = fakeSupabase([
+  const pool = fakePool([
     {
       id: "key_expired",
       clerk_user_id: "user_1",
@@ -118,17 +117,17 @@ test("an expired key fails verification", async () => {
       revoked_at: null,
     },
   ]);
-  const result = await verifyApiKey(rawKey, ENV, fetchImpl);
+  const result = await verifyApiKey(rawKey, {}, pool);
   assert.deepEqual(result, { valid: false, reason: "expired" });
 });
 
 test("scopes round-trip through create and list", async () => {
-  const { fetchImpl } = fakeSupabase();
-  await createApiKey({ clerkUserId: "user_1", name: "A", scopes: ["hipaa", "finance"] }, ENV, fetchImpl);
-  await createApiKey({ clerkUserId: "user_1", name: "B", scopes: [ALL_SCOPES_SENTINEL] }, ENV, fetchImpl);
-  await createApiKey({ clerkUserId: "user_2", name: "Other account", scopes: ["ferpa"] }, ENV, fetchImpl);
+  const pool = fakePool();
+  await createApiKey({ clerkUserId: "user_1", name: "A", scopes: ["hipaa", "finance"] }, {}, pool);
+  await createApiKey({ clerkUserId: "user_1", name: "B", scopes: [ALL_SCOPES_SENTINEL] }, {}, pool);
+  await createApiKey({ clerkUserId: "user_2", name: "Other account", scopes: ["ferpa"] }, {}, pool);
 
-  const keys = await listApiKeys("user_1", ENV, fetchImpl);
+  const keys = await listApiKeys("user_1", {}, pool);
   assert.equal(keys.length, 2);
   assert.deepEqual(
     keys.map((k) => k.scopes).sort(),
@@ -154,33 +153,33 @@ test("hashKey is deterministic and never reversible-looking (fixed length hex)",
 });
 
 test("revoking a key scoped to another user's id fails", async () => {
-  const { fetchImpl } = fakeSupabase();
-  const created = await createApiKey({ clerkUserId: "user_1", name: "A", scopes: ["hipaa"] }, ENV, fetchImpl);
-  await assert.rejects(() => revokeApiKey("user_2", created.id, ENV, fetchImpl));
+  const pool = fakePool();
+  const created = await createApiKey({ clerkUserId: "user_1", name: "A", scopes: ["hipaa"] }, {}, pool);
+  await assert.rejects(() => revokeApiKey("user_2", created.id, {}, pool));
 });
 
 test("updateApiKeyExpiry extends an existing key's expiry and the key still verifies", async () => {
-  const { fetchImpl } = fakeSupabase();
+  const pool = fakePool();
   const created = await createApiKey(
     { clerkUserId: "user_1", name: "A", scopes: ["hipaa"], expiresInDays: 1 },
-    ENV,
-    fetchImpl,
+    {},
+    pool,
   );
-  const updated = await updateApiKeyExpiry("user_1", created.id, 365, ENV, fetchImpl);
+  const updated = await updateApiKeyExpiry("user_1", created.id, 365, {}, pool);
   assert.ok(new Date(updated.expiresAt).getTime() > new Date(created.expiresAt).getTime());
 
-  const result = await verifyApiKey(created.rawKey, ENV, fetchImpl);
+  const result = await verifyApiKey(created.rawKey, {}, pool);
   assert.equal(result.valid, true);
 });
 
 test("updating expiry scoped to another user's id fails", async () => {
-  const { fetchImpl } = fakeSupabase();
-  const created = await createApiKey({ clerkUserId: "user_1", name: "A", scopes: ["hipaa"] }, ENV, fetchImpl);
-  await assert.rejects(() => updateApiKeyExpiry("user_2", created.id, 30, ENV, fetchImpl));
+  const pool = fakePool();
+  const created = await createApiKey({ clerkUserId: "user_1", name: "A", scopes: ["hipaa"] }, {}, pool);
+  await assert.rejects(() => updateApiKeyExpiry("user_2", created.id, 30, {}, pool));
 });
 
 test("updateApiKeyExpiry rejects non-positive day counts", async () => {
-  const { fetchImpl } = fakeSupabase();
-  const created = await createApiKey({ clerkUserId: "user_1", name: "A", scopes: ["hipaa"] }, ENV, fetchImpl);
-  await assert.rejects(() => updateApiKeyExpiry("user_1", created.id, 0, ENV, fetchImpl));
+  const pool = fakePool();
+  const created = await createApiKey({ clerkUserId: "user_1", name: "A", scopes: ["hipaa"] }, {}, pool);
+  await assert.rejects(() => updateApiKeyExpiry("user_1", created.id, 0, {}, pool));
 });

@@ -1,25 +1,13 @@
 import { randomBytes, createHash } from "node:crypto";
-import { supabaseConfigured } from "./supabaseCache.js";
+import { getPool } from "./db.js";
 import { PACK_IDS } from "./packs/index.js";
 
-const TABLE = "api_keys";
 const KEY_PREFIX = "cl_live_";
 export const DEFAULT_EXPIRY_DAYS = 90;
 export const ALL_SCOPES_SENTINEL = "all";
 const VALID_SCOPE_IDS = new Set([ALL_SCOPES_SENTINEL, ...PACK_IDS]);
 
-function headers(env) {
-  const key = env.SUPABASE_SERVICE_ROLE_KEY;
-  return {
-    apikey: key,
-    Authorization: `Bearer ${key}`,
-    "Content-Type": "application/json",
-  };
-}
-
-function restUrl(env, path) {
-  return `${env.SUPABASE_URL.replace(/\/$/, "")}/rest/v1/${path}`;
-}
+const NOT_CONFIGURED_ERROR = "API key storage requires Postgres configuration (DATABASE_URL).";
 
 function generateRawKey() {
   return `${KEY_PREFIX}${randomBytes(32).toString("base64url")}`;
@@ -57,11 +45,9 @@ function rowToMetadata(row) {
 export async function createApiKey(
   { clerkUserId, name, scopes, expiresInDays = DEFAULT_EXPIRY_DAYS },
   env = process.env,
-  fetchImpl = fetch,
+  pool = getPool(env),
 ) {
-  if (!supabaseConfigured(env)) {
-    throw new Error("API key storage requires Supabase configuration (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY).");
-  }
+  if (!pool) throw new Error(NOT_CONFIGURED_ERROR);
   if (!clerkUserId) throw new Error("clerkUserId is required");
   if (!name || !name.trim()) throw new Error("name is required");
   const scopeCheck = validateScopes(scopes);
@@ -73,94 +59,61 @@ export async function createApiKey(
   const rawKey = generateRawKey();
   const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
 
-  const resp = await fetchImpl(restUrl(env, `${TABLE}`), {
-    method: "POST",
-    headers: { ...headers(env), Prefer: "return=representation" },
-    body: JSON.stringify({
-      clerk_user_id: clerkUserId,
-      name: name.trim(),
-      key_hash: hashKey(rawKey),
-      scopes,
-      expires_at: expiresAt,
-    }),
-  });
-  if (!resp.ok) {
-    throw new Error(`Supabase insert failed: ${resp.status}`);
-  }
-  const [row] = await resp.json();
-  return { rawKey, ...rowToMetadata(row) };
+  const { rows } = await pool.query(
+    `insert into api_keys (clerk_user_id, name, key_hash, scopes, expires_at)
+     values ($1, $2, $3, $4, $5)
+     returning id, name, scopes, expires_at, created_at, last_used_at, revoked_at`,
+    [clerkUserId, name.trim(), hashKey(rawKey), JSON.stringify(scopes), expiresAt],
+  );
+  return { rawKey, ...rowToMetadata(rows[0]) };
 }
 
-export async function listApiKeys(clerkUserId, env = process.env, fetchImpl = fetch) {
-  if (!supabaseConfigured(env)) {
-    throw new Error("API key storage requires Supabase configuration (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY).");
-  }
-  const url = restUrl(
-    env,
-    `${TABLE}?clerk_user_id=eq.${encodeURIComponent(clerkUserId)}&select=id,name,scopes,expires_at,created_at,last_used_at,revoked_at&order=created_at.desc`,
+export async function listApiKeys(clerkUserId, env = process.env, pool = getPool(env)) {
+  if (!pool) throw new Error(NOT_CONFIGURED_ERROR);
+  const { rows } = await pool.query(
+    `select id, name, scopes, expires_at, created_at, last_used_at, revoked_at
+     from api_keys where clerk_user_id = $1 order by created_at desc`,
+    [clerkUserId],
   );
-  const resp = await fetchImpl(url, { headers: headers(env) });
-  if (!resp.ok) {
-    throw new Error(`Supabase list failed: ${resp.status}`);
-  }
-  const rows = await resp.json();
-  return (Array.isArray(rows) ? rows : []).map(rowToMetadata);
+  return rows.map(rowToMetadata);
 }
 
 // Soft-revoke: sets revoked_at rather than deleting, so audit history survives.
 // Scoped to clerkUserId so one user can never revoke another's key.
-export async function revokeApiKey(clerkUserId, keyId, env = process.env, fetchImpl = fetch) {
-  if (!supabaseConfigured(env)) {
-    throw new Error("API key storage requires Supabase configuration (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY).");
-  }
-  const url = restUrl(
-    env,
-    `${TABLE}?id=eq.${encodeURIComponent(keyId)}&clerk_user_id=eq.${encodeURIComponent(clerkUserId)}&select=id`,
+export async function revokeApiKey(clerkUserId, keyId, env = process.env, pool = getPool(env)) {
+  if (!pool) throw new Error(NOT_CONFIGURED_ERROR);
+  const { rows } = await pool.query(
+    `update api_keys set revoked_at = now()
+     where id = $1 and clerk_user_id = $2
+     returning id`,
+    [keyId, clerkUserId],
   );
-  const resp = await fetchImpl(url, {
-    method: "PATCH",
-    headers: { ...headers(env), Prefer: "return=representation" },
-    body: JSON.stringify({ revoked_at: new Date().toISOString() }),
-  });
-  if (!resp.ok) {
-    throw new Error(`Supabase revoke failed: ${resp.status}`);
-  }
-  const rows = await resp.json();
-  if (!Array.isArray(rows) || rows.length === 0) {
+  if (rows.length === 0) {
     throw new Error("Key not found");
   }
 }
 
 // Edits an existing key's expiry (extend or shorten). Scoped to clerkUserId
 // so one user can never edit another's key.
-export async function updateApiKeyExpiry(clerkUserId, keyId, expiresInDays, env = process.env, fetchImpl = fetch) {
-  if (!supabaseConfigured(env)) {
-    throw new Error("API key storage requires Supabase configuration (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY).");
-  }
+export async function updateApiKeyExpiry(clerkUserId, keyId, expiresInDays, env = process.env, pool = getPool(env)) {
+  if (!pool) throw new Error(NOT_CONFIGURED_ERROR);
   if (!Number.isFinite(expiresInDays) || expiresInDays <= 0) {
     throw new Error("expiresInDays must be a positive number");
   }
   const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
-  const url = restUrl(
-    env,
-    `${TABLE}?id=eq.${encodeURIComponent(keyId)}&clerk_user_id=eq.${encodeURIComponent(clerkUserId)}&select=id,name,scopes,expires_at,created_at,last_used_at,revoked_at`,
+  const { rows } = await pool.query(
+    `update api_keys set expires_at = $1
+     where id = $2 and clerk_user_id = $3
+     returning id, name, scopes, expires_at, created_at, last_used_at, revoked_at`,
+    [expiresAt, keyId, clerkUserId],
   );
-  const resp = await fetchImpl(url, {
-    method: "PATCH",
-    headers: { ...headers(env), Prefer: "return=representation" },
-    body: JSON.stringify({ expires_at: expiresAt }),
-  });
-  if (!resp.ok) {
-    throw new Error(`Supabase update failed: ${resp.status}`);
-  }
-  const rows = await resp.json();
-  if (!Array.isArray(rows) || rows.length === 0) {
+  if (rows.length === 0) {
     throw new Error("Key not found");
   }
   return rowToMetadata(rows[0]);
 }
 
-// Verification interface for the (separate, sequenced) webhook-receiver task.
+// Verification interface for the webhook receiver (server/webhooks/ingest.js).
 // Call with the raw key from an incoming request's auth header/param.
 //
 // Returns one of:
@@ -172,32 +125,26 @@ export async function updateApiKeyExpiry(clerkUserId, keyId, expiresInDays, env 
 // for intersecting that with whichever patternPackIds it wants to run.
 // On a valid key, last_used_at is updated best-effort (failure to record a
 // touch never fails verification).
-export async function verifyApiKey(rawKey, env = process.env, fetchImpl = fetch) {
-  if (!supabaseConfigured(env)) {
+export async function verifyApiKey(rawKey, env = process.env, pool = getPool(env)) {
+  if (!pool) {
     return { valid: false, reason: "not_configured" };
   }
   if (!rawKey || typeof rawKey !== "string") {
     return { valid: false, reason: "not_found" };
   }
-  const url = restUrl(
-    env,
-    `${TABLE}?key_hash=eq.${encodeURIComponent(hashKey(rawKey))}&select=id,clerk_user_id,scopes,expires_at,revoked_at&limit=1`,
+  const { rows } = await pool.query(
+    `select id, clerk_user_id, scopes, expires_at, revoked_at
+     from api_keys where key_hash = $1 limit 1`,
+    [hashKey(rawKey)],
   );
-  const resp = await fetchImpl(url, { headers: headers(env) });
-  if (!resp.ok) {
-    throw new Error(`Supabase lookup failed: ${resp.status}`);
-  }
-  const rows = await resp.json();
-  const row = Array.isArray(rows) ? rows[0] : null;
+  const row = rows[0];
   if (!row) return { valid: false, reason: "not_found" };
   if (row.revoked_at) return { valid: false, reason: "revoked" };
   if (new Date(row.expires_at).getTime() <= Date.now()) return { valid: false, reason: "expired" };
 
-  fetchImpl(restUrl(env, `${TABLE}?id=eq.${encodeURIComponent(row.id)}`), {
-    method: "PATCH",
-    headers: { ...headers(env), Prefer: "return=minimal" },
-    body: JSON.stringify({ last_used_at: new Date().toISOString() }),
-  }).catch(() => {});
+  pool
+    .query("update api_keys set last_used_at = now() where id = $1", [row.id])
+    .catch(() => {});
 
   return { valid: true, scopes: row.scopes, clerkUserId: row.clerk_user_id };
 }

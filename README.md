@@ -64,18 +64,18 @@ python3 scripts/generate-sample-audio.py
 
 Then sync the `tMs` values in `client/src/sampleSessions.js` to the printed `manifest.json` if the generator had to push turns apart to avoid overlap.
 
-### Deploy (Railway + Supabase)
+### Deploy (Railway + Railway Postgres)
 
-This app keeps `reportCache` as an in-process `Map` and optionally persists those reports to Supabase so a Railway restart does not re-run 12 LLM Gateway calls. Browser report history is still `localStorage`, not a database. Live-call audio is never stored.
+This app keeps `reportCache` as an in-process `Map` and optionally persists those reports to a Railway Postgres addon so a Railway restart does not re-run 12 LLM Gateway calls. Browser report history is still `localStorage`, not a database. Live-call audio is never stored.
 
-1. New Railway services do not read `railway.toml`. From this repo, with Railway CLI 5.42.1 or newer: `railway login`, then `railway link` (or create a project), then `railway config apply`. That applies `.railway/railway.ts` (`npm run build` / `npm start`). Railway must set `PORT`. Do not add an HTTP healthcheck on `/v1/boot-status`; Express binds `PORT` before the warm.
-2. Set Railway variables: `ASSEMBLYAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. The AssemblyAI key stays on the server. It never goes to the browser.
+1. New Railway services do not read `railway.toml`. From this repo, with Railway CLI 5.42.1 or newer: `railway login`, then `railway link` (or create a project), then `railway config apply`. That applies `.railway/railway.ts`, which declares both the `complyline` service (`npm run build` / `npm start`) and a linked `postgres` addon whose `DATABASE_URL` is auto-injected into the service. Railway must set `PORT`. Do not add an HTTP healthcheck on `/v1/boot-status`; Express binds `PORT` before the warm.
+2. Set the `ASSEMBLYAI_API_KEY` Railway variable. The AssemblyAI key stays on the server. It never goes to the browser.
 2a. Optional - per-visitor sign-in for a public demo: set `CLERK_SECRET_KEY` and `CLERK_PUBLISHABLE_KEY` on the server, and `VITE_CLERK_PUBLISHABLE_KEY` (same publishable key) as a client build-time env var. Both unset means no sign-in gate - anyone hitting the URL shares one anonymous trial, exactly as before. Both set gates `/home`, `/try`, `/sessions`, and the analyze/token/transcribe routes behind a Clerk sign-in, so each visitor gets their own trial.
-3. In Supabase, run `supabase/migrations/001_report_cache.sql`. RLS stays on; only the service role reads and writes `report_cache`.
-4. Express binds `PORT`, then hydrates the Map from Supabase, then warms any missing Northstar sessions with `patternPackIds` `["generic"]` before `GET /v1/boot-status` flips to `{ ok: true }`. Home never auto-runs the fleet sweep on load - a visitor must click "Run compliance sweep", which then POSTs the 12 sessions if boot is incomplete. It does not invent an 83 percent KPI for a failed cache.
-5. Live call audio is still not written to disk or to Supabase.
+3. On boot, if `DATABASE_URL` is set, the server runs `server/migrations/*.sql` itself (idempotent `create table if not exists`, see `server/migrate.js`) - no separate migration step needed.
+4. Express binds `PORT`, then runs migrations and hydrates the Map from Postgres, then warms any missing Northstar sessions with `patternPackIds` `["generic"]` before `GET /v1/boot-status` flips to `{ ok: true }`. Home never auto-runs the fleet sweep on load - a visitor must click "Run compliance sweep", which then POSTs the 12 sessions if boot is incomplete. It does not invent an 83 percent KPI for a failed cache.
+5. Live call audio is still not written to disk or to Postgres.
 
-Public demo URL: https://2peepsfromaz-production.up.railway.app (Railway project `exemplary-purpose`). Until that host is down, you can still run locally with `./scripts/start.sh`. Local dev does not need Supabase; the in-memory Map is enough.
+Public demo URL: https://2peepsfromaz-production.up.railway.app (Railway project `exemplary-purpose`). Until that host is down, you can still run locally with `./scripts/start.sh`. Local dev does not need `DATABASE_URL`; the in-memory Map is enough.
 
 `GET /v1/boot-status` returns `{ ok, cached, total, error }`.
 
@@ -101,7 +101,7 @@ See `AGENTS.md` for the standing convention on verifying AssemblyAI API docs bef
 ## Submission instructions
 
 1. Build the project in this repo, keeping AssemblyAI's Voice AI APIs as the core of the solution.
-2. Deploy a live demo on Railway (long-running Node) with optional Supabase persistence for the server report cache. Do not use Vercel serverless for this process-lifetime cache.
+2. Deploy a live demo on Railway (long-running Node) with optional Railway Postgres persistence for the server report cache. Do not use Vercel serverless for this process-lifetime cache.
 3. Record a demo video (under 5 minutes) and prepare a short slide deck (PDF).
 4. Go to the [AssemblyAI Voice Agent Hackathon page](https://lablab.ai/ai-hackathons/assemblyai-voice-agent-hackathon) on lablab.ai and submit through the official submission flow before **Sep 30, 2026**, including: title, descriptions, tags, cover image, video link, slides, this GitHub repo link, and the live demo URL.
 5. Register with whichever email you prefer - a company email is welcome but not required.
