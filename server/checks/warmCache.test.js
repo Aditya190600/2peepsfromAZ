@@ -125,7 +125,7 @@ test("a persist throw still caches and does not fail boot", async () => {
     sessions,
     sessionKeys,
     persist: async () => {
-      throw new Error("supabase 503");
+      throw new Error("postgres 503");
     },
   });
   assert.equal(result.ok, true);

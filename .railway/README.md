@@ -8,4 +8,4 @@ railway link
 railway config apply
 ```
 
-Set `ASSEMBLYAI_API_KEY`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY` in Railway after apply. Do not add an HTTP healthcheck on `/v1/boot-status`; Express binds `PORT` before the 12-session warm, so TCP on `PORT` is the ready signal.
+`DATABASE_URL` is auto-injected into `complyline` by the linked `postgres` resource above - no manual config needed. Set `ASSEMBLYAI_API_KEY` in Railway after apply. Do not add an HTTP healthcheck on `/v1/boot-status`; Express binds `PORT` before the 12-session warm, so TCP on `PORT` is the ready signal.
