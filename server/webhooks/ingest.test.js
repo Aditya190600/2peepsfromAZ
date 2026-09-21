@@ -88,7 +88,7 @@ test("expired key is rejected with 401", async () => {
   assert.equal(res.statusCode, 401);
 });
 
-test("Supabase not configured surfaces as 503, not 401", async () => {
+test("Postgres not configured surfaces as 503, not 401", async () => {
   const verifyKey = async () => ({ valid: false, reason: "not_configured" });
   const handler = handleIngest(new Map(), { verifyKey, dispatch: async () => {} });
   const req = fakeReq({ body: { session: { turns: [] } } });

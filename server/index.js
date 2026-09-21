@@ -10,7 +10,8 @@ import { packCatalog } from "./packs/index.js";
 import { parsePackEvalRequest } from "./evals/wire.js";
 import { evaluatePacks } from "./evals/runPackEvals.js";
 import { requestCacheKey, warmNorthstarCache } from "./warmCache.js";
-import { loadReportCache, supabaseConfigured, upsertReportCache } from "./supabaseCache.js";
+import { loadReportCache, dbConfigured, upsertReportCache } from "./reportCache.js";
+import { runMigrations } from "./migrate.js";
 import { createApiKey, listApiKeys, revokeApiKey, updateApiKeyExpiry, DEFAULT_EXPIRY_DAYS } from "./apiKeys.js";
 import { handleIngest } from "./webhooks/ingest.js";
 import { NORTHSTAR_SESSIONS, NORTHSTAR_SESSION_KEYS } from "../client/src/sampleSessions.js";
@@ -34,7 +35,7 @@ app.post("/v1/ingest/:apiKey", handleIngest(reportCache));
 
 // Per-visitor separation for the public demo, opt-in via both Clerk keys so a
 // fresh clone/local dev/test run needs no Clerk account (same opt-in pattern
-// as server/providers/ and Supabase caching). When unset, every request is
+// as server/providers/ and Postgres caching). When unset, every request is
 // treated as one shared anonymous visitor, matching today's single-tenant
 // behavior exactly. Requiring both keys (rather than just the secret key)
 // avoids clerkMiddleware() throwing on every request when only one is set.
@@ -143,8 +144,8 @@ app.get("/v1/api-keys", requireVisitor, requireRealAccount, async (req, res) => 
 });
 
 app.post("/v1/api-keys", requireVisitor, requireRealAccount, async (req, res) => {
-  if (!supabaseConfigured()) {
-    return res.status(503).json({ error: "API key storage requires Supabase configuration." });
+  if (!dbConfigured()) {
+    return res.status(503).json({ error: "API key storage requires Postgres configuration." });
   }
   const { name, scopes, expiresInDays } = req.body ?? {};
   try {
@@ -161,8 +162,8 @@ app.post("/v1/api-keys", requireVisitor, requireRealAccount, async (req, res) =>
 });
 
 app.patch("/v1/api-keys/:id", requireVisitor, requireRealAccount, async (req, res) => {
-  if (!supabaseConfigured()) {
-    return res.status(503).json({ error: "API key storage requires Supabase configuration." });
+  if (!dbConfigured()) {
+    return res.status(503).json({ error: "API key storage requires Postgres configuration." });
   }
   const { expiresInDays } = req.body ?? {};
   try {
@@ -174,8 +175,8 @@ app.patch("/v1/api-keys/:id", requireVisitor, requireRealAccount, async (req, re
 });
 
 app.post("/v1/api-keys/:id/revoke", requireVisitor, requireRealAccount, async (req, res) => {
-  if (!supabaseConfigured()) {
-    return res.status(503).json({ error: "API key storage requires Supabase configuration." });
+  if (!dbConfigured()) {
+    return res.status(503).json({ error: "API key storage requires Postgres configuration." });
   }
   try {
     await revokeApiKey(visitorId(req), req.params.id);
@@ -216,9 +217,9 @@ app.post("/v1/analyze-session", requireVisitor, async (req, res) => {
     const hasErroredCheck = report.findings.some((f) => f.status === "error");
     if (!hasErroredCheck) {
       reportCache.set(key, report);
-      if (supabaseConfigured()) {
+      if (dbConfigured()) {
         upsertReportCache(key, report).catch((persistErr) => {
-          console.error(`Supabase persist skipped: ${persistErr.message}`);
+          console.error(`Postgres persist skipped: ${persistErr.message}`);
         });
       }
     }
@@ -272,15 +273,16 @@ await new Promise((resolve) => {
   });
 });
 
-if (supabaseConfigured()) {
+if (dbConfigured()) {
   try {
+    await runMigrations();
     const rows = await loadReportCache();
     for (const row of rows) {
       if (row?.cache_key && row.report) reportCache.set(row.cache_key, row.report);
     }
-    console.log(`Northstar cache: hydrated ${reportCache.size} reports from Supabase.`);
+    console.log(`Northstar cache: hydrated ${reportCache.size} reports from Postgres.`);
   } catch (err) {
-    console.error(`Northstar cache: Supabase hydrate failed (${err.message}).`);
+    console.error(`Northstar cache: Postgres hydrate failed (${err.message}).`);
   }
 }
 
@@ -294,7 +296,7 @@ const result = await warmNorthstarCache({
   analyzeSession,
   sessions: NORTHSTAR_SESSIONS,
   sessionKeys: NORTHSTAR_SESSION_KEYS,
-  persist: supabaseConfigured()
+  persist: dbConfigured()
     ? (hash, report) => upsertReportCache(hash, report)
     : undefined,
 });

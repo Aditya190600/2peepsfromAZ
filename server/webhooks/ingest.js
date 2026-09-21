@@ -2,7 +2,7 @@ import { verifyApiKey, ALL_SCOPES_SENTINEL } from "../apiKeys.js";
 import { PACK_IDS } from "../packs/index.js";
 import { analyzeSession } from "../checks/analyze.js";
 import { requestCacheKey } from "../warmCache.js";
-import { supabaseConfigured, upsertReportCache } from "../supabaseCache.js";
+import { dbConfigured, upsertReportCache } from "../reportCache.js";
 import * as providers from "../providers/registry.js";
 
 export function resolvePatternPackIds(scopes) {
@@ -40,7 +40,7 @@ export async function processIngestedSession(
     const hasErroredCheck = report.findings.some((f) => f.status === "error");
     if (!hasErroredCheck) {
       reportCache?.set(key, report);
-      if (supabaseConfigured()) {
+      if (dbConfigured()) {
         await upsertReportCache(key, report).catch((err) => {
           console.error(`Ingest report persist failed for session ${session.sessionId}: ${err.message}`);
         });
