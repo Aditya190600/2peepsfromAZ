@@ -709,7 +709,8 @@ export default function Dashboard({ navigate, path }) {
                 onChange={(e) => setConsent(e.target.checked)}
                 disabled={!canStart}
               />
-              I am uploading or pasting recorded content for analysis. Live call audio is not stored.
+              I consent to this session being analyzed, whether a live call, an upload, or a pasted
+              transcript. Live call audio is not stored.
             </label>
           </div>
 
