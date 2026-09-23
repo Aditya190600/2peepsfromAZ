@@ -10,6 +10,7 @@ import { packCatalog } from "./packs/index.js";
 import { parsePackEvalRequest } from "./evals/wire.js";
 import { evaluatePacks } from "./evals/runPackEvals.js";
 import { evalRouter } from "./evals/router.js";
+import { telephonyRouter } from "./telephony/router.js";
 import { requestCacheKey, warmNorthstarCache } from "./warmCache.js";
 import { loadReportCache, dbConfigured, upsertReportCache } from "./reportCache.js";
 import { runMigrations } from "./migrate.js";
@@ -188,6 +189,16 @@ app.post("/v1/api-keys/:id/revoke", requireVisitor, requireRealAccount, async (r
 });
 
 app.use("/v1/evals", requireVisitor, evalRouter());
+
+const telephony = telephonyRouter();
+app.post("/v1/telephony/inbound", (req, res, next) => {
+  const expected = process.env.TELEPHONY_WEBHOOK_SECRET;
+  if (expected && req.get("x-complyline-hook-secret") === expected) {
+    return telephony.inbound(req, res, next);
+  }
+  return requireVisitor(req, res, () => telephony.inbound(req, res, next));
+});
+app.use("/v1/telephony", requireVisitor, telephony);
 
 app.post("/v1/pack-evals", requireVisitor, async (req, res) => {
   const parsed = parsePackEvalRequest(req.body);

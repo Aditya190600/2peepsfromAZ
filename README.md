@@ -34,6 +34,25 @@ Optional **HIPAA, GLBA, and FERPA identifier pattern packs** ship as real drop-i
 
 **Why this idea:** see `docs/hackathon-ideas.md`'s R3-21 entry for the full novelty/scoring rationale. In short: no scoped, protocol-level, industry-agnostic-first compliance checker for AI voice agents was found built anywhere; the addressable market is any company running a voice agent, not one vertical.
 
+## Phone numbers
+
+Telephony is off the Get started path. The browser mic on Try is unchanged. Outbound dialing is not implemented.
+
+One voice engine: **Twilio Programmable Voice**. Telnyx, Zadarma, Vonage, and Sinch are trunk recipes that deliver a finished transcript to `POST /v1/telephony/inbound`. ComplyLine does not run Asterisk, LiveKit, or a second SIP stack. It stores the number and trunk in gitignored `server/telephony/.telephony-store.json`, checks that the gateway accepts a TCP connection on port 5060, and runs the offline compliance analyzer on the posted transcript. The session then shows up in Sessions and can be reopened. Set `TELEPHONY_WEBHOOK_SECRET` in production and send it as `x-complyline-hook-secret`. US and EU Twilio SIP hosts are different. A US account uses `sip.twilio.com`. An Ireland-region account must use that region's SIP host. A mismatch fails the gateway check.
+
+Open **Numbers** in the app, or call the API:
+
+- `POST /v1/telephony/imports/twilio` with `accountSid`, `authToken`, and `e164`. A rejected token returns an error and the token is not logged or returned.
+- `POST /v1/telephony/imports/telnyx` with either `apiKey` or `sipFqdn`, plus `e164`.
+- `POST /v1/telephony/trunks` with `provider: "zadarma"`, `username`, and `password`. Gateways default to `sip.zadarma.com` and `pbx.zadarma.com`. In Zadarma, register that SIP user and forward the finished call transcript to `https://<host>/v1/telephony/inbound`.
+- `POST /v1/telephony/trunks` with `provider: "byo-sip-trunk"` and `gateways` (prefer the carrier's numeric signaling IP). Then `POST /v1/telephony/numbers` with `provider: "byo-phone-number"`, `e164`, and `credentialId`.
+
+Vonage recipe (untested against a live Vonage account): create the trunk with Vonage's SIP signaling address, attach the DID as `byo-phone-number`, and point Vonage's answer webhook at `/v1/telephony/inbound` with the transcript JSON.
+
+Sinch recipe (untested against a live Sinch account): same BYO SIP steps, using the Sinch SIP endpoint from the Sinch dashboard. Prefer the numeric IP when Sinch publishes one.
+
+`GET /v1/telephony/trunks` returns `hasSecret` and never the password, auth token, or API key.
+
 ## Dev setup
 
 **Quick start** (requires Node.js):

@@ -6,3 +6,4 @@ dist/
 !client/public/samples/*.mp3
 server/providers/.provider-store.json
 server/.eval-data/
+server/telephony/.telephony-store.json
