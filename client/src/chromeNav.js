@@ -7,4 +7,5 @@ export const PRODUCT_NAV = [
   },
   { href: "/try", label: "Try", match: (path) => path === "/try" },
   { href: "/api-keys", label: "API Keys", match: (path) => path === "/api-keys" },
+  { href: "/evals", label: "Evals", match: (path) => path === "/evals" },
 ];

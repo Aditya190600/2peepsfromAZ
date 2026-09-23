@@ -58,7 +58,7 @@ async function llmPiiScan(session, llmGateway) {
 // patternPacks.js), then supplements with an LLM Gateway pass for free-form
 // PII regex can't express. Packs stay pluggable: pass [genericPack] for the
 // core scan, or [genericPack, hipaaPack] to drop in an industry pack alongside it.
-export async function piiScan(session, patternPacks, { llmGateway = callLlmGateway } = {}) {
+export async function piiScan(session, patternPacks, { llmGateway = callLlmGateway, deterministic = false } = {}) {
   const items = [];
   const turns = session.turns ?? [];
 
@@ -82,7 +82,7 @@ export async function piiScan(session, patternPacks, { llmGateway = callLlmGatew
     }
   });
 
-  const llmResult = await llmPiiScan(session, llmGateway);
+  const llmResult = deterministic ? [] : await llmPiiScan(session, llmGateway);
   let llmGatewayError = null;
   let rateLimited = false;
   if (Array.isArray(llmResult)) {
@@ -93,7 +93,9 @@ export async function piiScan(session, patternPacks, { llmGateway = callLlmGatew
   }
 
   const status = items.length > 0 ? "flag" : llmGatewayError ? "error" : "pass";
-  const detail = rateLimited
+  const detail = deterministic
+    ? "Offline pattern packs only. Free-form PII requires semantic analysis."
+    : rateLimited
     ? "Pattern-pack scan found nothing, but the semantic pass for free-form PII (names, orgs, emails, addresses) is temporarily unavailable due to high demand. Please retry in a moment."
     : llmGatewayError
       ? "Pattern-pack scan found nothing, but the semantic pass for free-form PII could not complete right now. Please retry in a moment."
