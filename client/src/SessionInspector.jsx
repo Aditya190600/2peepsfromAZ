@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppShell } from "./Chrome";
 import { findEntryBySessionId } from "./reportHistory";
 import { SAMPLE_AUDIO_URLS } from "./sampleSessions";
@@ -32,6 +32,8 @@ function CallTab({ entry, audioUrl, audioRef, onSeek }) {
         </div>
       ) : entry.source === "live" ? (
         <p className="hint">This was a live call - audio is never stored, only the transcript.</p>
+      ) : entry.source === "pstn" ? (
+        <p className="hint">Phone audio is not stored. This is the transcript posted when the call ended.</p>
       ) : null}
       <ul className="transcript">
         {(entry.turns ?? []).map((t, i) => (
@@ -48,8 +50,35 @@ function CallTab({ entry, audioUrl, audioRef, onSeek }) {
 }
 
 export default function SessionInspector({ navigate, path, sessionId }) {
-  const [entry] = useState(() => findEntryBySessionId(sessionId));
+  const [entry, setEntry] = useState(() => findEntryBySessionId(sessionId));
+  const [loading, setLoading] = useState(() => !findEntryBySessionId(sessionId));
   const [tab, setTab] = useState("call");
+
+  useEffect(() => {
+    const local = findEntryBySessionId(sessionId);
+    if (local) {
+      setEntry(local);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    fetch(`/v1/telephony/sessions/${encodeURIComponent(sessionId)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        setEntry(data);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setEntry(null);
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
   const [shareCopied, setShareCopied] = useState(false);
   const audioRef = useRef(null);
 
@@ -106,6 +135,14 @@ export default function SessionInspector({ navigate, path, sessionId }) {
     </a>
   );
 
+  if (loading) {
+    return (
+      <AppShell path={path} navigate={navigate} title="Session" actions={actions}>
+        <p className="app-lede">Loading session.</p>
+      </AppShell>
+    );
+  }
+
   if (!entry) {
     return (
       <AppShell path={path} navigate={navigate} title="Session" actions={actions}>
@@ -143,7 +180,11 @@ export default function SessionInspector({ navigate, path, sessionId }) {
             </button>
           </div>
         </div>
-        <p className="hint">Share copies a link that only opens this session's report in this browser.</p>
+        <p className="hint">
+          {entry.source === "pstn"
+            ? "This link reopens the phone session from this server."
+            : "Share copies a link that only opens this session's report in this browser."}
+        </p>
 
         <div className="tab-bar">
           <button
