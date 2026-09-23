@@ -432,6 +432,7 @@ export default function Dashboard({ navigate, path }) {
   const audioRef = useRef(null);
   const reportHeadingRef = useRef(null);
   const liveHistoryIdRef = useRef(null);
+  const liveSessionRef = useRef(null);
 
   const patternPackIds = ["generic", ...selectedPacks];
   const canStart = status === "idle" || status === "error";
@@ -539,6 +540,10 @@ export default function Dashboard({ navigate, path }) {
   // it. The report then fills in that same entry; a pending entry left behind
   // can be regenerated from its /sessions page.
   useEffect(() => {
+    if (lastSession === liveSessionRef.current) return;
+    liveSessionRef.current = lastSession;
+    setLiveLoading(false);
+    setLiveError(null);
     liveHistoryIdRef.current = lastSession ? saveLiveHistory(null) : null;
     if (lastSession) runLiveReport();
     // eslint-disable-next-line react-hooks/exhaustive-deps
