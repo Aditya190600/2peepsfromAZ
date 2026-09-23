@@ -171,8 +171,8 @@ function IntroSteps() {
           <div>
             <strong>End the call for your report</strong>
             <p>
-              Click <em>End call</em>, then <em>Generate report for last call</em>. The report
-              here ranks findings by severity, with a regulatory citation on each.
+              Click <em>End call</em> - the report generates automatically and saves to your
+              Sessions history. It ranks findings by severity, with a regulatory citation on each.
             </p>
           </div>
         </li>
@@ -431,6 +431,8 @@ export default function Dashboard({ navigate, path }) {
   const [packCatalogStale, setPackCatalogStale] = useState(false);
   const audioRef = useRef(null);
   const reportHeadingRef = useRef(null);
+  const liveHistoryIdRef = useRef(null);
+  const liveSessionRef = useRef(null);
 
   const patternPackIds = ["generic", ...selectedPacks];
   const canStart = status === "idle" || status === "error";
@@ -497,25 +499,55 @@ export default function Dashboard({ navigate, path }) {
     setPasteError(null);
   };
 
+  // Writes the live call's history entry (replacing entry `id` in place when
+  // given) and returns its id - pending and transcript-only when `report` is null.
+  const saveLiveHistory = (report, id) =>
+    saveHistoryEntry({
+      ...buildHistoryEntry({
+        label: "Live call",
+        report,
+        session: lastSession,
+        verdict: report ? headlineVerdict(report.findings) : undefined,
+        durationMs: lastSession.endedAtMs - lastSession.startedAtMs,
+        source: "live",
+        patternPackIds,
+      }),
+      ...(id ? { id } : {}),
+    });
+
   const runLiveReport = async () => {
     if (!lastSession) return;
     setFleetResults(null);
     setActiveAudioUrl(null); // live calls aren't recorded/stored - no audio to play back
     clearLabErrors();
     setLiveLoading(true);
+    const historyId = liveHistoryIdRef.current;
+    const isCurrent = () => liveHistoryIdRef.current === historyId;
     try {
       const nextReport = await analyze(lastSession, patternPackIds);
-      setReport(nextReport);
-      recordHistory("Live call", nextReport, lastSession, {
-        durationMs: Date.now() - lastSession.startedAtMs,
-        source: "live",
-      });
+      saveLiveHistory(nextReport, historyId);
+      if (isCurrent()) setReport(nextReport);
     } catch (err) {
-      setLiveError(err.message ?? "Something went wrong generating this report.");
+      if (isCurrent()) setLiveError(err.message ?? "Something went wrong generating this report.");
     } finally {
-      setLiveLoading(false);
+      if (isCurrent()) setLiveLoading(false);
     }
   };
+
+  // A completed live call exists only in `lastSession` React state, so save a
+  // pending, transcript-only history entry the moment the call ends - before
+  // the slow analyze round-trip - so a refresh or a failed analyze can't lose
+  // it. The report then fills in that same entry; a pending entry left behind
+  // can be regenerated from its /sessions page.
+  useEffect(() => {
+    if (lastSession === liveSessionRef.current) return;
+    liveSessionRef.current = lastSession;
+    setLiveLoading(false);
+    setLiveError(null);
+    liveHistoryIdRef.current = lastSession ? saveLiveHistory(null) : null;
+    if (lastSession) runLiveReport();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastSession]);
 
   // Try-as-webhook-sandbox: the persona picker's own action for sending the
   // persona call's transcript through the same /v1/ingest/:apiKey path a
@@ -826,8 +858,8 @@ export default function Dashboard({ navigate, path }) {
               )}
               {status === "ready" && (
                 <p className="hint">
-                  Live — say hello or ask anything. Click <em>End call</em> when you're done to
-                  generate the report.
+                  Live — say hello or ask anything. Click <em>End call</em> when you're done - your
+                  report generates automatically.
                 </p>
               )}
 
@@ -863,7 +895,7 @@ export default function Dashboard({ navigate, path }) {
                   onClick={runLiveReport}
                   disabled={liveLoading}
                 >
-                  {liveLoading ? "Generating report…" : "Generate report for last call"}
+                  {liveLoading ? "Generating report…" : "Regenerate report for last call"}
                 </button>
               )}
               {liveError && <p className="error-banner">{liveError}</p>}

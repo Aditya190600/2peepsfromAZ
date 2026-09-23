@@ -15,6 +15,7 @@ import {
   loadHistory,
   clearHistory,
   findEntryBySessionId,
+  historyEntrySession,
 } from "./reportHistory.js";
 
 const FINDINGS = [{ status: "pass", check: "consent" }];
@@ -145,4 +146,51 @@ test("findEntryBySessionId returns null for an unknown id, not a throw", () => {
   clearHistory();
   assert.equal(findEntryBySessionId("sess_does_not_exist"), null);
   assert.equal(findEntryBySessionId(undefined), null);
+});
+
+test("pending live entry is saved before a report exists, then filled in place with the report", () => {
+  clearHistory();
+  saveHistoryEntry(buildHistoryEntry({ label: "Sample", report: { sessionId: "sess_old", findings: FINDINGS } }));
+  const liveSession = session([{ role: "user", text: "Hi", tMs: 0 }], {
+    consentEvent: { granted: true, timestamp: "2026-09-03T09:59:59.000Z" },
+  });
+  const id = saveHistoryEntry(
+    buildHistoryEntry({ label: "Live call", session: liveSession, source: "live", patternPackIds: ["generic", "hipaa"] })
+  );
+
+  const pending = findEntryBySessionId("sess_1");
+  assert.equal(pending.id, id);
+  assert.equal(pending.pending, true);
+  assert.equal(pending.verdictLabel, "Report pending");
+  assert.equal("report" in pending, false);
+  assert.deepEqual(pending.turns, [{ role: "user", text: "Hi", tMs: 0 }]);
+  assert.deepEqual(historyEntrySession(pending), {
+    sessionId: "sess_1",
+    startedAt: "2026-09-03T10:00:00.000Z",
+    consentEvent: { granted: true, timestamp: "2026-09-03T09:59:59.000Z" },
+    turns: [{ role: "user", text: "Hi", tMs: 0 }],
+  });
+
+  const report = { sessionId: "sess_1", findings: FINDINGS };
+  for (let i = 0; i < 2; i++) {
+    const savedId = saveHistoryEntry({
+      ...buildHistoryEntry({
+        label: "Live call",
+        report,
+        session: liveSession,
+        verdict: { level: "clear", label: "Clear" },
+        source: "live",
+      }),
+      id,
+    });
+    assert.equal(savedId, id);
+  }
+
+  const history = loadHistory();
+  assert.equal(history.length, 2);
+  assert.equal(history[0].id, id);
+  assert.equal("pending" in history[0], false);
+  assert.equal(history[0].verdictLabel, "Clear");
+  assert.deepEqual(history[0].findings, FINDINGS);
+  assert.equal(history[1].sessionId, "sess_old");
 });
