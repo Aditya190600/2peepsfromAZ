@@ -16,7 +16,7 @@ import { loadReportCache, dbConfigured, upsertReportCache } from "./reportCache.
 import { runMigrations } from "./migrate.js";
 import { createApiKey, listApiKeys, revokeApiKey, updateApiKeyExpiry, DEFAULT_EXPIRY_DAYS } from "./apiKeys.js";
 import { handleIngest } from "./webhooks/ingest.js";
-import { recordingsRouter } from "./recordingsStore.js";
+import { recordingsConfigured, uploadRecording, getRecording } from "./recordingsStore.js";
 import { NORTHSTAR_SESSIONS, NORTHSTAR_SESSION_KEYS } from "../client/src/sampleSessions.js";
 import * as providers from "./providers/registry.js";
 
@@ -269,7 +269,51 @@ app.post(
   }
 );
 
-app.use(recordingsRouter({ requireVisitor, visitorId }));
+const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
+
+// Persists a live-call recording (opt-in `recordCall` in the Try page) to the
+// Railway bucket so it survives reload and plays back in the report - see
+// server/recordingsStore.js. When the bucket isn't configured (local dev),
+// this 503s and the client falls back to the in-memory blob it already has.
+app.post(
+  "/v1/recordings/:sessionId",
+  requireVisitor,
+  express.raw({ type: () => true, limit: "25mb" }),
+  async (req, res) => {
+    const { sessionId } = req.params;
+    if (!SESSION_ID_RE.test(sessionId)) {
+      return res.status(400).json({ error: "invalid session id" });
+    }
+    if (!recordingsConfigured()) {
+      console.log(`Recordings storage not configured - skipping bucket upload for ${sessionId}.`);
+      return res.status(503).json({ error: "Recordings storage is not configured." });
+    }
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+      return res.status(400).json({ error: "recording body is required" });
+    }
+    try {
+      await uploadRecording(sessionId, req.body, req.headers["content-type"]);
+      res.status(201).json({ url: `/v1/recordings/${encodeURIComponent(sessionId)}` });
+    } catch (err) {
+      res.status(502).json({ error: `Recording upload failed: ${err.message}` });
+    }
+  }
+);
+
+app.get("/v1/recordings/:sessionId", requireVisitor, async (req, res) => {
+  const { sessionId } = req.params;
+  if (!SESSION_ID_RE.test(sessionId)) {
+    return res.status(400).json({ error: "invalid session id" });
+  }
+  try {
+    const recording = await getRecording(sessionId);
+    if (!recording) return res.status(404).json({ error: "Recording not found." });
+    res.setHeader("Content-Type", recording.contentType);
+    recording.body.pipe(res);
+  } catch (err) {
+    res.status(502).json({ error: `Recording fetch failed: ${err.message}` });
+  }
+});
 
 const dist = path.join(__dirname, "..", "client", "dist");
 if (existsSync(dist)) {

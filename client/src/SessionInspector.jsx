@@ -7,8 +7,8 @@ import {
   saveHistoryEntry,
 } from "./reportHistory";
 import { analyze } from "./analyzeClient";
-import { SAMPLE_AUDIO_URLS } from "./sampleSessions";
-import { getLiveAudioBlob } from "./liveAudioBlobs";
+import { resolveAudioUrl } from "./audioResolve";
+import { seekAudio } from "./seek";
 import { Report, Timestamp, formatTMs } from "./Dashboard";
 import AudioPlayer from "./AudioPlayer";
 import { VERDICT_CLASS, headlineVerdict } from "./compliance";
@@ -21,12 +21,6 @@ function formatWhen(iso) {
   } catch {
     return iso;
   }
-}
-
-function resolveAudioUrl(entry) {
-  if (!entry) return null;
-  if (entry.audioKey) return SAMPLE_AUDIO_URLS[entry.audioKey] ?? null;
-  return getLiveAudioBlob(entry.sessionId);
 }
 
 function CallTab({ entry, audioUrl, audioRef, onSeek }) {
@@ -92,12 +86,7 @@ export default function SessionInspector({ navigate, path, sessionId }) {
 
   const audioUrl = resolveAudioUrl(entry);
 
-  const onSeek = (tMs) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.currentTime = tMs / 1000;
-    audio.play();
-  };
+  const onSeek = (tMs) => seekAudio(audioRef, tMs);
 
   const onShare = async () => {
     const url = `${window.location.origin}/sessions/${encodeURIComponent(sessionId ?? "")}`;
@@ -126,6 +115,7 @@ export default function SessionInspector({ navigate, path, sessionId }) {
           durationMs: entry.durationMs,
           source: entry.source,
           patternPackIds: entry.patternPackIds,
+          recordingUrl: entry.recordingUrl,
         }),
         id: entry.id,
       };

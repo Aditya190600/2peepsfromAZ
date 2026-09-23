@@ -84,7 +84,7 @@ export async function transcribeUpload(file) {
 export async function uploadRecording(sessionId, blob) {
   const resp = await fetch(`/v1/recordings/${encodeURIComponent(sessionId)}`, {
     method: "POST",
-    headers: { "Content-Type": blob.type || "audio/webm" },
+    headers: { "Content-Type": blob.type || "application/octet-stream" },
     body: blob,
   });
   let body;
@@ -94,20 +94,6 @@ export async function uploadRecording(sessionId, blob) {
     throw new ApiError("The compliance server is unreachable right now.");
   }
   if (!resp.ok) throw new ApiError(body.error ?? "Recording upload failed.");
-  return body.url;
-}
-
-// Mints a play-only share link for the caller's own bucket recording
-// (server/recordingsStore.js). Returns the link's path.
-export async function shareRecording(sessionId) {
-  const resp = await fetch(`/v1/recordings/${encodeURIComponent(sessionId)}/share`, { method: "POST" });
-  let body;
-  try {
-    body = await resp.json();
-  } catch {
-    throw new ApiError("The compliance server is unreachable right now.");
-  }
-  if (!resp.ok) throw new ApiError(body.error ?? "Share link creation failed.");
   return body.url;
 }
 

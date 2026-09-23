@@ -20,7 +20,21 @@ export function loadHistory() {
 // With no `report`, builds a pending, transcript-only entry (`pending: true`)
 // that keeps enough of the session (`consentEvent`, `patternPackIds`) for
 // `historyEntrySession` to re-analyze it later.
-export function buildHistoryEntry({ label, session, report, audioKey, durationMs, verdict, source, patternPackIds }) {
+// `recordingUrl` is different from `audioKey`: it's a durable server path
+// (e.g. `/v1/recordings/<sessionId>`, see server/recordingsStore.js) for a
+// live call recording persisted to the Railway bucket - safe to store since
+// it survives reload, unlike a blob: URL.
+export function buildHistoryEntry({
+  label,
+  session,
+  report,
+  audioKey,
+  recordingUrl,
+  durationMs,
+  verdict,
+  source,
+  patternPackIds,
+}) {
   const turns = (session?.turns ?? []).map(({ role, text, tMs }) => ({ role, text, tMs }));
   const lastTurnMs = turns.length ? turns[turns.length - 1].tMs : 0;
   return {
@@ -35,6 +49,7 @@ export function buildHistoryEntry({ label, session, report, audioKey, durationMs
     durationMs: durationMs ?? lastTurnMs,
     turnCount: turns.length,
     ...(audioKey ? { audioKey } : {}),
+    ...(recordingUrl ? { recordingUrl } : {}),
     ...(source ? { source } : {}),
     ...(session?.persona ? { persona: session.persona } : {}),
     ...(session?.consentEvent ? { consentEvent: session.consentEvent } : {}),
