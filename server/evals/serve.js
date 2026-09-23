@@ -7,4 +7,9 @@ dotenv.config({ path: fileURLToPath(new URL('../../.env', import.meta.url)) });
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 app.use('/v1/evals', evalRouter());
-app.listen(process.env.PORT || 8787, () => console.log('Eval API ready'));
+const port = process.env.PORT || 8787;
+const server = app.listen(port, () => console.log('Eval API ready'));
+server.on('error', (err) => {
+  console.error(err.code === 'EADDRINUSE' ? `Port ${port} is already in use.` : err.message);
+  process.exit(1);
+});

@@ -13,11 +13,20 @@ const store = new EvalStore();
 const clean = await store.get('sess_clean_01');
 const noNetwork = () => { throw new Error('Network forbidden'); };
 test('fixtures run real analyzer offline with pinned consent and risk outcomes', async () => {
-  for (const [id, status, risk] of [['sess_clean_01', 'pass', 'clear'], ['sess_tcpa_04', 'fail', 'critical']]) {
-    const run = await runEval(await store.get(id), { completion: noNetwork });
-    assert.equal(run.checkpoints[0].status, status);
-    assert.equal(run.status, status);
-    assert.equal(headlineVerdict(run.report.findings).level, risk);
+  const expected = {
+    sess_clean_01: { status: 'pass', risk: 'clear', consent: 'pass', checkpoints: { consent: 'pass', disclosure: 'pass', pii: 'pass' } },
+    sess_tcpa_04: { status: 'fail', risk: 'critical', consent: 'flag', checkpoints: { consent: 'fail', disclosure: 'pass', pii: 'pass' } },
+  };
+  for (const [id, want] of Object.entries(expected)) {
+    let calls = 0;
+    const run = await runEval(await store.get(id), { completion: () => { calls += 1; throw new Error('Network forbidden'); } });
+    assert.equal(calls, 0);
+    assert.equal(run.status, want.status);
+    assert.equal(run.report.findings.find((f) => f.check === 'consent').status, want.consent);
+    for (const [checkpointId, status] of Object.entries(want.checkpoints)) {
+      assert.equal(run.checkpoints.find((c) => c.id === checkpointId).status, status);
+    }
+    assert.equal(headlineVerdict(run.report.findings).level, want.risk);
     assert.deepEqual(run.messages, run.document.messages);
   }
 });
