@@ -6,7 +6,7 @@ import {
   historyEntrySession,
   saveHistoryEntry,
 } from "./reportHistory";
-import { analyze } from "./analyzeClient";
+import { analyze, shareRecording } from "./analyzeClient";
 import { resolveAudioUrl } from "./audioResolve";
 import { seekAudio } from "./seek";
 import { Report, Timestamp, formatTMs } from "./Dashboard";
@@ -31,7 +31,10 @@ function CallTab({ entry, audioUrl, audioRef, onSeek }) {
           <AudioPlayer src={audioUrl} audioRef={audioRef} />
         </div>
       ) : entry.source === "live" ? (
-        <p className="hint">This was a live call - audio is never stored, only the transcript.</p>
+        <p className="hint">
+          This was a live call - audio is stored only when "Record this call" is checked, so only
+          the transcript is available here.
+        </p>
       ) : entry.source === "pstn" ? (
         <p className="hint">Phone audio is not stored. This is the transcript posted when the call ended.</p>
       ) : null}
@@ -82,6 +85,7 @@ export default function SessionInspector({ navigate, path, sessionId }) {
     };
   }, [sessionId]);
   const [shareCopied, setShareCopied] = useState(false);
+  const [audioShareStatus, setAudioShareStatus] = useState(null);
   const audioRef = useRef(null);
 
   const audioUrl = resolveAudioUrl(entry);
@@ -126,6 +130,21 @@ export default function SessionInspector({ navigate, path, sessionId }) {
     } finally {
       setGenerating(false);
     }
+  };
+
+  const onShareWithAudio = async () => {
+    try {
+      const url = `${window.location.origin}${await shareRecording(entry.sessionId)}`;
+      try {
+        await navigator.clipboard.writeText(url);
+      } catch {
+        window.prompt("Copy this play-only recording link:", url);
+      }
+      setAudioShareStatus("Copied!");
+    } catch (err) {
+      setAudioShareStatus(err.message);
+    }
+    setTimeout(() => setAudioShareStatus(null), 2000);
   };
 
   const onDownload = () => {
@@ -205,6 +224,11 @@ export default function SessionInspector({ navigate, path, sessionId }) {
             <button type="button" className="btn btn-outline" onClick={onShare}>
               {shareCopied ? "Copied!" : "Share"}
             </button>
+            {entry.recordingUrl && (
+              <button type="button" className="btn btn-outline" onClick={onShareWithAudio}>
+                {audioShareStatus ?? "Share with audio"}
+              </button>
+            )}
             <button type="button" className="btn btn-outline" onClick={onDownload}>
               Download JSON
             </button>
@@ -215,6 +239,7 @@ export default function SessionInspector({ navigate, path, sessionId }) {
           {entry.source === "pstn"
             ? "This link reopens the phone session from this server."
             : "Share copies a link that only opens this session's report in this browser."}
+          {entry.recordingUrl && " Share with audio copies a private, play-only link to this call's recording."}
         </p>
 
         <div className="tab-bar">

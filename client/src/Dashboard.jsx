@@ -494,7 +494,8 @@ export default function Dashboard({ navigate, path }) {
           }),
       };
     }
-    return () => URL.revokeObjectURL(url);
+    // A registered URL stays alive for history reopen (liveAudioBlobs.js).
+    if (!sessionId) return () => URL.revokeObjectURL(url);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordedBlob, lastSession]);
 
