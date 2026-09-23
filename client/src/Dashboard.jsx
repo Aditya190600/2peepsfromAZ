@@ -431,6 +431,7 @@ export default function Dashboard({ navigate, path }) {
   const [packCatalogStale, setPackCatalogStale] = useState(false);
   const audioRef = useRef(null);
   const reportHeadingRef = useRef(null);
+  const liveHistoryIdRef = useRef(null);
 
   const patternPackIds = ["generic", ...selectedPacks];
   const canStart = status === "idle" || status === "error";
@@ -497,6 +498,23 @@ export default function Dashboard({ navigate, path }) {
     setPasteError(null);
   };
 
+  // Writes (or, once this call has an entry, replaces in place) the live
+  // call's history entry - pending and transcript-only when `report` is null.
+  const saveLiveHistory = (report) => {
+    liveHistoryIdRef.current = saveHistoryEntry({
+      ...buildHistoryEntry({
+        label: "Live call",
+        report,
+        session: lastSession,
+        verdict: report ? headlineVerdict(report.findings) : undefined,
+        durationMs: lastSession.endedAtMs - lastSession.startedAtMs,
+        source: "live",
+        patternPackIds,
+      }),
+      ...(liveHistoryIdRef.current ? { id: liveHistoryIdRef.current } : {}),
+    });
+  };
+
   const runLiveReport = async () => {
     if (!lastSession) return;
     setFleetResults(null);
@@ -506,10 +524,7 @@ export default function Dashboard({ navigate, path }) {
     try {
       const nextReport = await analyze(lastSession, patternPackIds);
       setReport(nextReport);
-      recordHistory("Live call", nextReport, lastSession, {
-        durationMs: Date.now() - lastSession.startedAtMs,
-        source: "live",
-      });
+      saveLiveHistory(nextReport);
     } catch (err) {
       setLiveError(err.message ?? "Something went wrong generating this report.");
     } finally {
@@ -517,15 +532,16 @@ export default function Dashboard({ navigate, path }) {
     }
   };
 
-  // Every other analysis path (upload, sample, paste) generates + saves its
-  // report in the same user action that supplies the session. A live call
-  // was the one path that left the completed session sitting only in
-  // `lastSession` React state, needing a separate manual "Generate report"
-  // click before anything reached history - so a refresh right after ending
-  // the call lost the call with no history entry at all. Auto-run the report
-  // the moment the call ends so it saves before the user can navigate away.
+  // A completed live call exists only in `lastSession` React state, so save a
+  // pending, transcript-only history entry the moment the call ends - before
+  // the slow analyze round-trip - so a refresh or a failed analyze can't lose
+  // it. The report then fills in that same entry; a pending entry left behind
+  // can be regenerated from its /sessions page.
   useEffect(() => {
-    if (lastSession) runLiveReport();
+    liveHistoryIdRef.current = null;
+    if (!lastSession) return;
+    saveLiveHistory(null);
+    runLiveReport();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastSession]);
 

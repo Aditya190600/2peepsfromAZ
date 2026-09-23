@@ -6,8 +6,11 @@ generate + save a report in the same user action that supplies the session,
 ending a live call only set `lastSession` in React state and waited for a
 separate, easy-to-miss "Generate report for last call" click before anything
 was saved. A page refresh between those two steps lost the call entirely,
-with no history entry - see `client/src/Dashboard.jsx`'s `useEffect` on
-`lastSession` that now auto-runs `runLiveReport()` the moment a call ends.
+with no history entry. Now `client/src/Dashboard.jsx`'s `useEffect` on
+`lastSession` writes a pending, transcript-only history entry the moment a
+call ends, then auto-runs `runLiveReport()`, which fills in that same entry.
+`useVoiceAgent.js` sets `lastSession` when the socket closes too, so a call
+whose `session.ended` never arrives still goes through the same path.
 
 This can't be exercised by `node --test` - it needs a real microphone, a real
 AssemblyAI Voice Agent connection, and a real browser reload.
@@ -30,11 +33,14 @@ handoff:
    still shows the entry from step 2.
 4. **Refresh immediately after "End call"** - start a call, end it, and
    refresh the page as fast as possible (before the report visibly renders).
-   Once reloaded, check `/sessions` - the call should still be there, since
-   auto-generation kicks off synchronously off the `lastSession` state
-   update rather than waiting on a manual click that a fast refresh could
-   race past.
+   Once reloaded, `/sessions` should list the call with a "Report pending"
+   verdict: the pending, transcript-only entry is written synchronously the
+   moment the call ends, before the analyze request starts. Open it - the
+   Call tab shows the transcript, and "Generate report" fills in that same
+   entry (no duplicate row). Without a refresh, the entry fills in on its own
+   once analyze resolves.
 5. **Manual retry still works** - if a call's report ever needs
    regenerating (e.g. it came back rate-limited), "Regenerate report for
    last call" is still present under the transcript and re-runs the same
-   analyze-and-save path on demand.
+   analyze-and-save path on demand, updating the call's existing history
+   entry in place rather than adding a second one.
