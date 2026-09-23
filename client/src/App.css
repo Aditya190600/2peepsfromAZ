@@ -1909,3 +1909,25 @@ button.site-nav-link {
   color: var(--muted);
   margin-bottom: 20px;
 }
+
+.numbers-panel form {
+  display: grid;
+  gap: 12px;
+  max-width: 36rem;
+}
+
+.numbers-panel form label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+
+.numbers-panel form input,
+.numbers-panel form select,
+.numbers-panel form textarea {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--line, #d7d3cc);
+  border-radius: 6px;
+  background: #fff;
+}
