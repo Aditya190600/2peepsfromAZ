@@ -667,6 +667,10 @@ button.site-nav-link {
   margin-bottom: 28px;
 }
 
+.report-storage-note {
+  margin-bottom: 16px;
+}
+
 .report-storage-note a {
   color: var(--accent);
   text-decoration: none;
