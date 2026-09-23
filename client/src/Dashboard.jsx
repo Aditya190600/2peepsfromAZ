@@ -348,7 +348,13 @@ export function Report({
           This report and transcript are saved to your browser's local history - find it anytime
           on the{" "}
           {navigate ? (
-            <a href="#" onClick={(e) => { e.preventDefault(); navigate("/sessions"); }}>
+            <a
+              href="/sessions"
+              onClick={(e) => {
+                e.preventDefault();
+                navigate("/sessions");
+              }}
+            >
               Sessions
             </a>
           ) : (
@@ -424,6 +430,7 @@ export default function Dashboard({ navigate, path }) {
   const [industryPacks, setIndustryPacks] = useState(INDUSTRY_PACKS);
   const [packCatalogStale, setPackCatalogStale] = useState(false);
   const audioRef = useRef(null);
+  const reportHeadingRef = useRef(null);
 
   const patternPackIds = ["generic", ...selectedPacks];
   const canStart = status === "idle" || status === "error";
@@ -692,6 +699,15 @@ export default function Dashboard({ navigate, path }) {
     fleetError;
   const fleetReady = Array.isArray(fleetResults) && fleetResults.length > 0;
 
+  useEffect(() => {
+    if (!reportLoading && !report && !fleetReady) return;
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    reportHeadingRef.current?.scrollIntoView({
+      behavior: reduceMotion ? "auto" : "smooth",
+      block: "start",
+    });
+  }, [reportLoading, report, fleetReady]);
+
   return (
     <AppShell path={path} navigate={navigate} title="Try">
       <main className="layout">
@@ -703,7 +719,7 @@ export default function Dashboard({ navigate, path }) {
           </p>
 
           <div className="section-block">
-            <h3>Persona</h3>
+            <h2>Persona</h2>
             <p className="pack-note">
               Pick who the AI agent plays for this call - each persona has an explicit CAN/CANNOT
               scope and its own failure-mode boundary. Picking a persona auto-selects its matching
@@ -1055,12 +1071,14 @@ export default function Dashboard({ navigate, path }) {
 
           {fleetReady ? (
             <>
-              <h2>Fleet compliance report</h2>
+              <h2 ref={reportHeadingRef}>Fleet compliance report</h2>
               <FleetView results={fleetResults} progress={fleetProgress} navigate={navigate} />
             </>
           ) : reportLoading || reportError || report ? (
             <>
-              <h2 className="report-heading">Compliance report</h2>
+              <h2 className="report-heading" ref={reportHeadingRef}>
+                Compliance report
+              </h2>
               <Report
                 report={report}
                 loading={reportLoading}
