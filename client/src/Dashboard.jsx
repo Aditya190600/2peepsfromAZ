@@ -498,10 +498,10 @@ export default function Dashboard({ navigate, path }) {
     setPasteError(null);
   };
 
-  // Writes (or, once this call has an entry, replaces in place) the live
-  // call's history entry - pending and transcript-only when `report` is null.
-  const saveLiveHistory = (report) => {
-    liveHistoryIdRef.current = saveHistoryEntry({
+  // Writes the live call's history entry (replacing entry `id` in place when
+  // given) and returns its id - pending and transcript-only when `report` is null.
+  const saveLiveHistory = (report, id) =>
+    saveHistoryEntry({
       ...buildHistoryEntry({
         label: "Live call",
         report,
@@ -511,9 +511,8 @@ export default function Dashboard({ navigate, path }) {
         source: "live",
         patternPackIds,
       }),
-      ...(liveHistoryIdRef.current ? { id: liveHistoryIdRef.current } : {}),
+      ...(id ? { id } : {}),
     });
-  };
 
   const runLiveReport = async () => {
     if (!lastSession) return;
@@ -521,14 +520,16 @@ export default function Dashboard({ navigate, path }) {
     setActiveAudioUrl(null); // live calls aren't recorded/stored - no audio to play back
     clearLabErrors();
     setLiveLoading(true);
+    const historyId = liveHistoryIdRef.current;
+    const isCurrent = () => liveHistoryIdRef.current === historyId;
     try {
       const nextReport = await analyze(lastSession, patternPackIds);
-      setReport(nextReport);
-      saveLiveHistory(nextReport);
+      saveLiveHistory(nextReport, historyId);
+      if (isCurrent()) setReport(nextReport);
     } catch (err) {
-      setLiveError(err.message ?? "Something went wrong generating this report.");
+      if (isCurrent()) setLiveError(err.message ?? "Something went wrong generating this report.");
     } finally {
-      setLiveLoading(false);
+      if (isCurrent()) setLiveLoading(false);
     }
   };
 
@@ -538,10 +539,8 @@ export default function Dashboard({ navigate, path }) {
   // it. The report then fills in that same entry; a pending entry left behind
   // can be regenerated from its /sessions page.
   useEffect(() => {
-    liveHistoryIdRef.current = null;
-    if (!lastSession) return;
-    saveLiveHistory(null);
-    runLiveReport();
+    liveHistoryIdRef.current = lastSession ? saveLiveHistory(null) : null;
+    if (lastSession) runLiveReport();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastSession]);
 
