@@ -171,8 +171,8 @@ function IntroSteps() {
           <div>
             <strong>End the call for your report</strong>
             <p>
-              Click <em>End call</em>, then <em>Generate report for last call</em>. The report
-              here ranks findings by severity, with a regulatory citation on each.
+              Click <em>End call</em> - the report generates automatically and saves to your
+              Sessions history. It ranks findings by severity, with a regulatory citation on each.
             </p>
           </div>
         </li>
@@ -517,6 +517,18 @@ export default function Dashboard({ navigate, path }) {
     }
   };
 
+  // Every other analysis path (upload, sample, paste) generates + saves its
+  // report in the same user action that supplies the session. A live call
+  // was the one path that left the completed session sitting only in
+  // `lastSession` React state, needing a separate manual "Generate report"
+  // click before anything reached history - so a refresh right after ending
+  // the call lost the call with no history entry at all. Auto-run the report
+  // the moment the call ends so it saves before the user can navigate away.
+  useEffect(() => {
+    if (lastSession) runLiveReport();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastSession]);
+
   // Try-as-webhook-sandbox: the persona picker's own action for sending the
   // persona call's transcript through the same /v1/ingest/:apiKey path a
   // real customer integration would use, instead of the direct
@@ -826,8 +838,8 @@ export default function Dashboard({ navigate, path }) {
               )}
               {status === "ready" && (
                 <p className="hint">
-                  Live — say hello or ask anything. Click <em>End call</em> when you're done to
-                  generate the report.
+                  Live — say hello or ask anything. Click <em>End call</em> when you're done - your
+                  report generates automatically.
                 </p>
               )}
 
@@ -863,7 +875,7 @@ export default function Dashboard({ navigate, path }) {
                   onClick={runLiveReport}
                   disabled={liveLoading}
                 >
-                  {liveLoading ? "Generating report…" : "Generate report for last call"}
+                  {liveLoading ? "Generating report…" : "Regenerate report for last call"}
                 </button>
               )}
               {liveError && <p className="error-banner">{liveError}</p>}
