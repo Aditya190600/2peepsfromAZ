@@ -16,6 +16,7 @@ import { loadReportCache, dbConfigured, upsertReportCache } from "./reportCache.
 import { runMigrations } from "./migrate.js";
 import { createApiKey, listApiKeys, revokeApiKey, updateApiKeyExpiry, DEFAULT_EXPIRY_DAYS } from "./apiKeys.js";
 import { handleIngest } from "./webhooks/ingest.js";
+import { recordingsRouter } from "./recordingsStore.js";
 import { NORTHSTAR_SESSIONS, NORTHSTAR_SESSION_KEYS } from "../client/src/sampleSessions.js";
 import * as providers from "./providers/registry.js";
 
@@ -267,6 +268,8 @@ app.post(
     }
   }
 );
+
+app.use(recordingsRouter({ requireVisitor, visitorId }));
 
 const dist = path.join(__dirname, "..", "client", "dist");
 if (existsSync(dist)) {

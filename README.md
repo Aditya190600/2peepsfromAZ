@@ -85,14 +85,15 @@ Then sync the `tMs` values in `client/src/sampleSessions.js` to the printed `man
 
 ### Deploy (Railway + Railway Postgres)
 
-This app keeps `reportCache` as an in-process `Map` and optionally persists those reports to a Railway Postgres addon so a Railway restart does not re-run 12 LLM Gateway calls. Browser report history is still `localStorage`, not a database. Live-call audio is never stored.
+This app keeps `reportCache` as an in-process `Map` and optionally persists those reports to a Railway Postgres addon so a Railway restart does not re-run 12 LLM Gateway calls. Browser report history is still `localStorage`, not a database. Live-call audio is never stored unless the Try page's "Record this call" checkbox is on, in which case it is uploaded to the Railway bucket - see `server/recordingsStore.js`.
 
 1. New Railway services do not read `railway.toml`. From this repo, with Railway CLI 5.42.1 or newer: `railway login`, then `railway link` (or create a project), then `railway config apply`. That applies `.railway/railway.ts`, which declares both the `complyline` service (`npm run build` / `npm start`) and a linked `postgres` addon whose `DATABASE_URL` is auto-injected into the service. Railway must set `PORT`. Do not add an HTTP healthcheck on `/v1/boot-status`; Express binds `PORT` before the warm.
 2. Set the `ASSEMBLYAI_API_KEY` Railway variable. The AssemblyAI key stays on the server. It never goes to the browser.
 2a. Optional - per-visitor sign-in for a public demo: set `CLERK_SECRET_KEY` and `CLERK_PUBLISHABLE_KEY` on the server, and `VITE_CLERK_PUBLISHABLE_KEY` (same publishable key) as a client build-time env var. Both unset means no sign-in gate - anyone hitting the URL shares one anonymous trial, exactly as before. Both set gates `/home`, `/try`, `/sessions`, and the analyze/token/transcribe routes behind a Clerk sign-in, so each visitor gets their own trial.
+2b. Optional - recording playback storage: create a Railway bucket (`railway bucket create <name>`) and link it to the service with `railway variable set 'RECORDINGS_BUCKET=${{<bucket>.BUCKET}}' 'RECORDINGS_BUCKET_ENDPOINT=${{<bucket>.ENDPOINT}}' 'RECORDINGS_BUCKET_REGION=${{<bucket>.REGION}}' 'RECORDINGS_BUCKET_ACCESS_KEY_ID=${{<bucket>.ACCESS_KEY_ID}}' 'RECORDINGS_BUCKET_SECRET_ACCESS_KEY=${{<bucket>.SECRET_ACCESS_KEY}}'`. All five unset means recordings stay local-only (in-memory blob, dies on reload) - see `server/recordingsStore.js`'s `recordingsConfigured()`.
 3. On boot, if `DATABASE_URL` is set, the server runs `server/migrations/*.sql` itself (idempotent `create table if not exists`, see `server/migrate.js`) - no separate migration step needed.
 4. Express binds `PORT`, then runs migrations and hydrates the Map from Postgres, then warms any missing Northstar sessions with `patternPackIds` `["generic"]` before `GET /v1/boot-status` flips to `{ ok: true }`. Home never auto-runs the fleet sweep on load - a visitor must click "Run compliance sweep", which then POSTs the 12 sessions if boot is incomplete. It does not invent an 83 percent KPI for a failed cache.
-5. Live call audio is still not written to disk or to Postgres.
+5. Live call audio is written to the Railway bucket only when "Record this call" is checked; otherwise it is never written to disk, the bucket, or Postgres.
 
 Public demo URL: https://2peepsfromaz-production.up.railway.app (Railway project `exemplary-purpose`). Until that host is down, you can still run locally with `./scripts/start.sh`. Local dev does not need `DATABASE_URL`; the in-memory Map is enough.
 

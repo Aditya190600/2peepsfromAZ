@@ -11,7 +11,9 @@ cases by hand before merging any change that touches it:
    citations.
 2. **Live call without audio** - open a history entry with
    `source === "live"` and no resolvable audio. Call tab shows transcript
-   only, with copy stating audio was never stored. No player renders.
+   only, with copy stating audio is stored only when "Record this call" is
+   checked. No player renders. (A recorded live call whose `recordingUrl`
+   resolves shows the player instead, same as case 1.)
 3. **Missing/unknown session id** - navigate to `/sessions/<id-not-in-history>`.
    Inspector shows a clear empty/error state, no crash.
 4. **Share** - click Share. Clipboard receives `/sessions/:sessionId`
