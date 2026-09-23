@@ -1,0 +1,13 @@
+.evals-page { max-width: 1100px; margin: 2rem auto; padding: 0 1.5rem; }
+.evals-page section { margin: 2rem 0; padding: 1.5rem; border: 1px solid #d9dde2; border-radius: 12px; }
+.evals-page label { display: block; margin: 1rem 0 .5rem; font-weight: 600; }
+.evals-page textarea { display: block; width: 100%; min-height: 90px; padding: .75rem; font: inherit; box-sizing: border-box; }
+.evals-page .evals-json { min-height: 320px; font-family: monospace; }
+.evals-page button { margin: .5rem .5rem .5rem 0; padding: .5rem .8rem; cursor: pointer; }
+.evals-page button:disabled { cursor: wait; opacity: .6; }
+.evals-table { overflow-x: auto; }
+.evals-page table { width: 100%; border-collapse: collapse; text-align: left; }
+.evals-page th, .evals-page td { padding: .75rem; border-bottom: 1px solid #d9dde2; }
+.evals-page pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.evals-page [role=alert] { color: #a62020; }
+.evals-page li { margin: .6rem 0; }

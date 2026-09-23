@@ -9,6 +9,7 @@ import { analyzeSession } from "./checks/analyze.js";
 import { packCatalog } from "./packs/index.js";
 import { parsePackEvalRequest } from "./evals/wire.js";
 import { evaluatePacks } from "./evals/runPackEvals.js";
+import { evalRouter } from "./evals/router.js";
 import { requestCacheKey, warmNorthstarCache } from "./warmCache.js";
 import { loadReportCache, dbConfigured, upsertReportCache } from "./reportCache.js";
 import { runMigrations } from "./migrate.js";
@@ -185,6 +186,8 @@ app.post("/v1/api-keys/:id/revoke", requireVisitor, requireRealAccount, async (r
     res.status(400).json({ error: err.message });
   }
 });
+
+app.use("/v1/evals", requireVisitor, evalRouter());
 
 app.post("/v1/pack-evals", requireVisitor, async (req, res) => {
   const parsed = parsePackEvalRequest(req.body);

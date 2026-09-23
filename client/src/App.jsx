@@ -6,6 +6,7 @@ import Try from "./Try";
 import History from "./History";
 import SessionInspector from "./SessionInspector";
 import ApiKeys from "./ApiKeys";
+import Evals from "./Evals";
 import { matchRoute } from "./routes";
 import "./App.css";
 
@@ -85,6 +86,13 @@ export default function App() {
     return (
       <RequireVisitor>
         <ApiKeys navigate={navigate} path={viewPath} />
+      </RequireVisitor>
+    );
+  }
+  if (view.name === "evals") {
+    return (
+      <RequireVisitor>
+        <Evals navigate={navigate} path={viewPath} />
       </RequireVisitor>
     );
   }
