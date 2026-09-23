@@ -24,3 +24,15 @@ test("seekAudio() is a no-op when the audio element isn't mounted yet", () => {
   const ref = { current: null };
   assert.doesNotThrow(() => seekAudio(ref, 1000));
 });
+
+test("seekAudio() subtracts the recording's start offset so a live-call timestamp lands on the right audio", () => {
+  const { ref, audio } = fakeAudioRef();
+  seekAudio(ref, 7500, 4500);
+  assert.equal(audio.currentTime, 3);
+});
+
+test("seekAudio() clamps to the start when the timestamp precedes the recording", () => {
+  const { ref, audio } = fakeAudioRef();
+  seekAudio(ref, 1000, 4500);
+  assert.equal(audio.currentTime, 0);
+});

@@ -21,7 +21,7 @@ export function loadHistory() {
 // `/v1/recordings/<sessionId>`, see server/recordingsStore.js) for a live
 // call recording persisted to the Railway bucket - safe to store since it
 // survives reload, unlike a blob: URL.
-export function buildHistoryEntry({ label, session, report, audioKey, recordingUrl, durationMs, verdict, source }) {
+export function buildHistoryEntry({ label, session, report, audioKey, recordingUrl, recordingOffsetMs, durationMs, verdict, source }) {
   const turns = (session?.turns ?? []).map(({ role, text, tMs }) => ({ role, text, tMs }));
   const lastTurnMs = turns.length ? turns[turns.length - 1].tMs : 0;
   return {
@@ -37,6 +37,7 @@ export function buildHistoryEntry({ label, session, report, audioKey, recordingU
     turnCount: turns.length,
     ...(audioKey ? { audioKey } : {}),
     ...(recordingUrl ? { recordingUrl } : {}),
+    ...(recordingOffsetMs ? { recordingOffsetMs } : {}),
     ...(source ? { source } : {}),
     ...(session?.persona ? { persona: session.persona } : {}),
     findings: report.findings,
