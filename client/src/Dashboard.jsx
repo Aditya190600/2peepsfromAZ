@@ -362,7 +362,7 @@ export function Report({
           ) : (
             "Sessions"
           )}{" "}
-          page. Live call audio itself is never stored.
+          page. Live call audio is stored only when "Record this call" is checked.
         </p>
       )}
       {audioUrl && (
