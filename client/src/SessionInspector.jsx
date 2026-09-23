@@ -120,6 +120,7 @@ export default function SessionInspector({ navigate, path, sessionId }) {
           source: entry.source,
           patternPackIds: entry.patternPackIds,
           recordingUrl: entry.recordingUrl,
+          recordingOffsetMs: entry.recordingOffsetMs,
         }),
         id: entry.id,
       };

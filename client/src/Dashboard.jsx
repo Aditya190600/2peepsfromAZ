@@ -12,7 +12,7 @@ import { summarizeFleet, monitorTiles } from "./fleetStats";
 import AudioPlayer from "./AudioPlayer";
 import ProviderSettings from "./ProviderSettings";
 import { saveHistoryEntry, buildHistoryEntry, findEntryBySessionId } from "./reportHistory";
-import { registerLiveAudioBlob } from "./liveAudioBlobs";
+import { getLiveAudioBlob, registerLiveAudioBlob } from "./liveAudioBlobs";
 import { seekAudio } from "./seek";
 import {
   CHECK_LABEL,
@@ -441,6 +441,9 @@ export default function Dashboard({ navigate, path }) {
   // isn't configured (local dev) or the upload failed, so callers fall back
   // to the in-memory blob URL (recordingUrl below).
   const recordingUploadRef = useRef({ sessionId: null, promise: null });
+  // sessionId of the live call whose recording the report player is showing,
+  // or null when it's showing anything else (sample, upload, nothing).
+  const audioOwnerRef = useRef(null);
 
   const patternPackIds = ["generic", ...selectedPacks];
   const canStart = status === "idle" || status === "error";
@@ -468,8 +471,9 @@ export default function Dashboard({ navigate, path }) {
     if (!id) return;
     const existing = findEntryBySessionId(sessionId);
     if (!existing || existing.id !== id || existing.recordingUrl) return;
-    saveHistoryEntry({ ...existing, recordingUrl: url });
-    if (report?.sessionId === sessionId) showAudio(url, liveSessionRef.current.recordingOffsetMs);
+    const offsetMs = liveSessionRef.current.recordingOffsetMs;
+    saveHistoryEntry({ ...existing, recordingUrl: url, ...(offsetMs ? { recordingOffsetMs: offsetMs } : {}) });
+    if (audioOwnerRef.current === sessionId) showAudio(url, offsetMs, sessionId);
   };
 
   useEffect(() => {
@@ -482,6 +486,7 @@ export default function Dashboard({ navigate, path }) {
     const sessionId = lastSession?.sessionId;
     if (sessionId) {
       registerLiveAudioBlob(sessionId, url); // in-tab fallback if the bucket upload below fails or isn't configured
+      if (audioOwnerRef.current === sessionId) showAudio(url, lastSession.recordingOffsetMs, sessionId);
       recordingUploadRef.current = {
         sessionId,
         promise: uploadRecording(sessionId, recordedBlob)
@@ -500,7 +505,8 @@ export default function Dashboard({ navigate, path }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordedBlob, lastSession]);
 
-  const showAudio = (url, offsetMs = 0) => {
+  const showAudio = (url, offsetMs = 0, ownerSessionId = null) => {
+    audioOwnerRef.current = ownerSessionId;
     setActiveAudioUrl(url);
     setActiveAudioOffsetMs(offsetMs);
   };
@@ -573,18 +579,17 @@ export default function Dashboard({ navigate, path }) {
       // so the report (and history entry below) survive a reload. If the
       // upload is still in flight, attachRecordingToHistory fills it in once
       // it resolves.
-      let liveAudioUrl = recordingUrl;
-      if (recordingUploadRef.current.sessionId === lastSession.sessionId) {
-        const bucketUrl = await recordingUploadRef.current.promise;
-        if (bucketUrl) liveAudioUrl = bucketUrl;
-      }
-      if (isCurrent()) showAudio(liveAudioUrl, lastSession.recordingOffsetMs);
+      const { sessionId, recordingOffsetMs } = lastSession;
+      const bucketUrl =
+        recordingUploadRef.current.sessionId === sessionId ? await recordingUploadRef.current.promise : null;
+      if (isCurrent()) showAudio(bucketUrl ?? getLiveAudioBlob(sessionId), recordingOffsetMs, sessionId);
       const nextReport = await analyze(lastSession, patternPackIds);
+      const attached = findEntryBySessionId(sessionId);
       saveLiveHistory(
         nextReport,
         historyId,
-        liveAudioUrl && !liveAudioUrl.startsWith("blob:") ? liveAudioUrl : undefined,
-        lastSession.recordingOffsetMs
+        bucketUrl ?? (attached?.id === historyId ? attached.recordingUrl : undefined),
+        recordingOffsetMs
       );
       if (isCurrent()) setReport(nextReport);
     } catch (err) {
