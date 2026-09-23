@@ -55,7 +55,14 @@ setup.
     existing `micSilent` banner should still fire after ~15s regardless of
     which persona is active - persona wiring must not have broken the
     existing silence-detection plumbing.
-11. **Try as webhook sandbox** - start and end a call with any non-neutral
+11. **Multi-pack persona (School nurse)** - click "School nurse". Both the
+    HIPAA and FERPA pack checkboxes check themselves automatically (not just
+    one). Uncheck HIPAA only - FERPA stays checked (opt-out is per pack, not
+    all-or-nothing). Start a call, ask about your own child's visit (agent
+    answers), then ask for another student's health visit or grades - agent
+    should refuse both, per its CAN/CANNOT scope. Switch to "Bank teller" -
+    HIPAA/FERPA both uncheck, GLBA/finance checks itself instead.
+12. **Try as webhook sandbox** - start and end a call with any non-neutral
     persona. The "Try as webhook sandbox" block appears (it's hidden for
     "Neutral assistant"). Paste a real ComplyLine API key (mint one at
     `/api-keys`) and click "Send to webhook receiver" - status should flip
