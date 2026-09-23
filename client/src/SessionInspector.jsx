@@ -90,7 +90,7 @@ export default function SessionInspector({ navigate, path, sessionId }) {
 
   const audioUrl = resolveAudioUrl(entry);
 
-  const onSeek = (tMs) => seekAudio(audioRef, tMs);
+  const onSeek = (tMs) => seekAudio(audioRef, tMs, entry.recordingOffsetMs);
 
   const onShare = async () => {
     const url = `${window.location.origin}/sessions/${encodeURIComponent(sessionId ?? "")}`;

@@ -210,3 +210,59 @@ test("a share token cannot overwrite the recording", async () => {
     await srv.close();
   }
 });
+
+// A fake S3 whose GetObject body is a caller-supplied stream, to exercise
+// the proxy's handling of a body that errors or never finishes.
+function streamingS3(makeBody) {
+  const s3 = fakeS3();
+  const send = s3.send;
+  s3.send = async (command) => {
+    if (command.constructor.name === "GetObjectCommand" && command.input.Key.startsWith("live-calls/")) {
+      const body = makeBody();
+      s3.lastBody = body;
+      return { Body: body, ContentType: "audio/webm" };
+    }
+    return send(command);
+  };
+  return s3;
+}
+
+test("GET destroys the S3 body when the client aborts mid-stream", async () => {
+  const s3 = streamingS3(() => new Readable({ read() { this.push(Buffer.alloc(64 * 1024)); } }));
+  const srv = await startServer(s3);
+  try {
+    await srv.call("/v1/recordings/sess_1", { user: "user_a", method: "POST", body: "owner-audio" });
+    const play = await srv.call("/v1/recordings/sess_1", { user: "user_a" });
+    const reader = play.body.getReader();
+    await reader.read();
+    await reader.cancel();
+    await new Promise((r) => setTimeout(r, 100));
+    assert.equal(s3.lastBody.destroyed, true);
+  } finally {
+    await srv.close();
+  }
+});
+
+test("GET survives an S3 body that errors mid-stream instead of crashing the process", async () => {
+  const s3 = streamingS3(() => {
+    let sent = false;
+    return new Readable({
+      read() {
+        if (!sent) {
+          sent = true;
+          this.push(Buffer.from("partial"));
+        } else {
+          this.destroy(new Error("socket reset"));
+        }
+      },
+    });
+  });
+  const srv = await startServer(s3);
+  try {
+    await srv.call("/v1/recordings/sess_1", { user: "user_a", method: "POST", body: "owner-audio" });
+    await assert.rejects(async () => (await srv.call("/v1/recordings/sess_1", { user: "user_a" })).text());
+    assert.equal(s3.lastBody.destroyed, true);
+  } finally {
+    await srv.close();
+  }
+});

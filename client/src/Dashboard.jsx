@@ -419,6 +419,7 @@ export default function Dashboard({ navigate, path }) {
   const [fleetProgress, setFleetProgress] = useState(null);
   const [fleetError, setFleetError] = useState(null);
   const [activeAudioUrl, setActiveAudioUrl] = useState(null);
+  const [activeAudioOffsetMs, setActiveAudioOffsetMs] = useState(0);
   const [uploadStatus, setUploadStatus] = useState("idle"); // idle | uploading | error
   const [uploadError, setUploadError] = useState(null);
   const [dragActive, setDragActive] = useState(false);
@@ -468,7 +469,7 @@ export default function Dashboard({ navigate, path }) {
     const existing = findEntryBySessionId(sessionId);
     if (!existing || existing.id !== id || existing.recordingUrl) return;
     saveHistoryEntry({ ...existing, recordingUrl: url });
-    if (report?.sessionId === sessionId) setActiveAudioUrl(url);
+    if (report?.sessionId === sessionId) showAudio(url, liveSessionRef.current.recordingOffsetMs);
   };
 
   useEffect(() => {
@@ -499,7 +500,12 @@ export default function Dashboard({ navigate, path }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordedBlob, lastSession]);
 
-  const onSeek = (tMs) => seekAudio(audioRef, tMs);
+  const showAudio = (url, offsetMs = 0) => {
+    setActiveAudioUrl(url);
+    setActiveAudioOffsetMs(offsetMs);
+  };
+
+  const onSeek = (tMs) => seekAudio(audioRef, tMs, activeAudioOffsetMs);
 
   useEffect(() => {
     document.title = report ? `ComplyLine report — ${report.sessionId ?? "session"}` : "ComplyLine";
@@ -537,7 +543,7 @@ export default function Dashboard({ navigate, path }) {
   // given) and returns its id - pending and transcript-only when `report` is
   // null. `recordingUrl` must be a durable server path, never a blob: URL -
   // see buildHistoryEntry.
-  const saveLiveHistory = (report, id, recordingUrl) =>
+  const saveLiveHistory = (report, id, recordingUrl, recordingOffsetMs) =>
     saveHistoryEntry({
       ...buildHistoryEntry({
         label: "Live call",
@@ -548,6 +554,7 @@ export default function Dashboard({ navigate, path }) {
         source: "live",
         patternPackIds,
         recordingUrl,
+        recordingOffsetMs,
       }),
       ...(id ? { id } : {}),
     });
@@ -571,12 +578,13 @@ export default function Dashboard({ navigate, path }) {
         const bucketUrl = await recordingUploadRef.current.promise;
         if (bucketUrl) liveAudioUrl = bucketUrl;
       }
-      if (isCurrent()) setActiveAudioUrl(liveAudioUrl);
+      if (isCurrent()) showAudio(liveAudioUrl, lastSession.recordingOffsetMs);
       const nextReport = await analyze(lastSession, patternPackIds);
       saveLiveHistory(
         nextReport,
         historyId,
-        liveAudioUrl && !liveAudioUrl.startsWith("blob:") ? liveAudioUrl : undefined
+        liveAudioUrl && !liveAudioUrl.startsWith("blob:") ? liveAudioUrl : undefined,
+        lastSession.recordingOffsetMs
       );
       if (isCurrent()) setReport(nextReport);
     } catch (err) {
@@ -624,7 +632,7 @@ export default function Dashboard({ navigate, path }) {
     setFleetResults(null);
     clearLabErrors();
     setSampleLoadingKey(key);
-    setActiveAudioUrl(SAMPLE_AUDIO_URLS[key] && PLAYABLE_SAMPLE_LABEL[key] ? SAMPLE_AUDIO_URLS[key] : null);
+    showAudio(SAMPLE_AUDIO_URLS[key] && PLAYABLE_SAMPLE_LABEL[key] ? SAMPLE_AUDIO_URLS[key] : null);
     try {
       const session = sessionByKey(key);
       const nextReport = await analyze(session, patternPackIds);
@@ -644,7 +652,7 @@ export default function Dashboard({ navigate, path }) {
     setFleetLoading(true);
     clearLabErrors();
     setReport(null);
-    setActiveAudioUrl(null);
+    showAudio(null);
     setFleetResults([]);
     setFleetProgress({ done: 0, total: keys.length });
     try {
@@ -674,7 +682,7 @@ export default function Dashboard({ navigate, path }) {
     if (!consent) return;
     const parsed = parseSessionPaste(pasteText);
     setFleetResults(null);
-    setActiveAudioUrl(null);
+    showAudio(null);
     clearLabErrors();
     if (!parsed.ok) {
       setPasteError(parsed.error);
@@ -705,7 +713,7 @@ export default function Dashboard({ navigate, path }) {
     clearLabErrors();
     setUploadStatus("uploading");
     const blobUrl = URL.createObjectURL(file);
-    setActiveAudioUrl(blobUrl);
+    showAudio(blobUrl);
     try {
       const session = await transcribeUpload(file);
       // Optional consentEvent lets the "diarize this sample" path keep the
@@ -757,7 +765,7 @@ export default function Dashboard({ navigate, path }) {
     }
     setFleetResults(null);
     clearLabErrors();
-    setActiveAudioUrl(entry.audioKey ? SAMPLE_AUDIO_URLS[entry.audioKey] ?? null : null);
+    showAudio(entry.audioKey ? SAMPLE_AUDIO_URLS[entry.audioKey] ?? null : null);
     setReport(entry.report);
   };
 

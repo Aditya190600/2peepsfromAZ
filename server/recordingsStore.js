@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { pipeline } from "node:stream";
 import express from "express";
 import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 
@@ -139,7 +140,9 @@ function sendRecording(res, recording) {
   res.setHeader("Accept-Ranges", "bytes");
   if (recording.contentLength != null) res.setHeader("Content-Length", recording.contentLength);
   if (recording.contentRange) res.setHeader("Content-Range", recording.contentRange);
-  recording.body.pipe(res);
+  pipeline(recording.body, res, (err) => {
+    if (err && err.code !== "ERR_STREAM_PREMATURE_CLOSE") console.log(`Recording stream failed: ${err.message}`);
+  });
 }
 
 function sendFetchError(res, err) {

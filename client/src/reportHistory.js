@@ -23,13 +23,16 @@ export function loadHistory() {
 // `recordingUrl` is different from `audioKey`: it's a durable server path
 // (e.g. `/v1/recordings/<sessionId>`, see server/recordingsStore.js) for a
 // live call recording persisted to the Railway bucket - safe to store since
-// it survives reload, unlike a blob: URL.
+// it survives reload, unlike a blob: URL. `recordingOffsetMs` is how far into
+// the session the recording actually starts (set once the recorder is live,
+// after connect latency) - seekAudio subtracts it before seeking.
 export function buildHistoryEntry({
   label,
   session,
   report,
   audioKey,
   recordingUrl,
+  recordingOffsetMs,
   durationMs,
   verdict,
   source,
@@ -50,6 +53,7 @@ export function buildHistoryEntry({
     turnCount: turns.length,
     ...(audioKey ? { audioKey } : {}),
     ...(recordingUrl ? { recordingUrl } : {}),
+    ...(recordingOffsetMs ? { recordingOffsetMs } : {}),
     ...(source ? { source } : {}),
     ...(session?.persona ? { persona: session.persona } : {}),
     ...(session?.consentEvent ? { consentEvent: session.consentEvent } : {}),
