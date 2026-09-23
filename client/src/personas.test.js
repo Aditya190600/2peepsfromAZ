@@ -39,6 +39,11 @@ test("every non-neutral persona has a scope and a violation toggle tied to a rea
   }
 });
 
+test("school nurse persona auto-selects both HIPAA and FERPA packs", () => {
+  const nurse = findPersona("nurse");
+  assert.deepEqual(nurse.packIds, ["hipaa", "ferpa"]);
+});
+
 test("findPersona falls back to the first persona for an unknown id", () => {
   assert.equal(findPersona("does-not-exist").id, PERSONAS[0].id);
   assert.equal(findPersona(undefined).id, PERSONAS[0].id);

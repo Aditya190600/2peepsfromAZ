@@ -410,7 +410,7 @@ export default function Dashboard({ navigate, path }) {
   };
 
   // Persona choice auto-selects (opt-out, not opt-in) the industry pattern
-  // pack that matches its domain - the user can still uncheck it above.
+  // pack(s) that match its domain - the user can still uncheck any above.
   const selectPersona = (id) => {
     setPersonaId(id);
     setSeedViolation(false);
@@ -719,7 +719,7 @@ export default function Dashboard({ navigate, path }) {
             <p className="pack-note">
               Pick who the AI agent plays for this call - each persona has an explicit CAN/CANNOT
               scope and its own failure-mode boundary. Picking a persona auto-selects its matching
-              pattern pack above (uncheck it if you don't want it).
+              pattern pack(s) above (uncheck any you don't want).
             </p>
             <div className="pack-select">
               {PERSONAS.map((persona) => (
