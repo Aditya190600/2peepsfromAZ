@@ -1,17 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { AppShell } from "./Chrome";
-import {
-  buildHistoryEntry,
-  findEntryBySessionId,
-  historyEntrySession,
-  saveHistoryEntry,
-} from "./reportHistory";
-import { analyze } from "./analyzeClient";
-import { SAMPLE_AUDIO_URLS } from "./sampleSessions";
-import { getLiveAudioBlob } from "./liveAudioBlobs";
+import { findEntryBySessionId } from "./reportHistory";
+import { resolveAudioUrl } from "./audioResolve";
+import { seekAudio } from "./seek";
 import { Report, Timestamp, formatTMs } from "./Dashboard";
 import AudioPlayer from "./AudioPlayer";
-import { VERDICT_CLASS, headlineVerdict } from "./compliance";
+import { VERDICT_CLASS } from "./compliance";
 import "./App.css";
 
 function formatWhen(iso) {
@@ -21,12 +15,6 @@ function formatWhen(iso) {
   } catch {
     return iso;
   }
-}
-
-function resolveAudioUrl(entry) {
-  if (!entry) return null;
-  if (entry.audioKey) return SAMPLE_AUDIO_URLS[entry.audioKey] ?? null;
-  return getLiveAudioBlob(entry.sessionId);
 }
 
 function CallTab({ entry, audioUrl, audioRef, onSeek }) {
@@ -58,8 +46,6 @@ function CallTab({ entry, audioUrl, audioRef, onSeek }) {
 export default function SessionInspector({ navigate, path, sessionId }) {
   const [entry, setEntry] = useState(() => findEntryBySessionId(sessionId));
   const [loading, setLoading] = useState(() => !findEntryBySessionId(sessionId));
-  const [generating, setGenerating] = useState(false);
-  const [generateError, setGenerateError] = useState(null);
   const [tab, setTab] = useState("call");
 
   useEffect(() => {
@@ -92,12 +78,7 @@ export default function SessionInspector({ navigate, path, sessionId }) {
 
   const audioUrl = resolveAudioUrl(entry);
 
-  const onSeek = (tMs) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.currentTime = tMs / 1000;
-    audio.play();
-  };
+  const onSeek = (tMs) => seekAudio(audioRef, tMs);
 
   const onShare = async () => {
     const url = `${window.location.origin}/sessions/${encodeURIComponent(sessionId ?? "")}`;
@@ -109,33 +90,6 @@ export default function SessionInspector({ navigate, path, sessionId }) {
     }
     setShareCopied(true);
     setTimeout(() => setShareCopied(false), 2000);
-  };
-
-  const onGenerateReport = async () => {
-    setGenerating(true);
-    setGenerateError(null);
-    try {
-      const session = historyEntrySession(entry);
-      const report = await analyze(session, entry.patternPackIds ?? ["generic"]);
-      const nextEntry = {
-        ...buildHistoryEntry({
-          label: entry.label,
-          session,
-          report,
-          verdict: headlineVerdict(report.findings),
-          durationMs: entry.durationMs,
-          source: entry.source,
-          patternPackIds: entry.patternPackIds,
-        }),
-        id: entry.id,
-      };
-      saveHistoryEntry(nextEntry);
-      setEntry(nextEntry);
-    } catch (err) {
-      setGenerateError(err.message ?? "Something went wrong generating this report.");
-    } finally {
-      setGenerating(false);
-    }
   };
 
   const onDownload = () => {
@@ -207,11 +161,6 @@ export default function SessionInspector({ navigate, path, sessionId }) {
             </span>
           </div>
           <div className="sample-actions">
-            {entry.pending && (
-              <button type="button" className="btn btn-outline" onClick={onGenerateReport} disabled={generating}>
-                {generating ? "Generating report…" : "Generate report"}
-              </button>
-            )}
             <button type="button" className="btn btn-outline" onClick={onShare}>
               {shareCopied ? "Copied!" : "Share"}
             </button>
@@ -220,7 +169,6 @@ export default function SessionInspector({ navigate, path, sessionId }) {
             </button>
           </div>
         </div>
-        {generateError && <p className="error-banner">{generateError}</p>}
         <p className="hint">
           {entry.source === "pstn"
             ? "This link reopens the phone session from this server."
@@ -247,11 +195,7 @@ export default function SessionInspector({ navigate, path, sessionId }) {
         {tab === "call" ? (
           <CallTab entry={entry} audioUrl={audioUrl} audioRef={audioRef} onSeek={onSeek} />
         ) : (
-          <Report
-            report={entry.report}
-            loading={generating}
-            idleMessage="This call's report hasn't been generated yet. Click Generate report above."
-          />
+          <Report report={entry.report} />
         )}
       </section>
     </AppShell>

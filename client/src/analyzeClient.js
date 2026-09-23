@@ -77,6 +77,26 @@ export async function transcribeUpload(file) {
   return body;
 }
 
+// Persists a recorded live call to the Railway bucket (server/recordingsStore.js).
+// Rejects (with the server's message) when the bucket isn't configured -
+// callers should catch this and fall back to the in-memory blob URL, not
+// surface it as a hard error.
+export async function uploadRecording(sessionId, blob) {
+  const resp = await fetch(`/v1/recordings/${encodeURIComponent(sessionId)}`, {
+    method: "POST",
+    headers: { "Content-Type": blob.type || "application/octet-stream" },
+    body: blob,
+  });
+  let body;
+  try {
+    body = await resp.json();
+  } catch {
+    throw new ApiError("The compliance server is unreachable right now.");
+  }
+  if (!resp.ok) throw new ApiError(body.error ?? "Recording upload failed.");
+  return body.url;
+}
+
 export async function mapWithConcurrency(items, limit, fn, onProgress) {
   const results = new Array(items.length);
   let next = 0;

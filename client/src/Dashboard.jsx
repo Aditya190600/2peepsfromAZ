@@ -13,6 +13,7 @@ import AudioPlayer from "./AudioPlayer";
 import ProviderSettings from "./ProviderSettings";
 import { saveHistoryEntry, buildHistoryEntry, findEntryBySessionId } from "./reportHistory";
 import { registerLiveAudioBlob } from "./liveAudioBlobs";
+import { seekAudio } from "./seek";
 import {
   CHECK_LABEL,
   CHECK_CITATION,
@@ -26,6 +27,7 @@ import {
   analyze,
   transcribeUpload,
   ingestSession,
+  uploadRecording,
   mapWithConcurrency,
   findRateLimitedFinding,
 } from "./analyzeClient";
@@ -171,8 +173,8 @@ function IntroSteps() {
           <div>
             <strong>End the call for your report</strong>
             <p>
-              Click <em>End call</em> - the report generates automatically and saves to your
-              Sessions history. It ranks findings by severity, with a regulatory citation on each.
+              Click <em>End call</em>, then <em>Generate report for last call</em>. The report
+              here ranks findings by severity, with a regulatory citation on each.
             </p>
           </div>
         </li>
@@ -431,8 +433,11 @@ export default function Dashboard({ navigate, path }) {
   const [packCatalogStale, setPackCatalogStale] = useState(false);
   const audioRef = useRef(null);
   const reportHeadingRef = useRef(null);
-  const liveHistoryIdRef = useRef(null);
-  const liveSessionRef = useRef(null);
+  // { sessionId, promise<bucketUrl|null> } for the in-flight/completed bucket
+  // upload of the current recording - null promise result means the bucket
+  // isn't configured (local dev) or the upload failed, so callers fall back
+  // to the in-memory blob URL (recordingUrl below).
+  const recordingUploadRef = useRef({ sessionId: null, promise: null });
 
   const patternPackIds = ["generic", ...selectedPacks];
   const canStart = status === "idle" || status === "error";
@@ -457,15 +462,22 @@ export default function Dashboard({ navigate, path }) {
     }
     const url = URL.createObjectURL(recordedBlob);
     setRecordingUrl(url);
+    const sessionId = lastSession?.sessionId;
+    if (sessionId) {
+      registerLiveAudioBlob(sessionId, url); // in-tab fallback if the bucket upload below fails or isn't configured
+      recordingUploadRef.current = {
+        sessionId,
+        promise: uploadRecording(sessionId, recordedBlob)
+          .catch((err) => {
+            console.log(`Recording not persisted to bucket, using local blob only: ${err.message}`);
+            return null;
+          }),
+      };
+    }
     return () => URL.revokeObjectURL(url);
-  }, [recordedBlob]);
+  }, [recordedBlob, lastSession]);
 
-  const onSeek = (tMs) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.currentTime = tMs / 1000;
-    audio.play();
-  };
+  const onSeek = (tMs) => seekAudio(audioRef, tMs);
 
   useEffect(() => {
     document.title = report ? `ComplyLine report — ${report.sessionId ?? "session"}` : "ComplyLine";
@@ -499,55 +511,35 @@ export default function Dashboard({ navigate, path }) {
     setPasteError(null);
   };
 
-  // Writes the live call's history entry (replacing entry `id` in place when
-  // given) and returns its id - pending and transcript-only when `report` is null.
-  const saveLiveHistory = (report, id) =>
-    saveHistoryEntry({
-      ...buildHistoryEntry({
-        label: "Live call",
-        report,
-        session: lastSession,
-        verdict: report ? headlineVerdict(report.findings) : undefined,
-        durationMs: lastSession.endedAtMs - lastSession.startedAtMs,
-        source: "live",
-        patternPackIds,
-      }),
-      ...(id ? { id } : {}),
-    });
-
   const runLiveReport = async () => {
     if (!lastSession) return;
     setFleetResults(null);
-    setActiveAudioUrl(null); // live calls aren't recorded/stored - no audio to play back
     clearLabErrors();
     setLiveLoading(true);
-    const historyId = liveHistoryIdRef.current;
-    const isCurrent = () => liveHistoryIdRef.current === historyId;
     try {
+      // Not recorded (recordCall was off) -> no audio, same as before.
+      // Recorded -> the in-memory blob plays immediately; if the bucket
+      // upload for this same session has resolved, prefer its durable URL
+      // so the report (and history entry below) survive a reload.
+      let liveAudioUrl = recordingUrl;
+      if (recordingUploadRef.current.sessionId === lastSession.sessionId) {
+        const bucketUrl = await recordingUploadRef.current.promise;
+        if (bucketUrl) liveAudioUrl = bucketUrl;
+      }
+      setActiveAudioUrl(liveAudioUrl);
       const nextReport = await analyze(lastSession, patternPackIds);
-      saveLiveHistory(nextReport, historyId);
-      if (isCurrent()) setReport(nextReport);
+      setReport(nextReport);
+      recordHistory("Live call", nextReport, lastSession, {
+        durationMs: Date.now() - lastSession.startedAtMs,
+        source: "live",
+        recordingUrl: liveAudioUrl && !liveAudioUrl.startsWith("blob:") ? liveAudioUrl : undefined,
+      });
     } catch (err) {
-      if (isCurrent()) setLiveError(err.message ?? "Something went wrong generating this report.");
+      setLiveError(err.message ?? "Something went wrong generating this report.");
     } finally {
-      if (isCurrent()) setLiveLoading(false);
+      setLiveLoading(false);
     }
   };
-
-  // A completed live call exists only in `lastSession` React state, so save a
-  // pending, transcript-only history entry the moment the call ends - before
-  // the slow analyze round-trip - so a refresh or a failed analyze can't lose
-  // it. The report then fills in that same entry; a pending entry left behind
-  // can be regenerated from its /sessions page.
-  useEffect(() => {
-    if (lastSession === liveSessionRef.current) return;
-    liveSessionRef.current = lastSession;
-    setLiveLoading(false);
-    setLiveError(null);
-    liveHistoryIdRef.current = lastSession ? saveLiveHistory(null) : null;
-    if (lastSession) runLiveReport();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastSession]);
 
   // Try-as-webhook-sandbox: the persona picker's own action for sending the
   // persona call's transcript through the same /v1/ingest/:apiKey path a
@@ -815,7 +807,7 @@ export default function Dashboard({ navigate, path }) {
                 disabled={!canStart}
               />
               I consent to this session being analyzed, whether a live call, an upload, or a pasted
-              transcript. Live call audio is not stored.
+              transcript.
             </label>
           </div>
 
@@ -834,7 +826,8 @@ export default function Dashboard({ navigate, path }) {
                   disabled={!canStart}
                 />
                 Record this call. Off by default — live call audio is never stored unless you check
-                this. A recording stays local until you choose to analyze or download it.
+                this. A recording is saved to persistent storage (falls back to this browser only if
+                storage isn't configured) so the report's audio player can play it back later.
               </label>
               <div className="call-row">
                 <button
@@ -858,8 +851,8 @@ export default function Dashboard({ navigate, path }) {
               )}
               {status === "ready" && (
                 <p className="hint">
-                  Live — say hello or ask anything. Click <em>End call</em> when you're done - your
-                  report generates automatically.
+                  Live — say hello or ask anything. Click <em>End call</em> when you're done to
+                  generate the report.
                 </p>
               )}
 
@@ -895,7 +888,7 @@ export default function Dashboard({ navigate, path }) {
                   onClick={runLiveReport}
                   disabled={liveLoading}
                 >
-                  {liveLoading ? "Generating report…" : "Regenerate report for last call"}
+                  {liveLoading ? "Generating report…" : "Generate report for last call"}
                 </button>
               )}
               {liveError && <p className="error-banner">{liveError}</p>}
