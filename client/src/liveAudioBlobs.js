@@ -6,7 +6,10 @@
 const blobs = new Map();
 
 export function registerLiveAudioBlob(sessionId, url) {
-  if (sessionId && url) blobs.set(sessionId, url);
+  if (!sessionId || !url) return;
+  const previous = blobs.get(sessionId);
+  if (previous && previous !== url) URL.revokeObjectURL(previous);
+  blobs.set(sessionId, url);
 }
 
 export function getLiveAudioBlob(sessionId) {

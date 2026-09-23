@@ -474,7 +474,8 @@ export default function Dashboard({ navigate, path }) {
           }),
       };
     }
-    return () => URL.revokeObjectURL(url);
+    // A registered URL stays alive for history reopen (liveAudioBlobs.js).
+    if (!sessionId) return () => URL.revokeObjectURL(url);
   }, [recordedBlob, lastSession]);
 
   const onSeek = (tMs) => seekAudio(audioRef, tMs);
