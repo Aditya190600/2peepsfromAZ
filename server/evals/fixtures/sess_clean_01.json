@@ -1,0 +1,47 @@
+{
+  "id": "sess_clean_01",
+  "name": "Clean call baseline",
+  "mode": "offline",
+  "startedAt": "2026-09-05T09:00:00.000Z",
+  "consentEvent": {
+    "granted": true,
+    "timestamp": "2026-09-05T08:59:50.000Z"
+  },
+  "messages": [
+    {
+      "role": "assistant",
+      "text": "Hi, this is an AI assistant. This call may be recorded for quality purposes.",
+      "tMs": 500
+    },
+    {
+      "role": "user",
+      "text": "Sure, go ahead.",
+      "tMs": 3200
+    },
+    {
+      "role": "assistant",
+      "text": "Great, your billing reminder is set for next week.",
+      "tMs": 4500
+    }
+  ],
+  "checkpoints": [
+    {
+      "id": "consent",
+      "type": "check",
+      "check": "consent",
+      "expected": "pass"
+    },
+    {
+      "id": "disclosure",
+      "type": "check",
+      "check": "ai_disclosure",
+      "expected": "pass"
+    },
+    {
+      "id": "pii",
+      "type": "check",
+      "check": "pii_scan",
+      "expected": "pass"
+    }
+  ]
+}

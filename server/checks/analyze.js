@@ -9,11 +9,11 @@ import { PACKS as AVAILABLE_PACKS } from "../packs/index.js";
 // session shape: { sessionId, startedAt, consentEvent: {granted, timestamp},
 //                  turns: [{role: "user"|"agent", text, tMs}],
 //                  persona?: {id, label, scope, seedViolation} }
-export async function analyzeSession(session, { patternPackIds = ["generic"], llmGateway } = {}) {
+export async function analyzeSession(session, { patternPackIds = ["generic"], llmGateway, deterministic = false } = {}) {
   const patternPacks = patternPackIds
     .map((id) => AVAILABLE_PACKS[id])
     .filter(Boolean);
-  const gatewayOpts = llmGateway ? { llmGateway } : {};
+  const gatewayOpts = { ...(llmGateway ? { llmGateway } : {}), deterministic };
 
   const findings = await Promise.all([
     consentCheck(session),

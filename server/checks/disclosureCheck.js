@@ -8,7 +8,7 @@ const DISCLOSURE_WINDOW_MS = 10_000;
 
 const SYSTEM_PROMPT = `You review the opening seconds of a phone call between an AI voice agent and a caller. Decide whether the agent disclosed that the caller is talking to an AI or automated system rather than a human - directly ("I'm an AI") or by paraphrase ("I'm a computer program helping you today", "you're speaking with a virtual assistant", "this call uses an automated system"). Respond with ONLY a JSON object, no other text: {"disclosed": true|false, "turnIndex": <number|null>, "quote": <string|null>}. Use the turnIndex and exact quote of the first turn where disclosure occurred, or null for both if there was none.`;
 
-export async function disclosureCheck(session, { llmGateway = callLlmGateway } = {}) {
+export async function disclosureCheck(session, { llmGateway = callLlmGateway, deterministic = false } = {}) {
   const turns = session.turns ?? [];
   const earlyAgentTurns = turns
     .map((t, turnIndex) => ({ ...t, turnIndex }))
@@ -19,6 +19,18 @@ export async function disclosureCheck(session, { llmGateway = callLlmGateway } =
       check: "ai_disclosure",
       status: "flag",
       detail: `No agent turns detected within the first ${DISCLOSURE_WINDOW_MS / 1000}s.`,
+    };
+  }
+
+  if (deterministic) {
+    const matched = earlyAgentTurns.find((t) =>
+      /\b(AI (assistant|system)|automated (assistant|system)|virtual assistant)\b/i.test(t.text),
+    );
+    return {
+      check: "ai_disclosure",
+      status: matched ? "pass" : "flag",
+      detail: "Offline phrase check only. Paraphrases require semantic analysis.",
+      ...(matched ? { tMs: matched.tMs } : {}),
     };
   }
 
