@@ -291,6 +291,7 @@ export function useVoiceAgent() {
     };
     mediaRecorderRef.current = recorder;
     recorder.start();
+    if (sessionRef.current) sessionRef.current.recordingOffsetMs = Date.now() - sessionRef.current.startedAtMs;
   }, []);
 
   const stopMic = useCallback(() => {

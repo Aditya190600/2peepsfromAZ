@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   analyze,
   ingestSession,
+  uploadRecording,
   ApiError,
   GATEWAY_RATE_LIMIT_MESSAGE,
   findRateLimitedFinding,
@@ -103,4 +104,32 @@ test("ingestSession() throws ApiError on a non-ok response (e.g. bad API key)", 
   global.fetch = async () => mockJsonResponse(401, { error: "invalid api key" });
 
   await assert.rejects(() => ingestSession("bad-key", { turns: [] }), ApiError);
+});
+
+test("uploadRecording() POSTs the blob to /v1/recordings/:sessionId and returns the server's playback url", async () => {
+  let capturedUrl;
+  let capturedOpts;
+  global.fetch = async (url, opts) => {
+    capturedUrl = url;
+    capturedOpts = opts;
+    return mockJsonResponse(201, { url: "/v1/recordings/sess_1" });
+  };
+
+  const blob = { type: "audio/webm" };
+  const result = await uploadRecording("sess_1", blob);
+
+  assert.equal(capturedUrl, "/v1/recordings/sess_1");
+  assert.equal(capturedOpts.method, "POST");
+  assert.equal(capturedOpts.headers["Content-Type"], "audio/webm");
+  assert.equal(capturedOpts.body, blob);
+  assert.equal(result, "/v1/recordings/sess_1");
+});
+
+test("uploadRecording() throws ApiError when the bucket isn't configured (503)", async () => {
+  global.fetch = async () => mockJsonResponse(503, { error: "Recordings storage is not configured." });
+
+  await assert.rejects(
+    () => uploadRecording("sess_1", { type: "audio/webm" }),
+    /Recordings storage is not configured/
+  );
 });
