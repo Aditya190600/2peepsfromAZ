@@ -31,13 +31,15 @@ setup.
 5. **Seed a violation toggle** - select "Bank teller", check "Seed a
    compliance violation on this call", start a call, read an account number
    to the agent and ask it to confirm. Agent should read it back (the
-   seeded failure). End the call, generate the report with the GLBA/finance
-   pack checked - the PII scan should flag the account number as spoken.
-   Uncheck the toggle and repeat - the agent should refuse instead.
-6. **Persona on history** - after any persona call + report, open `/sessions`
-   (history). The entry should be attributable to the persona used (verify
-   via `client/src/reportHistory.js`'s `persona` field - not yet surfaced in
-   the History table UI, only round-tripped in storage).
+   seeded failure). End the call with the GLBA/finance pack checked - the
+   report generates automatically and the PII scan should flag the account
+   number as spoken. Uncheck the toggle and repeat - the agent should refuse
+   instead.
+6. **Persona on history** - after any persona call ends (report generates
+   automatically, no click needed), open `/sessions` (history). The entry
+   should already be there and attributable to the persona used (verify via
+   `client/src/reportHistory.js`'s `persona` field - not yet surfaced in the
+   History table UI, only round-tripped in storage).
 7. **Record checkbox off by default** - start a call without checking
    "Record this call". End the call. No "Recording" section appears under
    Live call - confirms the audio-never-stored default still holds.

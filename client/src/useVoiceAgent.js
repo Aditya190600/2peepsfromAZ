@@ -106,7 +106,7 @@ export function useVoiceAgent() {
       recordedChunksRef.current = [];
 
       const startedAtMs = Date.now();
-      sessionRef.current = {
+      const session = {
         sessionId: null,
         startedAt: new Date(startedAtMs).toISOString(),
         startedAtMs,
@@ -115,6 +115,14 @@ export function useVoiceAgent() {
           : null,
         turns: [],
         persona: { id: persona.id, label: persona.label, scope: persona.scope, seedViolation },
+      };
+      sessionRef.current = session;
+      // Hands the completed session to `lastSession` exactly once, whether the
+      // call ends cleanly (session.ended) or the socket just closes.
+      const finishSession = () => {
+        if (sessionRef.current !== session) return;
+        sessionRef.current = null;
+        setLastSession({ ...session, endedAtMs: Date.now() });
       };
 
       const tokenResp = await fetch("/v1/token");
@@ -182,9 +190,7 @@ export function useVoiceAgent() {
             if (msg.status === "interrupted") flushPlayback();
             break;
           case "session.ended":
-            if (sessionRef.current) {
-              setLastSession({ ...sessionRef.current });
-            }
+            finishSession();
             ws.close();
             break;
           case "session.error":
@@ -203,6 +209,7 @@ export function useVoiceAgent() {
         console.log("ws closed", event.code, event.reason);
         setStatus((s) => (s === "error" ? s : "idle"));
         stopMic();
+        if (session.turns.length > 0) finishSession();
       };
     },
     [appendTranscript, flushPlayback, playReplyAudio]
