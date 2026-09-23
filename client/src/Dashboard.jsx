@@ -12,7 +12,8 @@ import { summarizeFleet, monitorTiles } from "./fleetStats";
 import AudioPlayer from "./AudioPlayer";
 import ProviderSettings from "./ProviderSettings";
 import { saveHistoryEntry, buildHistoryEntry, findEntryBySessionId } from "./reportHistory";
-import { registerLiveAudioBlob } from "./liveAudioBlobs";
+import { getLiveAudioBlob, registerLiveAudioBlob } from "./liveAudioBlobs";
+import { seekAudio } from "./seek";
 import {
   CHECK_LABEL,
   CHECK_CITATION,
@@ -26,6 +27,7 @@ import {
   analyze,
   transcribeUpload,
   ingestSession,
+  uploadRecording,
   mapWithConcurrency,
   findRateLimitedFinding,
 } from "./analyzeClient";
@@ -360,7 +362,7 @@ export function Report({
           ) : (
             "Sessions"
           )}{" "}
-          page. Live call audio itself is never stored.
+          page. Live call audio is stored only when "Record this call" is checked.
         </p>
       )}
       {audioUrl && (
@@ -417,6 +419,7 @@ export default function Dashboard({ navigate, path }) {
   const [fleetProgress, setFleetProgress] = useState(null);
   const [fleetError, setFleetError] = useState(null);
   const [activeAudioUrl, setActiveAudioUrl] = useState(null);
+  const [activeAudioOffsetMs, setActiveAudioOffsetMs] = useState(0);
   const [uploadStatus, setUploadStatus] = useState("idle"); // idle | uploading | error
   const [uploadError, setUploadError] = useState(null);
   const [dragActive, setDragActive] = useState(false);
@@ -433,6 +436,14 @@ export default function Dashboard({ navigate, path }) {
   const reportHeadingRef = useRef(null);
   const liveHistoryIdRef = useRef(null);
   const liveSessionRef = useRef(null);
+  // { sessionId, promise<bucketUrl|null> } for the in-flight/completed bucket
+  // upload of the current recording - null promise result means the bucket
+  // isn't configured (local dev) or the upload failed, so callers fall back
+  // to the in-memory blob URL (recordingUrl below).
+  const recordingUploadRef = useRef({ sessionId: null, promise: null });
+  // sessionId of the live call whose recording the report player is showing,
+  // or null when it's showing anything else (sample, upload, nothing).
+  const audioOwnerRef = useRef(null);
 
   const patternPackIds = ["generic", ...selectedPacks];
   const canStart = status === "idle" || status === "error";
@@ -450,6 +461,21 @@ export default function Dashboard({ navigate, path }) {
     setSelectedPacks(findPersona(id).packIds);
   };
 
+  // Attaches a recording's durable bucket URL to its live-call history entry
+  // after the fact - covers the race where the recorder's own async
+  // stop+upload finishes after runLiveReport already saved the entry without
+  // it. A no-op if the call has since moved on, or the entry already has one.
+  const attachRecordingToHistory = (sessionId, url) => {
+    if (!url || liveSessionRef.current?.sessionId !== sessionId) return;
+    const id = liveHistoryIdRef.current;
+    if (!id) return;
+    const existing = findEntryBySessionId(sessionId);
+    if (!existing || existing.id !== id || existing.recordingUrl) return;
+    const offsetMs = liveSessionRef.current.recordingOffsetMs;
+    saveHistoryEntry({ ...existing, recordingUrl: url, ...(offsetMs ? { recordingOffsetMs: offsetMs } : {}) });
+    if (audioOwnerRef.current === sessionId) showAudio(url, offsetMs, sessionId);
+  };
+
   useEffect(() => {
     if (!recordedBlob) {
       setRecordingUrl(null);
@@ -457,15 +483,35 @@ export default function Dashboard({ navigate, path }) {
     }
     const url = URL.createObjectURL(recordedBlob);
     setRecordingUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [recordedBlob]);
+    const sessionId = lastSession?.sessionId;
+    if (sessionId) {
+      registerLiveAudioBlob(sessionId, url); // in-tab fallback if the bucket upload below fails or isn't configured
+      if (audioOwnerRef.current === sessionId) showAudio(url, lastSession.recordingOffsetMs, sessionId);
+      recordingUploadRef.current = {
+        sessionId,
+        promise: uploadRecording(sessionId, recordedBlob)
+          .then((bucketUrl) => {
+            attachRecordingToHistory(sessionId, bucketUrl);
+            return bucketUrl;
+          })
+          .catch((err) => {
+            console.log(`Recording not persisted to bucket, using local blob only: ${err.message}`);
+            return null;
+          }),
+      };
+    }
+    // A registered URL stays alive for history reopen (liveAudioBlobs.js).
+    if (!sessionId) return () => URL.revokeObjectURL(url);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordedBlob, lastSession]);
 
-  const onSeek = (tMs) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.currentTime = tMs / 1000;
-    audio.play();
+  const showAudio = (url, offsetMs = 0, ownerSessionId = null) => {
+    audioOwnerRef.current = ownerSessionId;
+    setActiveAudioUrl(url);
+    setActiveAudioOffsetMs(offsetMs);
   };
+
+  const onSeek = (tMs) => seekAudio(audioRef, tMs, activeAudioOffsetMs);
 
   useEffect(() => {
     document.title = report ? `ComplyLine report — ${report.sessionId ?? "session"}` : "ComplyLine";
@@ -500,8 +546,10 @@ export default function Dashboard({ navigate, path }) {
   };
 
   // Writes the live call's history entry (replacing entry `id` in place when
-  // given) and returns its id - pending and transcript-only when `report` is null.
-  const saveLiveHistory = (report, id) =>
+  // given) and returns its id - pending and transcript-only when `report` is
+  // null. `recordingUrl` must be a durable server path, never a blob: URL -
+  // see buildHistoryEntry.
+  const saveLiveHistory = (report, id, recordingUrl, recordingOffsetMs) =>
     saveHistoryEntry({
       ...buildHistoryEntry({
         label: "Live call",
@@ -511,6 +559,8 @@ export default function Dashboard({ navigate, path }) {
         durationMs: lastSession.endedAtMs - lastSession.startedAtMs,
         source: "live",
         patternPackIds,
+        recordingUrl,
+        recordingOffsetMs,
       }),
       ...(id ? { id } : {}),
     });
@@ -518,14 +568,29 @@ export default function Dashboard({ navigate, path }) {
   const runLiveReport = async () => {
     if (!lastSession) return;
     setFleetResults(null);
-    setActiveAudioUrl(null); // live calls aren't recorded/stored - no audio to play back
     clearLabErrors();
     setLiveLoading(true);
     const historyId = liveHistoryIdRef.current;
     const isCurrent = () => liveHistoryIdRef.current === historyId;
     try {
+      // Not recorded (recordCall was off) -> no audio, same as before.
+      // Recorded -> the in-memory blob plays immediately; if the bucket
+      // upload for this same session has resolved, prefer its durable URL
+      // so the report (and history entry below) survive a reload. If the
+      // upload is still in flight, attachRecordingToHistory fills it in once
+      // it resolves.
+      const { sessionId, recordingOffsetMs } = lastSession;
+      const bucketUrl =
+        recordingUploadRef.current.sessionId === sessionId ? await recordingUploadRef.current.promise : null;
+      if (isCurrent()) showAudio(bucketUrl ?? getLiveAudioBlob(sessionId), recordingOffsetMs, sessionId);
       const nextReport = await analyze(lastSession, patternPackIds);
-      saveLiveHistory(nextReport, historyId);
+      const attached = findEntryBySessionId(sessionId);
+      saveLiveHistory(
+        nextReport,
+        historyId,
+        bucketUrl ?? (attached?.id === historyId ? attached.recordingUrl : undefined),
+        recordingOffsetMs
+      );
       if (isCurrent()) setReport(nextReport);
     } catch (err) {
       if (isCurrent()) setLiveError(err.message ?? "Something went wrong generating this report.");
@@ -572,7 +637,7 @@ export default function Dashboard({ navigate, path }) {
     setFleetResults(null);
     clearLabErrors();
     setSampleLoadingKey(key);
-    setActiveAudioUrl(SAMPLE_AUDIO_URLS[key] && PLAYABLE_SAMPLE_LABEL[key] ? SAMPLE_AUDIO_URLS[key] : null);
+    showAudio(SAMPLE_AUDIO_URLS[key] && PLAYABLE_SAMPLE_LABEL[key] ? SAMPLE_AUDIO_URLS[key] : null);
     try {
       const session = sessionByKey(key);
       const nextReport = await analyze(session, patternPackIds);
@@ -592,7 +657,7 @@ export default function Dashboard({ navigate, path }) {
     setFleetLoading(true);
     clearLabErrors();
     setReport(null);
-    setActiveAudioUrl(null);
+    showAudio(null);
     setFleetResults([]);
     setFleetProgress({ done: 0, total: keys.length });
     try {
@@ -622,7 +687,7 @@ export default function Dashboard({ navigate, path }) {
     if (!consent) return;
     const parsed = parseSessionPaste(pasteText);
     setFleetResults(null);
-    setActiveAudioUrl(null);
+    showAudio(null);
     clearLabErrors();
     if (!parsed.ok) {
       setPasteError(parsed.error);
@@ -653,7 +718,7 @@ export default function Dashboard({ navigate, path }) {
     clearLabErrors();
     setUploadStatus("uploading");
     const blobUrl = URL.createObjectURL(file);
-    setActiveAudioUrl(blobUrl);
+    showAudio(blobUrl);
     try {
       const session = await transcribeUpload(file);
       // Optional consentEvent lets the "diarize this sample" path keep the
@@ -705,7 +770,7 @@ export default function Dashboard({ navigate, path }) {
     }
     setFleetResults(null);
     clearLabErrors();
-    setActiveAudioUrl(entry.audioKey ? SAMPLE_AUDIO_URLS[entry.audioKey] ?? null : null);
+    showAudio(entry.audioKey ? SAMPLE_AUDIO_URLS[entry.audioKey] ?? null : null);
     setReport(entry.report);
   };
 
@@ -815,7 +880,7 @@ export default function Dashboard({ navigate, path }) {
                 disabled={!canStart}
               />
               I consent to this session being analyzed, whether a live call, an upload, or a pasted
-              transcript. Live call audio is not stored.
+              transcript.
             </label>
           </div>
 
@@ -834,7 +899,8 @@ export default function Dashboard({ navigate, path }) {
                   disabled={!canStart}
                 />
                 Record this call. Off by default — live call audio is never stored unless you check
-                this. A recording stays local until you choose to analyze or download it.
+                this. A recording is saved to persistent storage (falls back to this browser only if
+                storage isn't configured) so the report's audio player can play it back later.
               </label>
               <div className="call-row">
                 <button

@@ -79,6 +79,35 @@ test("sample entry stores audioKey; upload entry never does", () => {
   assert.equal("audioKey" in uploadEntry, false);
 });
 
+test("live entry with a bucket-persisted recording stores recordingUrl (not a blob: url, so it survives reload)", () => {
+  clearHistory();
+  const liveSession = session([{ role: "agent", text: "Hi", tMs: 0 }]);
+  const report = { sessionId: "sess_1", findings: FINDINGS };
+  saveHistoryEntry(
+    buildHistoryEntry({
+      label: "Live call",
+      report,
+      session: liveSession,
+      verdict: { level: "clear", label: "Clear" },
+      source: "live",
+      recordingUrl: "/v1/recordings/sess_1",
+    })
+  );
+  saveHistoryEntry(
+    buildHistoryEntry({
+      label: "Live call",
+      report,
+      session: liveSession,
+      verdict: { level: "clear", label: "Clear" },
+      source: "live",
+    })
+  );
+
+  const [unrecordedEntry, recordedEntry] = loadHistory();
+  assert.equal(recordedEntry.recordingUrl, "/v1/recordings/sess_1");
+  assert.equal("recordingUrl" in unrecordedEntry, false);
+});
+
 test("live-call source tag round-trips for SessionInspector's 'never stored' copy", () => {
   clearHistory();
   const liveSession = session([{ role: "agent", text: "Hi", tMs: 0 }]);

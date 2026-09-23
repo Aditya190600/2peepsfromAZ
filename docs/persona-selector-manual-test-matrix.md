@@ -46,8 +46,10 @@ setup.
 8. **Record, download** - check "Record this call", start a call, say a few
    things, end the call. A "Recording" section appears with an inline
    player, "Download recording" (saves a real, playable `.webm` locally),
-   and "Analyze this recording" - clicking Download alone never sends
-   anything to the server.
+   and "Analyze this recording". The recording is also uploaded to the
+   recordings bucket (`POST /v1/recordings/:sessionId`) as soon as the call
+   ends; with the bucket unset that POST 503s, nothing is stored, and the
+   recording stays a local blob only.
 9. **Record, analyze** - same as above, click "Analyze this recording"
    instead. It should reuse the existing `/v1/transcribe-upload` pipeline
    (same network call as "Diarize upload" on a sample) and produce a report
