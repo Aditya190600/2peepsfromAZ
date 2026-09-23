@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { analyzeSession } from "./analyze.js";
 import { LlmGatewayRateLimitError } from "./llmGateway.js";
+import { piiScan } from "./piiScan.js";
+import { genericPack } from "./patternPacks.js";
 
 const cleanSession = {
   sessionId: "sess_clean",
@@ -310,4 +312,28 @@ test("PII scan flags rateLimited:true specifically for a gateway rate-limit fail
   const pii = report.findings.find((f) => f.check === "pii_scan");
   assert.equal(pii.status, "error");
   assert.equal(pii.rateLimited, true);
+});
+
+test("offline piiScan keeps a pattern-pack match and adds the offline sentence only when nothing matched", async () => {
+  const llmGateway = () => {
+    throw new Error("no network");
+  };
+
+  const matched = await piiScan(
+    { turns: [{ role: "user", text: "my SSN is 123-45-6789", tMs: 0 }] },
+    [genericPack],
+    { deterministic: true, llmGateway },
+  );
+  assert.equal(matched.status, "flag");
+  assert.ok(matched.items.length > 0);
+  assert.equal(matched.detail, undefined);
+
+  const clean = await piiScan(
+    { turns: [{ role: "user", text: "Sure, go ahead.", tMs: 0 }] },
+    [genericPack],
+    { deterministic: true, llmGateway },
+  );
+  assert.equal(clean.status, "pass");
+  assert.deepEqual(clean.items, []);
+  assert.equal(clean.detail, "Offline pattern packs only. Free-form PII requires semantic analysis.");
 });
