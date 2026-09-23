@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppShell } from "./Chrome";
 import { loadHistory, clearHistory } from "./reportHistory";
 import { SEVERITY_LABEL, VERDICT_CLASS } from "./compliance";
@@ -13,12 +13,37 @@ function formatWhen(iso) {
   }
 }
 
+function mergeSessions(remote) {
+  const local = loadHistory();
+  const seen = new Set(local.map((entry) => entry.sessionId));
+  return [...remote.filter((entry) => !seen.has(entry.sessionId)), ...local].sort((a, b) =>
+    (b.timestamp || "").localeCompare(a.timestamp || ""),
+  );
+}
+
 export default function History({ navigate, path }) {
+  const [remote, setRemote] = useState([]);
   const [entries, setEntries] = useState(() => loadHistory());
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/v1/telephony/sessions")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((rows) => {
+        if (cancelled) return;
+        const list = Array.isArray(rows) ? rows : [];
+        setRemote(list);
+        setEntries(mergeSessions(list));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const onClear = () => {
     clearHistory();
-    setEntries([]);
+    setEntries(remote);
   };
 
   return (
@@ -35,10 +60,9 @@ export default function History({ navigate, path }) {
       }
     >
       <p className="app-lede">
-        Sessions is a history list, stored in this browser's localStorage, not a shared database - it
-        won't follow you to another device or browser. Every report you've run lands here, most
-        recent first. Click any row to reopen that session's full report, or copy a session's URL to
-        deep-link straight to it later.
+        Reports you run in this browser stay in localStorage. Phone calls ingested on this server
+        stay in the list after Clear history, and their links reopen from the server. Click a row
+        to open the report.
       </p>
       {entries.length === 0 ? (
         <Report
