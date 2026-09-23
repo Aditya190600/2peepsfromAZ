@@ -663,6 +663,19 @@ button.site-nav-link {
   margin: 10px 0 0;
 }
 
+.try-actions {
+  margin-bottom: 28px;
+}
+
+.report-storage-note a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.report-storage-note a:hover {
+  text-decoration: underline;
+}
+
 .upload-note {
   margin: 0 0 12px;
 }
