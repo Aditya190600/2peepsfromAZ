@@ -594,7 +594,8 @@ button.site-nav-link {
 }
 
 @media (max-width: 860px) {
-  .layout {
+  .layout,
+  .app-shell .layout {
     grid-template-columns: 1fr;
   }
 }

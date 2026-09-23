@@ -151,8 +151,8 @@ function IntroSteps() {
           <div>
             <strong>Start a live call</strong>
             <p>
-              Click <em>Start call</em> in the panel on the left. Your browser will ask for
-              microphone access — allow it so your voice can reach the AssemblyAI agent.
+              Click <em>Start call</em> below. Your browser will ask for microphone access — allow
+              it so your voice can reach the AssemblyAI agent.
             </p>
           </div>
         </li>
@@ -299,7 +299,17 @@ export function FleetView({ results, progress, navigate }) {
   );
 }
 
-export function Report({ report, audioUrl, audioRef, onSeek, loading = false, error = null, idleMessage }) {
+export function Report({
+  report,
+  audioUrl,
+  audioRef,
+  onSeek,
+  loading = false,
+  error = null,
+  idleMessage,
+  showStorageNote = false,
+  navigate,
+}) {
   const [rateLimitDismissed, setRateLimitDismissed] = useState(false);
   useEffect(() => setRateLimitDismissed(false), [report]);
 
@@ -333,6 +343,20 @@ export function Report({ report, audioUrl, audioRef, onSeek, loading = false, er
           Print / export report
         </button>
       </div>
+      {showStorageNote && (
+        <p className="pack-note report-storage-note">
+          This report and transcript are saved to your browser's local history — find it anytime
+          on the{" "}
+          {navigate ? (
+            <a href="#" onClick={(e) => { e.preventDefault(); navigate("/sessions"); }}>
+              Sessions
+            </a>
+          ) : (
+            "Sessions"
+          )}{" "}
+          page. Live call audio itself is never stored.
+        </p>
+      )}
       {audioUrl && (
         <div className="report-audio">
           <AudioPlayer src={audioUrl} audioRef={audioRef} />
@@ -678,7 +702,40 @@ export default function Dashboard({ navigate, path }) {
             layered on top of the generic scan before generating a report.
           </p>
 
-          <ProviderSettings />
+          <div className="section-block">
+            <h3>Persona</h3>
+            <p className="pack-note">
+              Pick who the AI agent plays for this call - each persona has an explicit CAN/CANNOT
+              scope and its own failure-mode boundary. Picking a persona auto-selects its matching
+              pattern pack(s) below (uncheck any you don't want).
+            </p>
+            <div className="pack-select">
+              {PERSONAS.map((persona) => (
+                <label className={`check-row ${!canStart ? "disabled" : ""}`} key={persona.id}>
+                  <input
+                    type="radio"
+                    name="persona"
+                    checked={personaId === persona.id}
+                    onChange={() => selectPersona(persona.id)}
+                    disabled={!canStart}
+                  />
+                  <strong>{persona.label}</strong> — {persona.description}
+                </label>
+              ))}
+            </div>
+            {selectedPersona.violation && (
+              <label className={`check-row ${!canStart ? "disabled" : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={seedViolation}
+                  onChange={(e) => setSeedViolation(e.target.checked)}
+                  disabled={!canStart}
+                />
+                Seed a compliance violation on this call ({selectedPersona.violation.label}) — demos
+                the report catching a failure instead of a clean pass.
+              </label>
+            )}
+          </div>
 
           <div className="section-block">
             <h2>Session</h2>
@@ -714,41 +771,10 @@ export default function Dashboard({ navigate, path }) {
             </label>
           </div>
 
-          <div className="section-block">
-            <h3>Persona</h3>
-            <p className="pack-note">
-              Pick who the AI agent plays for this call - each persona has an explicit CAN/CANNOT
-              scope and its own failure-mode boundary. Picking a persona auto-selects its matching
-              pattern pack(s) above (uncheck any you don't want).
-            </p>
-            <div className="pack-select">
-              {PERSONAS.map((persona) => (
-                <label className={`check-row ${!canStart ? "disabled" : ""}`} key={persona.id}>
-                  <input
-                    type="radio"
-                    name="persona"
-                    checked={personaId === persona.id}
-                    onChange={() => selectPersona(persona.id)}
-                    disabled={!canStart}
-                  />
-                  <strong>{persona.label}</strong> — {persona.description}
-                </label>
-              ))}
-            </div>
-            {selectedPersona.violation && (
-              <label className={`check-row ${!canStart ? "disabled" : ""}`}>
-                <input
-                  type="checkbox"
-                  checked={seedViolation}
-                  onChange={(e) => setSeedViolation(e.target.checked)}
-                  disabled={!canStart}
-                />
-                Seed a compliance violation on this call ({selectedPersona.violation.label}) — demos
-                the report catching a failure instead of a clean pass.
-              </label>
-            )}
-          </div>
+          <ProviderSettings />
+        </section>
 
+        <section className="panel report-panel">
           <div className="section-block">
             <h3>Live call</h3>
             <label className={`check-row ${!canStart ? "disabled" : ""}`}>
@@ -1024,9 +1050,7 @@ export default function Dashboard({ navigate, path }) {
             </p>
             {fleetError && <p className="error-banner">{fleetError}</p>}
           </div>
-        </section>
 
-        <section className="panel report-panel">
           {fleetReady ? (
             <>
               <h2>Fleet compliance report</h2>
@@ -1042,6 +1066,8 @@ export default function Dashboard({ navigate, path }) {
                 audioUrl={activeAudioUrl}
                 audioRef={audioRef}
                 onSeek={onSeek}
+                showStorageNote={Boolean(report) && !reportLoading && !reportError}
+                navigate={navigate}
               />
             </>
           ) : (
