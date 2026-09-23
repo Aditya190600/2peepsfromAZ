@@ -17,41 +17,57 @@ export function loadHistory() {
 // saveHistoryEntry call site, from the session that was analyzed and the
 // report it produced. `audioKey` must be a SAMPLE_AUDIO_URLS key - never a
 // blob URL, which isn't valid across a reload/localStorage round-trip.
-// `recordingUrl` is different: it's a durable server path (e.g.
-// `/v1/recordings/<sessionId>`, see server/recordingsStore.js) for a live
-// call recording persisted to the Railway bucket - safe to store since it
-// survives reload, unlike a blob: URL.
-export function buildHistoryEntry({ label, session, report, audioKey, recordingUrl, recordingOffsetMs, durationMs, verdict, source }) {
+// With no `report`, builds a pending, transcript-only entry (`pending: true`)
+// that keeps enough of the session (`consentEvent`, `patternPackIds`) for
+// `historyEntrySession` to re-analyze it later.
+export function buildHistoryEntry({ label, session, report, audioKey, durationMs, verdict, source, patternPackIds }) {
   const turns = (session?.turns ?? []).map(({ role, text, tMs }) => ({ role, text, tMs }));
   const lastTurnMs = turns.length ? turns[turns.length - 1].tMs : 0;
   return {
     timestamp: new Date().toISOString(),
     label,
-    sessionId: report.sessionId,
-    verdictLevel: verdict?.level,
-    verdictLabel: verdict?.label,
-    report,
+    sessionId: report ? report.sessionId : (session?.sessionId ?? null),
+    ...(report
+      ? { verdictLevel: verdict?.level, verdictLabel: verdict?.label, report, findings: report.findings }
+      : { pending: true, verdictLabel: "Report pending" }),
     turns,
     startedAt: session?.startedAt ?? null,
     durationMs: durationMs ?? lastTurnMs,
     turnCount: turns.length,
     ...(audioKey ? { audioKey } : {}),
-    ...(recordingUrl ? { recordingUrl } : {}),
-    ...(recordingOffsetMs ? { recordingOffsetMs } : {}),
     ...(source ? { source } : {}),
     ...(session?.persona ? { persona: session.persona } : {}),
-    findings: report.findings,
+    ...(session?.consentEvent ? { consentEvent: session.consentEvent } : {}),
+    ...(patternPackIds ? { patternPackIds } : {}),
   };
 }
 
+// The analyzable session a stored entry was built from, for re-running a
+// pending entry's report.
+export function historyEntrySession(entry) {
+  return {
+    sessionId: entry.sessionId,
+    startedAt: entry.startedAt,
+    consentEvent: entry.consentEvent ?? null,
+    turns: entry.turns ?? [],
+    ...(entry.persona ? { persona: entry.persona } : {}),
+  };
+}
+
+// Saves `entry` and returns its id. An entry carrying the `id` of one already
+// in history replaces it in place; anything else is added to the front.
 export function saveHistoryEntry(entry) {
+  const id = entry.id ?? `hist_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   try {
     const history = loadHistory();
-    history.unshift({ id: `hist_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, ...entry });
+    const index = entry.id ? history.findIndex((e) => e.id === entry.id) : -1;
+    if (index >= 0) history[index] = { ...entry, id };
+    else history.unshift({ ...entry, id });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(history.slice(0, MAX_ENTRIES)));
   } catch {
     // localStorage unavailable (private mode, quota) - history is a convenience, not load-bearing
   }
+  return id;
 }
 
 export function findEntryBySessionId(sessionId) {

@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { AppShell } from "./Chrome";
-import { findEntryBySessionId } from "./reportHistory";
-import { resolveAudioUrl } from "./audioResolve";
-import { seekAudio } from "./seek";
+import {
+  buildHistoryEntry,
+  findEntryBySessionId,
+  historyEntrySession,
+  saveHistoryEntry,
+} from "./reportHistory";
+import { analyze } from "./analyzeClient";
+import { SAMPLE_AUDIO_URLS } from "./sampleSessions";
+import { getLiveAudioBlob } from "./liveAudioBlobs";
 import { Report, Timestamp, formatTMs } from "./Dashboard";
 import AudioPlayer from "./AudioPlayer";
-import { VERDICT_CLASS } from "./compliance";
-import { shareRecording } from "./analyzeClient";
+import { VERDICT_CLASS, headlineVerdict } from "./compliance";
 import "./App.css";
 
 function formatWhen(iso) {
@@ -18,6 +23,12 @@ function formatWhen(iso) {
   }
 }
 
+function resolveAudioUrl(entry) {
+  if (!entry) return null;
+  if (entry.audioKey) return SAMPLE_AUDIO_URLS[entry.audioKey] ?? null;
+  return getLiveAudioBlob(entry.sessionId);
+}
+
 function CallTab({ entry, audioUrl, audioRef, onSeek }) {
   return (
     <div className="section-block">
@@ -26,10 +37,7 @@ function CallTab({ entry, audioUrl, audioRef, onSeek }) {
           <AudioPlayer src={audioUrl} audioRef={audioRef} />
         </div>
       ) : entry.source === "live" ? (
-        <p className="hint">
-          This was a live call - audio is stored only when "Record this call" is checked, so only
-          the transcript is available here.
-        </p>
+        <p className="hint">This was a live call - audio is never stored, only the transcript.</p>
       ) : entry.source === "pstn" ? (
         <p className="hint">Phone audio is not stored. This is the transcript posted when the call ended.</p>
       ) : null}
@@ -50,6 +58,8 @@ function CallTab({ entry, audioUrl, audioRef, onSeek }) {
 export default function SessionInspector({ navigate, path, sessionId }) {
   const [entry, setEntry] = useState(() => findEntryBySessionId(sessionId));
   const [loading, setLoading] = useState(() => !findEntryBySessionId(sessionId));
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState(null);
   const [tab, setTab] = useState("call");
 
   useEffect(() => {
@@ -78,12 +88,16 @@ export default function SessionInspector({ navigate, path, sessionId }) {
     };
   }, [sessionId]);
   const [shareCopied, setShareCopied] = useState(false);
-  const [audioShareStatus, setAudioShareStatus] = useState(null);
   const audioRef = useRef(null);
 
   const audioUrl = resolveAudioUrl(entry);
 
-  const onSeek = (tMs) => seekAudio(audioRef, tMs, entry.recordingOffsetMs);
+  const onSeek = (tMs) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.currentTime = tMs / 1000;
+    audio.play();
+  };
 
   const onShare = async () => {
     const url = `${window.location.origin}/sessions/${encodeURIComponent(sessionId ?? "")}`;
@@ -97,19 +111,31 @@ export default function SessionInspector({ navigate, path, sessionId }) {
     setTimeout(() => setShareCopied(false), 2000);
   };
 
-  const onShareWithAudio = async () => {
+  const onGenerateReport = async () => {
+    setGenerating(true);
+    setGenerateError(null);
     try {
-      const url = `${window.location.origin}${await shareRecording(entry.sessionId)}`;
-      try {
-        await navigator.clipboard.writeText(url);
-      } catch {
-        window.prompt("Copy this play-only recording link:", url);
-      }
-      setAudioShareStatus("Copied!");
+      const session = historyEntrySession(entry);
+      const report = await analyze(session, entry.patternPackIds ?? ["generic"]);
+      const nextEntry = {
+        ...buildHistoryEntry({
+          label: entry.label,
+          session,
+          report,
+          verdict: headlineVerdict(report.findings),
+          durationMs: entry.durationMs,
+          source: entry.source,
+          patternPackIds: entry.patternPackIds,
+        }),
+        id: entry.id,
+      };
+      saveHistoryEntry(nextEntry);
+      setEntry(nextEntry);
     } catch (err) {
-      setAudioShareStatus(err.message);
+      setGenerateError(err.message ?? "Something went wrong generating this report.");
+    } finally {
+      setGenerating(false);
     }
-    setTimeout(() => setAudioShareStatus(null), 2000);
   };
 
   const onDownload = () => {
@@ -181,24 +207,24 @@ export default function SessionInspector({ navigate, path, sessionId }) {
             </span>
           </div>
           <div className="sample-actions">
+            {entry.pending && (
+              <button type="button" className="btn btn-outline" onClick={onGenerateReport} disabled={generating}>
+                {generating ? "Generating report…" : "Generate report"}
+              </button>
+            )}
             <button type="button" className="btn btn-outline" onClick={onShare}>
               {shareCopied ? "Copied!" : "Share"}
             </button>
-            {entry.recordingUrl && (
-              <button type="button" className="btn btn-outline" onClick={onShareWithAudio}>
-                {audioShareStatus ?? "Share with audio"}
-              </button>
-            )}
             <button type="button" className="btn btn-outline" onClick={onDownload}>
               Download JSON
             </button>
           </div>
         </div>
+        {generateError && <p className="error-banner">{generateError}</p>}
         <p className="hint">
           {entry.source === "pstn"
             ? "This link reopens the phone session from this server."
             : "Share copies a link that only opens this session's report in this browser."}
-          {entry.recordingUrl && " Share with audio copies a private, play-only link to this call's recording."}
         </p>
 
         <div className="tab-bar">
@@ -221,7 +247,11 @@ export default function SessionInspector({ navigate, path, sessionId }) {
         {tab === "call" ? (
           <CallTab entry={entry} audioUrl={audioUrl} audioRef={audioRef} onSeek={onSeek} />
         ) : (
-          <Report report={entry.report} />
+          <Report
+            report={entry.report}
+            loading={generating}
+            idleMessage="This call's report hasn't been generated yet. Click Generate report above."
+          />
         )}
       </section>
     </AppShell>
