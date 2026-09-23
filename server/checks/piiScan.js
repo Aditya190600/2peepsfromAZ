@@ -94,7 +94,9 @@ export async function piiScan(session, patternPacks, { llmGateway = callLlmGatew
 
   const status = items.length > 0 ? "flag" : llmGatewayError ? "error" : "pass";
   const detail = deterministic
-    ? "Offline pattern packs only. Free-form PII requires semantic analysis."
+    ? items.length === 0
+      ? "Offline pattern packs only. Free-form PII requires semantic analysis."
+      : undefined
     : rateLimited
     ? "Pattern-pack scan found nothing, but the semantic pass for free-form PII (names, orgs, emails, addresses) is temporarily unavailable due to high demand. Please retry in a moment."
     : llmGatewayError
