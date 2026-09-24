@@ -81,6 +81,7 @@ export function attachTwilioStreamServer(
   });
 
   httpServer.on("upgrade", (req, socket, head) => {
+    console.log(`QualEval call bridge: raw upgrade request url = ${req.url}`);
     const { pathname } = new URL(req.url, "http://localhost");
     if (pathname !== STREAM_PATH) return;
     wss.handleUpgrade(req, socket, head, (ws) => {
