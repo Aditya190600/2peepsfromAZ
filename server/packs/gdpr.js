@@ -10,7 +10,7 @@ export const gdprPack = {
     {
       id: "eu_national_id",
       label: "Possible EU national ID or passport number",
-      regex: /\b(?:national\s*id(?:entity)?(?:\s*card)?\s*number|passport\s*number)\s*[:#-]?\s*[A-Z0-9]{6,12}\b/gi,
+      regex: /\b(?:national\s*id(?:entity)?(?:\s*card)?\s*number|passport\s*number)\s*(?:is\s*)?[:#-]?\s*[A-Z0-9]{6,12}\b/gi,
       specimens: [
         { kind: "positive", utterance: "My national ID number is X1234567." },
         { kind: "negative", utterance: "My employee number is X1234567.", why: "national ID/passport keyword required" },
@@ -19,7 +19,7 @@ export const gdprPack = {
     {
       id: "eu_iban",
       label: "Possible IBAN",
-      regex: /\bIBAN\s*[:#-]?\s*[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b/gi,
+      regex: /\bIBAN\s*(?:is\s*)?[:#-]?\s*[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b/gi,
       specimens: [
         { kind: "positive", utterance: "My IBAN is DE89370400440532013000." },
         { kind: "negative", utterance: "My account number is DE89370400440532013000.", why: "IBAN keyword required" },
