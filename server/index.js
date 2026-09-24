@@ -216,7 +216,7 @@ app.post("/v1/pack-evals", requireVisitor, async (req, res) => {
 // session: consent-event-logged (TCPA), AI-disclosure-timing (e.g. CA AB
 // 2905), and a pluggable PII pattern-set scan. Body: { session, patternPackIds }.
 app.post("/v1/analyze-session", requireVisitor, async (req, res) => {
-  const { session, patternPackIds = ["generic"] } = req.body ?? {};
+  const { session, patternPackIds = ["generic"], stream = false } = req.body ?? {};
   if (!session || !Array.isArray(session.turns)) {
     return res.status(400).json({ error: "session with a turns array is required" });
   }
@@ -224,11 +224,43 @@ app.post("/v1/analyze-session", requireVisitor, async (req, res) => {
   const key = requestCacheKey(session, patternPackIds, modelProviderId);
   const cached = reportCache.get(key);
   if (cached) {
+    if (stream) {
+      res.setHeader("Content-Type", "application/x-ndjson");
+      res.write(`${JSON.stringify({ type: "done", report: cached })}\n`);
+      return res.end();
+    }
     return res.json(cached);
   }
+  // stream=true (Dashboard's single-session live report and fleet report
+  // paths) trades the plain JSON response for newline-delimited progress
+  // events, one per check as it completes, ending with a "done" event
+  // carrying the same report shape the non-streamed response returns - so
+  // the "Analyzing…" state can show real tokens-used/cost/violation-count
+  // numbers as they accumulate instead of a static message. Every other
+  // caller (sample buttons, paste, upload-recording analyze) keeps the
+  // original single-JSON-response contract unchanged.
+  if (stream) res.setHeader("Content-Type", "application/x-ndjson");
   try {
     const llmGateway = providers.getModel().complete;
-    const report = await analyzeSession(session, { patternPackIds, llmGateway });
+    const report = await analyzeSession(session, {
+      patternPackIds,
+      llmGateway,
+      onCheckComplete: stream
+        ? (finding, checksDone, checksTotal) => {
+            res.write(
+              `${JSON.stringify({
+                type: "progress",
+                check: finding.check,
+                status: finding.status,
+                checksDone,
+                checksTotal,
+                usage: finding.llmUsage ?? null,
+                costUsd: finding.llmCostUsd ?? null,
+              })}\n`,
+            );
+          }
+        : undefined,
+    });
     const hasErroredCheck = report.findings.some((f) => f.status === "error");
     if (!hasErroredCheck) {
       reportCache.set(key, report);
@@ -238,9 +270,19 @@ app.post("/v1/analyze-session", requireVisitor, async (req, res) => {
         });
       }
     }
-    res.json(report);
+    if (stream) {
+      res.write(`${JSON.stringify({ type: "done", report })}\n`);
+      res.end();
+    } else {
+      res.json(report);
+    }
   } catch (err) {
-    res.status(502).json({ error: `Analysis failed: ${err.message}` });
+    if (stream) {
+      res.write(`${JSON.stringify({ type: "error", error: `Analysis failed: ${err.message}` })}\n`);
+      res.end();
+    } else {
+      res.status(502).json({ error: `Analysis failed: ${err.message}` });
+    }
   }
 });
 

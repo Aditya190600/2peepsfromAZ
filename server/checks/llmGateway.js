@@ -11,6 +11,26 @@ const LLM_GATEWAY_URL = "https://llm-gateway.assemblyai.com/v1/chat/completions"
 // broadly-available default. See /docs/llm-gateway/available-models.
 const DEFAULT_MODEL = "qwen3.5-4b-32k-fast";
 
+// Published LLM Gateway per-1M-token pricing (USD), verified live against
+// /docs/llm-gateway/available-models on 2026-09-23 - see AGENTS.md's
+// standing convention on checking docs before relying on a rate/field name.
+// Real billing may add regional surcharges/rounding this table doesn't
+// model, so every dollar figure derived from it is surfaced as an estimate,
+// never as an exact charge - see estimateCostUsd below.
+const MODEL_PRICING_PER_MILLION_USD = {
+  "qwen3.5-4b-32k-fast": { prompt: 0.1, completion: 0.5 },
+};
+
+// Returns null (rather than 0) when the model isn't in the pricing table
+// above, so callers can render "cost unknown" instead of a misleading $0.00.
+export function estimateCostUsd(model, usage) {
+  const pricing = MODEL_PRICING_PER_MILLION_USD[model];
+  if (!pricing || !usage) return null;
+  const promptCost = (usage.inputTokens / 1_000_000) * pricing.prompt;
+  const completionCost = (usage.outputTokens / 1_000_000) * pricing.completion;
+  return promptCost + completionCost;
+}
+
 export class LlmGatewayModelAccessError extends Error {
   constructor(model, status, body) {
     super(`LLM Gateway model access denied for "${model}": ${status} ${body}`);
@@ -58,13 +78,34 @@ function sleep(ms) {
 // sessions; per-API-key sharding if throughput ever needs it.
 let gatewayQueue = Promise.resolve();
 
-export function callLlmGateway(messages, options = {}) {
+function enqueueGatewayCall(messages, options) {
   const result = gatewayQueue.then(() => callLlmGatewayNow(messages, options));
   gatewayQueue = result.then(
     () => undefined,
     () => undefined,
   );
   return result;
+}
+
+// Back-compat contract: resolves to the completion text only, same as
+// before this change. Callers that need token/cost metrics (see
+// callLlmGatewayWithUsage below) get the richer shape; everyone else -
+// provider adapters, evals, existing tests - keeps working unchanged.
+export function callLlmGateway(messages, options = {}) {
+  return enqueueGatewayCall(messages, options).then((result) => result.content);
+}
+
+// Same call, same queue/retry/backoff behavior, but resolves to
+// { content, usage: {inputTokens, outputTokens, totalTokens}, costUsd, model, durationMs }
+// so the three checks that call the Gateway (disclosureCheck, piiScan,
+// scopeAdherenceCheck) can thread real token/cost numbers back out through
+// analyzeSession's report shape. This is the default `complete` for the
+// AssemblyAI model slot (server/providers/modelGateway.js) - a BYO
+// OpenAI-compatible provider still implements the plain-string contract
+// above, so its checks simply report no usage/cost, which is honest given
+// this project doesn't have that provider's pricing.
+export function callLlmGatewayWithUsage(messages, options = {}) {
+  return enqueueGatewayCall(messages, options);
 }
 
 async function callLlmGatewayNow(messages, options = {}) {
@@ -76,6 +117,7 @@ async function callLlmGatewayNow(messages, options = {}) {
     timeoutMs = DEFAULT_TIMEOUT_MS,
   } = options;
 
+  const startedAt = Date.now();
   let lastStatus, lastText;
   for (let attempt = 0; attempt <= RETRYABLE_429_DELAYS_MS.length; attempt++) {
     const controller = new AbortController();
@@ -93,7 +135,11 @@ async function callLlmGatewayNow(messages, options = {}) {
       lastStatus = "timeout";
       lastText = `no response within ${timeoutMs}ms`;
       if (attempt < RETRYABLE_429_DELAYS_MS.length) {
-        await sleep(RETRYABLE_429_DELAYS_MS[attempt]);
+        const delayMs = RETRYABLE_429_DELAYS_MS[attempt];
+        console.warn(
+          `[llmGateway] attempt ${attempt + 1} timed out after ${timeoutMs}ms, retrying in ${delayMs}ms`,
+        );
+        await sleep(delayMs);
       }
       continue;
     } finally {
@@ -102,7 +148,20 @@ async function callLlmGatewayNow(messages, options = {}) {
 
     if (resp.ok) {
       const body = await resp.json();
-      return body.choices[0].message.content;
+      const rawUsage = body.usage ?? {};
+      const usage = {
+        inputTokens: rawUsage.input_tokens ?? 0,
+        outputTokens: rawUsage.output_tokens ?? 0,
+        totalTokens: rawUsage.total_tokens ?? (rawUsage.input_tokens ?? 0) + (rawUsage.output_tokens ?? 0),
+      };
+      const costUsd = estimateCostUsd(model, usage);
+      const durationMs = Date.now() - startedAt;
+      console.log(
+        `[llmGateway] model=${model} inputTokens=${usage.inputTokens} outputTokens=${usage.outputTokens} ` +
+          `totalTokens=${usage.totalTokens} costUsd=${costUsd === null ? "n/a" : costUsd.toFixed(6)} ` +
+          `durationMs=${durationMs} attempt=${attempt + 1}`,
+      );
+      return { content: body.choices[0].message.content, usage, costUsd, model, durationMs };
     }
 
     const text = await resp.text();
@@ -115,9 +174,15 @@ async function callLlmGatewayNow(messages, options = {}) {
     lastStatus = resp.status;
     lastText = text;
     if (attempt < RETRYABLE_429_DELAYS_MS.length) {
-      await sleep(RETRYABLE_429_DELAYS_MS[attempt]);
+      const delayMs = RETRYABLE_429_DELAYS_MS[attempt];
+      console.warn(`[llmGateway] attempt ${attempt + 1} got 429, retrying in ${delayMs}ms`);
+      await sleep(delayMs);
     }
   }
+  const durationMs = Date.now() - startedAt;
+  console.error(
+    `[llmGateway] model=${model} exhausted retries after ${durationMs}ms: ${lastStatus} ${lastText}`,
+  );
   throw new LlmGatewayRateLimitError(lastStatus, lastText);
 }
 

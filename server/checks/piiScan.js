@@ -1,4 +1,4 @@
-import { callLlmGateway, parseJsonResponse, LlmGatewayRateLimitError } from "./llmGateway.js";
+import { callLlmGatewayWithUsage, parseJsonResponse, LlmGatewayRateLimitError } from "./llmGateway.js";
 
 function redact(match) {
   if (match.length <= 4) return "*".repeat(match.length);
@@ -21,13 +21,13 @@ function looksLikeOrgName(text) {
 // Guardrails' audio-time redact_pii is the fit here.
 async function llmPiiScan(session, llmGateway) {
   const turns = session.turns ?? [];
-  if (turns.length === 0) return [];
+  if (turns.length === 0) return { items: [], usage: null, costUsd: null };
 
   const payload = turns.map((t, turnIndex) => ({ turnIndex, role: t.role, text: t.text }));
 
-  let content;
+  let result;
   try {
-    content = await llmGateway([
+    result = await llmGateway([
       { role: "system", content: NER_SYSTEM_PROMPT },
       { role: "user", content: JSON.stringify(payload) },
     ]);
@@ -36,10 +36,13 @@ async function llmPiiScan(session, llmGateway) {
     return { error: err.message, rateLimited: err instanceof LlmGatewayRateLimitError };
   }
 
+  const content = typeof result === "string" ? result : result.content;
+  const usage = typeof result === "string" ? null : result.usage;
+  const costUsd = typeof result === "string" ? null : result.costUsd;
   const parsed = parseJsonResponse(content, { items: [] });
-  const items = Array.isArray(parsed.items) ? parsed.items : [];
+  const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
 
-  return items
+  const items = rawItems
     .filter((item) => turns[item.turnIndex] && typeof item.text === "string" && item.text.length > 0)
     .filter((item) => !(item.type === "person_name" && looksLikeOrgName(item.text)))
     .map((item) => ({
@@ -51,6 +54,8 @@ async function llmPiiScan(session, llmGateway) {
       label: `LLM Gateway-detected ${String(item.type).replace(/_/g, " ")}`,
       matchRedacted: redact(item.text),
     }));
+
+  return { items, usage, costUsd };
 }
 
 // Scans every transcript turn against every pattern in every supplied pack
@@ -58,7 +63,7 @@ async function llmPiiScan(session, llmGateway) {
 // patternPacks.js), then supplements with an LLM Gateway pass for free-form
 // PII regex can't express. Packs stay pluggable: pass [genericPack] for the
 // core scan, or [genericPack, hipaaPack] to drop in an industry pack alongside it.
-export async function piiScan(session, patternPacks, { llmGateway = callLlmGateway, deterministic = false } = {}) {
+export async function piiScan(session, patternPacks, { llmGateway = callLlmGatewayWithUsage, deterministic = false } = {}) {
   const items = [];
   const turns = session.turns ?? [];
 
@@ -82,14 +87,18 @@ export async function piiScan(session, patternPacks, { llmGateway = callLlmGatew
     }
   });
 
-  const llmResult = deterministic ? [] : await llmPiiScan(session, llmGateway);
+  const llmResult = deterministic ? { items: [], usage: null, costUsd: null } : await llmPiiScan(session, llmGateway);
   let llmGatewayError = null;
   let rateLimited = false;
-  if (Array.isArray(llmResult)) {
-    items.push(...llmResult);
-  } else {
+  let llmUsage = null;
+  let llmCostUsd = null;
+  if (llmResult.error) {
     llmGatewayError = llmResult.error;
     rateLimited = Boolean(llmResult.rateLimited);
+  } else {
+    items.push(...llmResult.items);
+    llmUsage = llmResult.usage;
+    llmCostUsd = llmResult.costUsd;
   }
 
   const status = items.length > 0 ? "flag" : llmGatewayError ? "error" : "pass";
@@ -108,6 +117,7 @@ export async function piiScan(session, patternPacks, { llmGateway = callLlmGatew
     detail,
     patternPacksUsed: patternPacks.map((p) => p.id),
     ...(llmGatewayError ? { llmGatewayError, rateLimited } : {}),
+    ...(llmUsage ? { llmUsage, llmCostUsd } : {}),
     items,
   };
 }
