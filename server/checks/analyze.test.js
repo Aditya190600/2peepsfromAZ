@@ -370,3 +370,18 @@ test("offline piiScan keeps a pattern-pack match and adds the offline sentence o
   assert.deepEqual(clean.items, []);
   assert.equal(clean.detail, "Offline pattern packs only. Free-form PII requires semantic analysis.");
 });
+
+test("a pack's own check function only runs when that pack is selected via patternPackIds", async () => {
+  const llmGateway = async () => JSON.stringify({ disclosed: true, turnIndex: 0, quote: "AI assistant" });
+
+  const withoutPack = await analyzeSession(cleanSession, { llmGateway });
+  assert.equal(withoutPack.findings.some((f) => f.check === "ca_sb1001_bot_disclosure"), false);
+
+  const withPack = await analyzeSession(cleanSession, {
+    llmGateway,
+    patternPackIds: ["generic", "ca_sb1001"],
+  });
+  const sb1001 = withPack.findings.find((f) => f.check === "ca_sb1001_bot_disclosure");
+  assert.ok(sb1001);
+  assert.equal(sb1001.status, "pass");
+});

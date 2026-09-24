@@ -56,15 +56,21 @@ export function casesForPack(pack) {
     }
   }
   for (const scenario of pack.scenarios ?? []) {
+    const expectedPatternIds = scenario.expectPatternIds ?? [];
+    const claim = scenario.expectCheckId
+      ? `scenario expects ${scenario.expectCheckId} status "${scenario.expectCheckStatus}"`
+      : `scenario flags ${expectedPatternIds.join(", ")}`;
     cases.push({
       id: `${pack.id}/scenario/${scenario.id}`,
       ownerPackId: pack.id,
       patternId: null,
       kind: "scenario",
       title: scenario.title,
-      claim: `scenario flags ${scenario.expectPatternIds.join(", ")}`,
+      claim,
       session: scenario.session,
-      expectedPatternIds: [...scenario.expectPatternIds],
+      expectedPatternIds: [...expectedPatternIds],
+      expectCheckId: scenario.expectCheckId ?? null,
+      expectCheckStatus: scenario.expectCheckStatus ?? null,
     });
   }
   return cases;

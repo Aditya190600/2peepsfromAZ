@@ -8,6 +8,8 @@ import { recordingConsentPack } from "./recordingConsent.js";
 import { pcidssPack } from "./pcidss.js";
 import { gdprPack } from "./gdpr.js";
 import { fdcpaPack } from "./fdcpa.js";
+import { caSb1001Pack } from "./caSb1001.js";
+import { caAb489Pack } from "./caAb489.js";
 
 export {
   genericPack,
@@ -20,6 +22,8 @@ export {
   pcidssPack,
   gdprPack,
   fdcpaPack,
+  caSb1001Pack,
+  caAb489Pack,
 };
 
 /** @type {Record<string, object>} */
@@ -34,6 +38,8 @@ export const PACKS = {
   pcidss: pcidssPack,
   gdpr: gdprPack,
   fdcpa: fdcpaPack,
+  ca_sb1001: caSb1001Pack,
+  ca_ab489: caAb489Pack,
 };
 
 export const PACK_IDS = Object.keys(PACKS);
