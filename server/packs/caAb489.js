@@ -54,7 +54,7 @@ export const caAb489Pack = {
     {
       id: "credential_letters_claim",
       label: "Possible self-claimed licensed-credential letters",
-      regex: /\bI(?:'m| am)\s+(?:a\s+|an\s+|board-certified\s+)?(?:M\.?D\.?|D\.?O\.?|D\.?D\.?S\.?|R\.?N\.?|P\.?A\.?-?C?)\b/g,
+      regex: /\bI(?:'m| am)\s+(?:a\s+|an\s+|board-certified\s+)?(?:M\.?D\.?|D\.?O\.?|D\.?D\.?S\.?|R\.?N\.?|P\.?A\.?-?C?)\b/gi,
       specimens: [
         {
           kind: "positive",
