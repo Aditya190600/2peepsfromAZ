@@ -5,8 +5,18 @@ import { ferpaPack } from "./ferpa.js";
 import { coppaPack } from "./coppa.js";
 import { tcpaPack } from "./tcpa.js";
 import { recordingConsentPack } from "./recordingConsent.js";
+import { pcidssPack } from "./pcidss.js";
 
-export { genericPack, hipaaPack, financePack, ferpaPack, coppaPack, tcpaPack, recordingConsentPack };
+export {
+  genericPack,
+  hipaaPack,
+  financePack,
+  ferpaPack,
+  coppaPack,
+  tcpaPack,
+  recordingConsentPack,
+  pcidssPack,
+};
 
 /** @type {Record<string, object>} */
 export const PACKS = {
@@ -17,6 +27,7 @@ export const PACKS = {
   coppa: coppaPack,
   tcpa: tcpaPack,
   recording_consent: recordingConsentPack,
+  pcidss: pcidssPack,
 };
 
 export const PACK_IDS = Object.keys(PACKS);
