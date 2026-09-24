@@ -16,6 +16,7 @@ import { loadReportCache, dbConfigured, upsertReportCache } from "./reportCache.
 import { runMigrations } from "./migrate.js";
 import { createApiKey, listApiKeys, revokeApiKey, updateApiKeyExpiry, DEFAULT_EXPIRY_DAYS } from "./apiKeys.js";
 import { handleIngest } from "./webhooks/ingest.js";
+import { handleAssemblyAiWebhook } from "./webhooks/assemblyaiWebhook.js";
 import { recordingsRouter } from "./recordingsStore.js";
 import { NORTHSTAR_SESSIONS, NORTHSTAR_SESSION_KEYS } from "../client/src/sampleSessions.js";
 import * as providers from "./providers/registry.js";
@@ -29,6 +30,17 @@ const app = express();
 app.use(cors());
 
 const reportCache = new Map();
+
+// POST /v1/webhooks/assemblyai - AssemblyAI-native call-ended trigger. Must
+// be mounted with its own express.raw() ahead of the app-wide express.json()
+// below, since signature verification needs the exact raw bytes AssemblyAI
+// signed. See docs/assemblyai-webhook-ingest.md and
+// server/webhooks/assemblyaiWebhook.js.
+app.post(
+  "/v1/webhooks/assemblyai",
+  express.raw({ type: "application/json", limit: "1mb" }),
+  handleAssemblyAiWebhook(reportCache),
+);
 
 app.use(express.json({ limit: "2mb" }));
 
