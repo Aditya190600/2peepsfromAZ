@@ -393,6 +393,77 @@ export function Report({
   );
 }
 
+// Lightweight step-through walkthrough: no target measurement library, just
+// getBoundingClientRect on the step's own ref plus scrollIntoView. Steps are
+// {ref, title, body} tuples supplied by the caller; the caller also owns
+// switching tabs so a step's target actually exists in the DOM before this
+// renders it.
+function TourOverlay({ steps, stepIndex, onNext, onPrev, onClose }) {
+  const [rect, setRect] = useState(null);
+  const step = steps[stepIndex];
+
+  useEffect(() => {
+    const node = step?.ref?.current;
+    if (!node) {
+      setRect(null);
+      return;
+    }
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+    const measure = () => setRect(node.getBoundingClientRect());
+    const t = setTimeout(measure, 260); // let the smooth scroll settle
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
+    };
+  }, [step]);
+
+  if (!step) return null;
+
+  const tooltipTop = rect ? Math.min(rect.bottom + 12, window.innerHeight - 160) : window.innerHeight / 2;
+  const tooltipLeft = rect ? Math.min(Math.max(rect.left, 16), window.innerWidth - 316) : 16;
+
+  return (
+    <div className="tour-overlay" role="dialog" aria-label="Guided walkthrough">
+      {rect && (
+        <div
+          className="tour-spotlight"
+          style={{
+            top: rect.top - 6,
+            left: rect.left - 6,
+            width: rect.width + 12,
+            height: rect.height + 12,
+          }}
+        />
+      )}
+      <div className="tour-tooltip" style={{ top: tooltipTop, left: tooltipLeft }}>
+        <p className="tour-step-count">
+          Step {stepIndex + 1} of {steps.length}
+        </p>
+        <h4>{step.title}</h4>
+        <p>{step.body}</p>
+        <div className="tour-tooltip-actions">
+          <button type="button" className="btn btn-outline" onClick={onClose}>
+            Skip tour
+          </button>
+          <div className="tour-tooltip-nav">
+            {stepIndex > 0 && (
+              <button type="button" className="btn btn-outline" onClick={onPrev}>
+                Back
+              </button>
+            )}
+            <button type="button" className="btn btn-primary" onClick={onNext}>
+              {stepIndex === steps.length - 1 ? "Done" : "Next"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard({ navigate, path }) {
   const {
     status,
@@ -432,10 +503,17 @@ export default function Dashboard({ navigate, path }) {
   const [pasteError, setPasteError] = useState(null);
   const [industryPacks, setIndustryPacks] = useState(INDUSTRY_PACKS);
   const [packCatalogStale, setPackCatalogStale] = useState(false);
+  const [sessionTab, setSessionTab] = useState("live"); // live | webhook | paste
+  const [sampleTab, setSampleTab] = useState("samples"); // samples | scripted | fleet
+  const [tourStep, setTourStep] = useState(-1); // -1 = not running
   const audioRef = useRef(null);
   const reportHeadingRef = useRef(null);
   const liveHistoryIdRef = useRef(null);
   const liveSessionRef = useRef(null);
+  const personaSectionRef = useRef(null);
+  const consentRowRef = useRef(null);
+  const startCallRef = useRef(null);
+  const callStatusRef = useRef(null);
   // { sessionId, promise<bucketUrl|null> } for the in-flight/completed bucket
   // upload of the current recording - null promise result means the bucket
   // isn't configured (local dev) or the upload failed, so callers fall back
@@ -781,6 +859,51 @@ export default function Dashboard({ navigate, path }) {
     runUpload(e.dataTransfer.files?.[0]);
   };
 
+  // Take-a-tour: highlights the live-call flow in order. Targets live in two
+  // different panels (persona/consent on the left, call controls + report on
+  // the right), so starting the tour also forces the Live call tab active.
+  const tourSteps = [
+    {
+      ref: personaSectionRef,
+      title: "1. Pick a persona",
+      body: "Choose who the AI agent plays on this call. Each persona has its own scope and voice - picking one also auto-selects the matching pattern packs below.",
+    },
+    {
+      ref: consentRowRef,
+      title: "2. Give consent",
+      body: "Check this box to allow the call to be analyzed. Start call stays disabled until it's checked.",
+    },
+    {
+      ref: startCallRef,
+      title: "3. Start the call",
+      body: "Click Start call, then allow microphone access when your browser asks for it.",
+    },
+    {
+      ref: callStatusRef,
+      title: "4. Watch the live status",
+      body: "This shows the call's connection state - Connecting, then Live once the agent is on the line and your transcript is filling in.",
+    },
+    {
+      ref: reportHeadingRef,
+      title: "5. Get your report",
+      body: "Click End call and a compliance report generates automatically here, ranked by severity with a citation on every finding.",
+    },
+  ];
+
+  const startTour = () => {
+    setSessionTab("live");
+    setTourStep(0);
+  };
+  const closeTour = () => setTourStep(-1);
+  const nextTourStep = () => {
+    if (tourStep >= tourSteps.length - 1) {
+      closeTour();
+      return;
+    }
+    setTourStep((s) => s + 1);
+  };
+  const prevTourStep = () => setTourStep((s) => Math.max(0, s - 1));
+
   const playableKeys = Object.keys(PLAYABLE_SAMPLE_LABEL);
   const reportLoading =
     liveLoading ||
@@ -815,7 +938,7 @@ export default function Dashboard({ navigate, path }) {
             layered on top of the generic scan before generating a report.
           </p>
 
-          <div className="section-block">
+          <div className="section-block" ref={personaSectionRef}>
             <h2>Persona</h2>
             <p className="pack-note">
               Pick who the AI agent plays for this call - each persona has an explicit CAN/CANNOT
@@ -872,7 +995,7 @@ export default function Dashboard({ navigate, path }) {
               </p>
             )}
             <PackEvals selectedPacks={selectedPacks} catalog={industryPacks} />
-            <label className={`check-row ${!canStart ? "disabled" : ""}`}>
+            <label className={`check-row ${!canStart ? "disabled" : ""}`} ref={consentRowRef}>
               <input
                 type="checkbox"
                 checked={consent}
@@ -889,148 +1012,215 @@ export default function Dashboard({ navigate, path }) {
 
         <section className="panel report-panel">
           <div className="try-actions">
-            <div className="section-block">
-              <h3>Live call</h3>
-              <label className={`check-row ${!canStart ? "disabled" : ""}`}>
-                <input
-                  type="checkbox"
-                  checked={recordCall}
-                  onChange={(e) => setRecordCall(e.target.checked)}
-                  disabled={!canStart}
-                />
-                Record this call. Off by default — live call audio is never stored unless you check
-                this. A recording is saved to persistent storage (falls back to this browser only if
-                storage isn't configured) so the report's audio player can play it back later.
-              </label>
-              <div className="call-row">
+            <div className="tab-bar-row">
+              <div className="tab-bar">
                 <button
-                  className={`btn ${canStart ? "btn-primary" : "btn-danger"}`}
-                  onClick={canStart ? () => connect(consent, selectedPersona, seedViolation, recordCall) : disconnect}
-                  disabled={canStart && !consent}
+                  type="button"
+                  className={`tab-btn ${sessionTab === "live" ? "is-active" : ""}`}
+                  onClick={() => setSessionTab("live")}
                 >
-                  {canStart ? "Start call" : "End call"}
+                  Live call
                 </button>
-                <span className={`status is-${status}`}>
-                  <span className="status-dot" />
-                  {STATUS_LABEL[status]}
-                </span>
+                <button
+                  type="button"
+                  className={`tab-btn ${sessionTab === "webhook" ? "is-active" : ""}`}
+                  onClick={() => setSessionTab("webhook")}
+                >
+                  Try as webhook sandbox
+                </button>
+                <button
+                  type="button"
+                  className={`tab-btn ${sessionTab === "paste" ? "is-active" : ""}`}
+                  onClick={() => setSessionTab("paste")}
+                >
+                  Paste session transcript
+                </button>
               </div>
+              <button type="button" className="btn btn-outline tour-start-btn" onClick={startTour}>
+                Take a tour
+              </button>
+            </div>
 
-              {canStart && (
-                <p className="hint">Your browser will ask for microphone access.</p>
-              )}
-              {status === "connecting" && (
-                <p className="hint">Connecting to the AssemblyAI voice agent…</p>
-              )}
-              {status === "ready" && (
-                <p className="hint">
-                  Live — say hello or ask anything. Click <em>End call</em> when you're done - your
-                  report generates automatically.
-                </p>
-              )}
-
-              {status === "error" && (
-                <p className="error-banner">
-                  {connectError ??
-                    "The call could not connect. Check the AssemblyAI API key on the server and try again."}
-                </p>
-              )}
-
-              {status === "ready" && micSilent && (
-                <p className="error-banner">
-                  No signal from your microphone - it may be muted or the wrong input device is
-                  selected. Check your system sound settings.
-                </p>
-              )}
-
-              <ul className="transcript">
-                {transcript.map((t, i) => (
-                  <li key={i}>
-                    <span className="transcript-role">{t.role}</span>
-                    {t.text}
-                  </li>
-                ))}
-              </ul>
-              {status !== "idle" && transcript.length === 0 && (
-                <p className="transcript-empty">Listening for the first turn…</p>
-              )}
-
-              {lastSession && (
-                <button
-                  className="btn btn-outline generate-btn"
-                  onClick={runLiveReport}
-                  disabled={liveLoading}
-                >
-                  {liveLoading ? "Generating report…" : "Regenerate report for last call"}
-                </button>
-              )}
-              {liveError && <p className="error-banner">{liveError}</p>}
-
-              {lastSession && personaId !== "neutral" && (
-                <div className="section-block webhook-sandbox-block">
-                  <h4>Try as webhook sandbox</h4>
-                  <p className="pack-note">
-                    Send this persona call's transcript through{" "}
-                    <code>POST /v1/ingest/:apiKey</code> - the same webhook receiver a real
-                    customer integration posts to, instead of analyzing it directly here. Needs a
-                    ComplyLine API key with the right pack scopes;{" "}
-                    <a href="#" onClick={(e) => { e.preventDefault(); navigate("/api-keys"); }}>
-                      create one
-                    </a>
-                    .
-                  </p>
+            {sessionTab === "live" && (
+              <div className="section-block tab-panel">
+                <label className={`check-row ${!canStart ? "disabled" : ""}`}>
                   <input
-                    type="password"
-                    placeholder="ComplyLine API key"
-                    value={webhookApiKey}
-                    onChange={(e) => setWebhookApiKey(e.target.value)}
+                    type="checkbox"
+                    checked={recordCall}
+                    onChange={(e) => setRecordCall(e.target.checked)}
+                    disabled={!canStart}
                   />
+                  Record this call. Off by default — live call audio is never stored unless you check
+                  this. A recording is saved to persistent storage (falls back to this browser only if
+                  storage isn't configured) so the report's audio player can play it back later.
+                </label>
+                <div className="call-row">
                   <button
-                    className="btn btn-outline"
-                    onClick={runWebhookSandbox}
-                    disabled={!webhookApiKey.trim() || webhookStatus === "sending"}
+                    ref={startCallRef}
+                    className={`btn ${canStart ? "btn-primary" : "btn-danger"}`}
+                    onClick={canStart ? () => connect(consent, selectedPersona, seedViolation, recordCall) : disconnect}
+                    disabled={canStart && !consent}
                   >
-                    {webhookStatus === "sending" ? "Sending…" : "Send to webhook receiver"}
+                    {canStart ? "Start call" : "End call"}
                   </button>
-                  {webhookStatus === "sent" && (
-                    <p className="pack-note">
-                      Sent - the ingest endpoint acked and is analyzing asynchronously, same as a
-                      real customer's inbound webhook. No inline report here by design.
-                    </p>
-                  )}
-                  {webhookStatus === "error" && webhookError && (
-                    <p className="error-banner">{webhookError}</p>
-                  )}
+                  <span className={`status is-${status}`} ref={callStatusRef}>
+                    <span className="status-dot" />
+                    {STATUS_LABEL[status]}
+                  </span>
                 </div>
-              )}
 
-              {recordingUrl && (
-                <div className="section-block recording-block">
-                  <h4>Recording</h4>
-                  <AudioPlayer src={recordingUrl} compact />
-                  <div className="call-row">
-                    <a className="btn btn-outline" href={recordingUrl} download={`complyline-call-${Date.now()}.webm`}>
-                      Download recording
-                    </a>
+                {canStart && (
+                  <p className="hint">Your browser will ask for microphone access.</p>
+                )}
+                {status === "connecting" && (
+                  <p className="hint">Connecting to the AssemblyAI voice agent…</p>
+                )}
+                {status === "ready" && (
+                  <p className="hint">
+                    Live — say hello or ask anything. Click <em>End call</em> when you're done - your
+                    report generates automatically.
+                  </p>
+                )}
+
+                {status === "error" && (
+                  <p className="error-banner">
+                    {connectError ??
+                      "The call could not connect. Check the AssemblyAI API key on the server and try again."}
+                  </p>
+                )}
+
+                {status === "ready" && micSilent && (
+                  <p className="error-banner">
+                    No signal from your microphone - it may be muted or the wrong input device is
+                    selected. Check your system sound settings.
+                  </p>
+                )}
+
+                <ul className="transcript">
+                  {transcript.map((t, i) => (
+                    <li key={i}>
+                      <span className="transcript-role">{t.role}</span>
+                      {t.text}
+                    </li>
+                  ))}
+                </ul>
+                {status !== "idle" && transcript.length === 0 && (
+                  <p className="transcript-empty">Listening for the first turn…</p>
+                )}
+
+                {lastSession && (
+                  <button
+                    className="btn btn-outline generate-btn"
+                    onClick={runLiveReport}
+                    disabled={liveLoading}
+                  >
+                    {liveLoading ? "Generating report…" : "Regenerate report for last call"}
+                  </button>
+                )}
+                {liveError && <p className="error-banner">{liveError}</p>}
+
+                {recordingUrl && (
+                  <div className="section-block recording-block">
+                    <h4>Recording</h4>
+                    <AudioPlayer src={recordingUrl} compact />
+                    <div className="call-row">
+                      <a className="btn btn-outline" href={recordingUrl} download={`complyline-call-${Date.now()}.webm`}>
+                        Download recording
+                      </a>
+                      <button
+                        className="btn btn-outline"
+                        disabled={!consent || uploadStatus === "uploading"}
+                        onClick={() =>
+                          runUpload(new File([recordedBlob], "recording.webm", { type: recordedBlob.type }), {
+                            label: `${selectedPersona.label} — recorded call`,
+                          })
+                        }
+                      >
+                        {uploadStatus === "uploading" ? "Analyzing…" : "Analyze this recording"}
+                      </button>
+                    </div>
+                    <p className="pack-note">
+                      Download stays separate from analyze — analyzing sends the recording to the same
+                      upload pipeline as the sample audio below; download never does.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {sessionTab === "webhook" && (
+              <div className="section-block tab-panel">
+                {lastSession && personaId !== "neutral" ? (
+                  <>
+                    <p className="pack-note">
+                      Send this persona call's transcript through{" "}
+                      <code>POST /v1/ingest/:apiKey</code> - the same webhook receiver a real
+                      customer integration posts to, instead of analyzing it directly here. Needs a
+                      ComplyLine API key with the right pack scopes;{" "}
+                      <a href="#" onClick={(e) => { e.preventDefault(); navigate("/api-keys"); }}>
+                        create one
+                      </a>
+                      .
+                    </p>
+                    <input
+                      type="password"
+                      placeholder="ComplyLine API key"
+                      value={webhookApiKey}
+                      onChange={(e) => setWebhookApiKey(e.target.value)}
+                    />
                     <button
                       className="btn btn-outline"
-                      disabled={!consent || uploadStatus === "uploading"}
-                      onClick={() =>
-                        runUpload(new File([recordedBlob], "recording.webm", { type: recordedBlob.type }), {
-                          label: `${selectedPersona.label} — recorded call`,
-                        })
-                      }
+                      onClick={runWebhookSandbox}
+                      disabled={!webhookApiKey.trim() || webhookStatus === "sending"}
                     >
-                      {uploadStatus === "uploading" ? "Analyzing…" : "Analyze this recording"}
+                      {webhookStatus === "sending" ? "Sending…" : "Send to webhook receiver"}
                     </button>
-                  </div>
+                    {webhookStatus === "sent" && (
+                      <p className="pack-note">
+                        Sent - the ingest endpoint acked and is analyzing asynchronously, same as a
+                        real customer's inbound webhook. No inline report here by design.
+                      </p>
+                    )}
+                    {webhookStatus === "error" && webhookError && (
+                      <p className="error-banner">{webhookError}</p>
+                    )}
+                  </>
+                ) : (
                   <p className="pack-note">
-                    Download stays separate from analyze — analyzing sends the recording to the same
-                    upload pipeline as the sample audio below; download never does.
+                    Start a live call with a persona other than Neutral (Live call tab) to try the
+                    webhook sandbox - it sends that call's transcript through the same{" "}
+                    <code>POST /v1/ingest/:apiKey</code> receiver a real customer integration posts
+                    to.
                   </p>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
+
+            {sessionTab === "paste" && (
+              <div className="section-block tab-panel">
+                <p className="pack-note">
+                  Paste a completed AssemblyAI session object with a <code>turns</code> array. Same
+                  shape as the samples. This is recorded-content ingest, not a live call.
+                </p>
+                <textarea
+                  className="session-paste"
+                  rows={8}
+                  value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)}
+                  spellCheck={false}
+                  placeholder='{"sessionId":"sess_clean_01","turns":[{"role":"agent","text":"Hi","tMs":0}]}'
+                />
+                <button
+                  className="btn btn-outline generate-btn"
+                  type="button"
+                  onClick={runPaste}
+                  disabled={!consent || pasteLoading}
+                >
+                  {pasteLoading ? "Analyzing…" : "Analyze pasted session"}
+                </button>
+                {pasteError && <p className="error-banner">{pasteError}</p>}
+              </div>
+            )}
 
             <div className="section-block">
               <h3>Demo: try your own audio</h3>
@@ -1066,106 +1256,120 @@ export default function Dashboard({ navigate, path }) {
               {uploadStatus === "error" && <p className="error-banner">{uploadError}</p>}
             </div>
 
-            <div className="section-block">
-              <h3>Paste session JSON</h3>
-              <p className="pack-note">
-                Paste a completed AssemblyAI session object with a <code>turns</code> array. Same
-                shape as the samples. This is recorded-content ingest, not a live call.
-              </p>
-              <textarea
-                className="session-paste"
-                rows={8}
-                value={pasteText}
-                onChange={(e) => setPasteText(e.target.value)}
-                spellCheck={false}
-                placeholder='{"sessionId":"sess_clean_01","turns":[{"role":"agent","text":"Hi","tMs":0}]}'
-              />
+            <div className="tab-bar">
               <button
-                className="btn btn-outline generate-btn"
                 type="button"
-                onClick={runPaste}
-                disabled={!consent || pasteLoading}
+                className={`tab-btn ${sampleTab === "samples" ? "is-active" : ""}`}
+                onClick={() => setSampleTab("samples")}
               >
-                {pasteLoading ? "Analyzing…" : "Analyze pasted session"}
+                Playable samples
               </button>
-              {pasteError && <p className="error-banner">{pasteError}</p>}
-            </div>
-
-            <div className="section-block">
-              <h3>Playable samples</h3>
-              <p className="pack-note">
-                Analyze uses the canned transcript. Diarize re-uploads the MP3 through AssemblyAI
-                speaker labels — use that to demo the upload path without bringing your own file.
-              </p>
-              <div className="sample-buttons">
-                {playableKeys.map((key) => (
-                  <div key={key} className="sample-row">
-                    <div className="sample-actions">
-                      <button
-                        className="btn btn-outline"
-                        onClick={() => openStoredOrRunSample(key)}
-                        disabled={sampleLoadingKey === key || uploadStatus === "uploading"}
-                      >
-                        {sampleLoadingKey === key && uploadStatus !== "uploading"
-                          ? "Analyzing…"
-                          : sampleLabel(key)}
-                      </button>
-                      <button
-                        className="btn btn-outline sample-diarize-btn"
-                        onClick={() => runDiarizedSample(key)}
-                        disabled={!consent || sampleLoadingKey === key || uploadStatus === "uploading"}
-                      >
-                        {sampleLoadingKey === key && uploadStatus === "uploading"
-                          ? "Diarizing…"
-                          : "Diarize upload"}
-                      </button>
-                    </div>
-                    <AudioPlayer src={SAMPLE_AUDIO_URLS[key]} compact />
-                  </div>
-                ))}
-              </div>
-              {sampleError && <p className="error-banner">{sampleError}</p>}
-            </div>
-
-            <div className="section-block">
-              <h3>Scripted violation demos</h3>
-              <p className="pack-note">
-                Two concrete, scripted scenarios built to trip the HIPAA and GLBA pattern packs.
-                Check the matching industry pack above, then Analyze.
-              </p>
-              <div className="sample-buttons">
-                {SCRIPTED_VIOLATION_DEMO_KEYS.map((key) => (
-                  <div key={key} className="sample-row">
-                    <div className="sample-actions">
-                      <button
-                        className="btn btn-outline"
-                        onClick={() => openStoredOrRunSample(key)}
-                        disabled={sampleLoadingKey === key || uploadStatus === "uploading"}
-                      >
-                        {sampleLoadingKey === key ? "Analyzing…" : sampleLabel(key)}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="section-block">
-              <h3>Or analyze a fleet</h3>
               <button
-                className="btn btn-outline generate-btn"
-                onClick={() => runFleetOn(playableKeys)}
-                disabled={fleetLoading}
+                type="button"
+                className={`tab-btn ${sampleTab === "scripted" ? "is-active" : ""}`}
+                onClick={() => setSampleTab("scripted")}
               >
-                {fleetLoading ? "Analyzing…" : `Analyze ${playableKeys.length} sample sessions`}
+                Scripted violation demos
               </button>
-              <p className="pack-note">
-                Aggregates pass/flag counts and compliance rate across every playable sample. The
-                Northstar Voice program lives on Home.
-              </p>
-              {fleetError && <p className="error-banner">{fleetError}</p>}
+              <button
+                type="button"
+                className={`tab-btn ${sampleTab === "fleet" ? "is-active" : ""}`}
+                onClick={() => setSampleTab("fleet")}
+              >
+                Analyze a fleet
+              </button>
             </div>
+
+            {sampleTab === "samples" && (
+              <div className="section-block tab-panel">
+                <p className="pack-note">
+                  Analyze uses the canned transcript. Diarize re-uploads the MP3 through AssemblyAI
+                  speaker labels — use that to demo the upload path without bringing your own file.
+                </p>
+                <div className="sample-buttons">
+                  {playableKeys.map((key) => (
+                    <div key={key} className="sample-row">
+                      <div className="sample-actions">
+                        <button
+                          className="btn btn-outline"
+                          onClick={() => openStoredOrRunSample(key)}
+                          disabled={sampleLoadingKey === key || uploadStatus === "uploading"}
+                        >
+                          {sampleLoadingKey === key && uploadStatus !== "uploading"
+                            ? "Analyzing…"
+                            : sampleLabel(key)}
+                        </button>
+                        <button
+                          className="btn btn-outline sample-diarize-btn"
+                          onClick={() => runDiarizedSample(key)}
+                          disabled={!consent || sampleLoadingKey === key || uploadStatus === "uploading"}
+                        >
+                          {sampleLoadingKey === key && uploadStatus === "uploading"
+                            ? "Diarizing…"
+                            : "Diarize upload"}
+                        </button>
+                      </div>
+                      <AudioPlayer src={SAMPLE_AUDIO_URLS[key]} compact />
+                    </div>
+                  ))}
+                </div>
+                {sampleError && <p className="error-banner">{sampleError}</p>}
+              </div>
+            )}
+
+            {sampleTab === "scripted" && (
+              <div className="section-block tab-panel">
+                <p className="pack-note">
+                  Two concrete, scripted scenarios built to trip the HIPAA and GLBA pattern packs.
+                  Check the matching industry pack above, then Analyze.
+                </p>
+                <div className="sample-buttons">
+                  {SCRIPTED_VIOLATION_DEMO_KEYS.map((key) => (
+                    <div key={key} className="sample-row">
+                      <div className="sample-actions">
+                        <button
+                          className="btn btn-outline"
+                          onClick={() => openStoredOrRunSample(key)}
+                          disabled={sampleLoadingKey === key || uploadStatus === "uploading"}
+                        >
+                          {sampleLoadingKey === key ? "Analyzing…" : sampleLabel(key)}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {sampleTab === "fleet" && (
+              <div className="section-block tab-panel">
+                <p className="pack-note">
+                  Runs the same compliance analysis used above on all {playableKeys.length} playable
+                  sample calls at once, then rolls the results into one fleet-wide compliance rate and
+                  a shared report - a quick way to see how a whole book of calls would score, instead
+                  of checking one call at a time.
+                </p>
+                <button
+                  className="btn btn-outline generate-btn"
+                  onClick={() => runFleetOn(playableKeys)}
+                  disabled={fleetLoading}
+                >
+                  {fleetLoading ? "Analyzing…" : `Analyze ${playableKeys.length} sample sessions`}
+                </button>
+                {fleetError && <p className="error-banner">{fleetError}</p>}
+              </div>
+            )}
           </div>
+
+          {tourStep >= 0 && (
+            <TourOverlay
+              steps={tourSteps}
+              stepIndex={tourStep}
+              onNext={nextTourStep}
+              onPrev={prevTourStep}
+              onClose={closeTour}
+            />
+          )}
 
           {fleetReady ? (
             <>
