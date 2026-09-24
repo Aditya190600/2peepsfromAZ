@@ -4,6 +4,7 @@ import { parsePackEvalRequest } from "./wire.js";
 import { evaluatePacks, offlineEvalGateway } from "./runPackEvals.js";
 import { diagnoseOwnerMiss } from "./cases.js";
 import { PACKS } from "../packs/index.js";
+import { analyzeSession } from "../checks/analyze.js";
 
 test("parsePackEvalRequest rejects empty, generic, and unknown ids", () => {
   assert.equal(parsePackEvalRequest({ packIds: [] }).ok, false);
@@ -70,6 +71,36 @@ test("GDPR suite passes with the offline gateway", async () => {
   assert.ok(run.passed > 0);
   assert.equal(run.suites.length, 1);
   assert.equal(run.suites[0].packId, "gdpr");
+});
+
+test("FCRA suite passes with the offline gateway", async () => {
+  const run = await evaluatePacks(["fcra"]);
+  assert.equal(run.failed, 0);
+  assert.ok(run.passed > 0);
+  assert.equal(run.suites.length, 1);
+  assert.equal(run.suites[0].packId, "fcra");
+});
+
+test("FCRA whole-session checks do not false-positive when the disclosure is spoken in a later turn", async () => {
+  const report = await analyzeSession(PACKS.fcra.scenarios[1].session, {
+    patternPackIds: ["generic", "fcra"],
+    llmGateway: offlineEvalGateway,
+  });
+  const adverseAction = report.findings.find((f) => f.check === "fcra_adverse_action_disclosure");
+  const creditPull = report.findings.find((f) => f.check === "fcra_credit_pull_permissible_purpose");
+  assert.equal(adverseAction.status, "pass");
+  assert.equal(creditPull.status, "pass");
+});
+
+test("FCRA whole-session checks flag when the disclosure never appears in the call", async () => {
+  const report = await analyzeSession(PACKS.fcra.scenarios[0].session, {
+    patternPackIds: ["generic", "fcra"],
+    llmGateway: offlineEvalGateway,
+  });
+  const adverseAction = report.findings.find((f) => f.check === "fcra_adverse_action_disclosure");
+  const creditPull = report.findings.find((f) => f.check === "fcra_credit_pull_permissible_purpose");
+  assert.equal(adverseAction.status, "flag");
+  assert.equal(creditPull.status, "flag");
 });
 
 test("HIPAA+GLBA omitted trial keeps the other pack enabled", async () => {
