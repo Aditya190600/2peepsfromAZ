@@ -11,9 +11,10 @@ but new product work should build here, not there, unless told otherwise.
 ## What this task built (foundation only)
 
 This is the foundation slice: everything up to and including scenario
-approval, with the actual call-placement step stubbed. There is no Twilio
-account wired into this repo's env or Railway vars, so outbound/inbound
-calling cannot be built yet.
+approval. The call-placement step was stubbed when this slice landed; it has
+since been built (outbound only) - see AGENTS.md's "Real outbound
+call-placement bridge" section for the current Twilio -> AssemblyAI bridge
+architecture, which supersedes the "Stubbed, honestly" section below.
 
 **Fully working:**
 - Data model: `server/migrations/003_qualeval.sql` (`qualeval_evaluations`,
@@ -41,24 +42,19 @@ calling cannot be built yet.
   form, and a combined generation-review page (scenario cards + a persistent
   typed-feedback regenerate panel - not a per-item wizard).
 
-**Stubbed, honestly:**
-- `POST /v1/qualeval/scenarios/:id/runs` creates a Run recorded as
-  `verdict: "pending"`, `transcript: null`, with an assessment text that
-  reads "Not yet run - pending Twilio call-placement credentials." It never
-  fabricates a transcript or a pass/fail verdict. The Try page's "Run" button
-  is clearly labeled as a stub in the UI.
-- `server/qualeval/store.js`'s `attachTranscript` and
-  `server/qualeval/router.js`'s `dispatchEvaluation` exist and are tested,
-  but nothing in this task's routes calls them yet - they're the exact seam
-  a follow-up call-bridge task should call once a real transcript exists
-  (same async-dispatch-after-fast-ack shape as
-  `server/webhooks/ingest.js`'s `processIngestedSession`).
+**Stubbed at the time this slice landed (now superseded, see above):**
+`POST /v1/qualeval/scenarios/:id/runs` created a Run recorded as
+`verdict: "pending"`, `transcript: null`, with an assessment text that read
+"Not yet run - pending Twilio call-placement credentials", when Twilio
+credentials were absent. `server/qualeval/store.js`'s `attachTranscript` and
+`server/qualeval/router.js`'s `dispatchEvaluation` were the seam a follow-up
+call-bridge task would call once a real transcript exists - that follow-up
+has since landed (outbound bridge, see AGENTS.md); the `pending` stub path
+still runs when Twilio env vars are unset.
 
-**Out of scope for this task** (follow-up, needs Twilio credentials):
-the actual Twilio outbound/inbound call bridge to AssemblyAI's Voice Agent
-API, the bidirectional (target-calls-QualEval) follow-up-scenario path,
-two-demo-target-agent tabs, phone-number-pool rotation, persona avatars,
-failure-driven regeneration.
+**Still out of scope** (follow-up): the bidirectional (target-calls-QualEval)
+inbound direction, the follow-up-scenario path, two-demo-target-agent tabs,
+phone-number-pool rotation, persona avatars, failure-driven regeneration.
 
 ## Where to look
 
