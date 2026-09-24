@@ -86,7 +86,19 @@ export const VERDICT_CLASS = {
   clear: "is-clear",
 };
 
-export function reportView({ report, loading = false, error = null } = {}) {
+// Turns per-check progress (server/index.js's streamed /v1/analyze-session,
+// accumulated in Dashboard.jsx) into the "Analyzing…" copy, so the loading
+// state shows real, changing numbers instead of a static message.
+export function formatAnalyzingMessage(progress) {
+  if (!progress || !progress.checksTotal) return "Analyzing session…";
+  const parts = [`Analyzing… ${progress.checksDone} of ${progress.checksTotal} checks complete`];
+  if (progress.tokensUsed > 0) parts.push(`${progress.tokensUsed.toLocaleString()} tokens used`);
+  if (progress.costKnown) parts.push(`~$${progress.costUsd.toFixed(4)} estimated`);
+  parts.push(`${progress.violationCount} violation${progress.violationCount === 1 ? "" : "s"} found so far`);
+  return parts.join(" · ");
+}
+
+export function reportView({ report, loading = false, error = null, progress = null } = {}) {
   if (error) {
     const message =
       typeof error === "string" ? error : (error?.message ?? "The analysis could not be completed.");
@@ -97,7 +109,7 @@ export function reportView({ report, loading = false, error = null } = {}) {
       kind: "loading",
       label: "Loading",
       className: "is-loading",
-      message: "Analyzing session…",
+      message: formatAnalyzingMessage(progress),
     };
   }
   if (!report) {
