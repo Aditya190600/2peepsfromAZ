@@ -23,10 +23,10 @@ function wrap(fn) {
 // once a run's transcript is attached via server/qualeval/store.js's
 // attachTranscript.
 export async function dispatchEvaluation(runId, { llmGateway = providers.getModel().complete } = {}) {
-  const run = await store.getRun(runId);
+  const run = await store.getRun(runId, null);
   if (!run) throw new Error("Run not found");
   if (!run.transcript) throw new Error("Cannot evaluate a run with no transcript.");
-  const scenario = await store.getScenario(run.scenarioId);
+  const scenario = await store.getScenario(run.scenarioId, null);
   if (!scenario) throw new Error("Scenario not found for run");
   try {
     const result = await evaluateTranscript(scenario, run.transcript, { llmGateway });
@@ -68,7 +68,7 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
     wrap(async (req, res) => {
       const evaluation = await store.getEvaluation(req.params.id, visitorId(req));
       if (!evaluation) return res.status(404).json({ error: "Evaluation not found" });
-      const scenarios = await store.listScenarios(evaluation.id);
+      const scenarios = await store.listScenarios(evaluation.id, visitorId(req));
       const scenariosWithRuns = await Promise.all(
         scenarios.map(async (scenario) => ({ ...scenario, runs: await store.listRuns(scenario.id) })),
       );
@@ -98,7 +98,7 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
   router.get(
     "/evaluations/:id/scenarios",
     wrap(async (req, res) => {
-      const scenarios = await store.listScenarios(req.params.id);
+      const scenarios = await store.listScenarios(req.params.id, visitorId(req));
       res.json({ scenarios });
     }),
   );
@@ -106,7 +106,7 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
   router.patch(
     "/scenarios/:id",
     wrap(async (req, res) => {
-      const updated = await store.updateScenario(req.params.id, req.body ?? {});
+      const updated = await store.updateScenario(req.params.id, visitorId(req), req.body ?? {});
       res.json(updated);
     }),
   );
@@ -120,7 +120,7 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
   router.post(
     "/scenarios/:id/runs",
     wrap(async (req, res) => {
-      const scenario = await store.getScenario(req.params.id);
+      const scenario = await store.getScenario(req.params.id, visitorId(req));
       if (!scenario) return res.status(404).json({ error: "Scenario not found" });
       if (scenario.status !== "approved") {
         return res.status(400).json({ error: "Only approved scenarios can be run." });
@@ -133,7 +133,9 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
   router.get(
     "/scenarios/:id/runs",
     wrap(async (req, res) => {
-      const runs = await store.listRuns(req.params.id);
+      const scenario = await store.getScenario(req.params.id, visitorId(req));
+      if (!scenario) return res.status(404).json({ error: "Scenario not found" });
+      const runs = await store.listRuns(scenario.id);
       res.json({ runs });
     }),
   );
@@ -141,7 +143,7 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
   router.get(
     "/runs/:id",
     wrap(async (req, res) => {
-      const run = await store.getRun(req.params.id);
+      const run = await store.getRun(req.params.id, visitorId(req));
       if (!run) return res.status(404).json({ error: "Run not found" });
       res.json(run);
     }),

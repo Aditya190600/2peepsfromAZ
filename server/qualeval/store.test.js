@@ -82,6 +82,12 @@ function fakePool() {
       rows.push(row);
       return { rows: [row] };
     }
+    const evaluationOwns = (evaluationId, clerkUserId) => {
+      if (clerkUserId === null || clerkUserId === undefined) return true;
+      const evaluation = tables.qualeval_evaluations.find((e) => e.id === evaluationId);
+      return evaluation?.clerk_user_id === clerkUserId;
+    };
+
     if (sql.startsWith("select") && table === "qualeval_evaluations") {
       if (params.length === 2) {
         const [id, clerkUserId] = params;
@@ -91,17 +97,20 @@ function fakePool() {
       return { rows: rows.filter((r) => r.clerk_user_id === clerkUserId) };
     }
     if (sql.startsWith("select") && table === "qualeval_scenarios") {
-      if (sql.includes("where id =")) {
-        const [id] = params;
-        return { rows: rows.filter((r) => r.id === id) };
+      if (sql.includes("where s.id =")) {
+        const [id, clerkUserId] = params;
+        return { rows: rows.filter((r) => r.id === id && evaluationOwns(r.evaluation_id, clerkUserId)) };
       }
-      const [evaluationId] = params;
-      return { rows: rows.filter((r) => r.evaluation_id === evaluationId) };
+      const [evaluationId, clerkUserId] = params;
+      return { rows: rows.filter((r) => r.evaluation_id === evaluationId && evaluationOwns(evaluationId, clerkUserId)) };
     }
     if (sql.startsWith("select") && table === "qualeval_runs") {
-      if (sql.includes("where id =")) {
-        const [id] = params;
-        return { rows: rows.filter((r) => r.id === id) };
+      if (sql.includes("where r.id =")) {
+        const [id, clerkUserId] = params;
+        const row = rows.find((r) => r.id === id);
+        if (!row) return { rows: [] };
+        const scenario = tables.qualeval_scenarios.find((s) => s.id === row.scenario_id);
+        return { rows: evaluationOwns(scenario?.evaluation_id, clerkUserId) ? [row] : [] };
       }
       const [scenarioId] = params;
       return { rows: rows.filter((r) => r.scenario_id === scenarioId) };
@@ -112,13 +121,13 @@ function fakePool() {
       return { rows: [] };
     }
     if (sql.startsWith("update qualeval_scenarios")) {
-      const id = params[0];
+      const [id, clerkUserId] = params;
       const row = rows.find((r) => r.id === id);
-      if (!row) return { rows: [] };
-      const setClause = text.match(/set (.+) where/i)[1];
+      if (!row || !evaluationOwns(row.evaluation_id, clerkUserId)) return { rows: [] };
+      const setClause = text.match(/set ([\s\S]+?)\s+where id = \$1/i)[1];
       const cols = setClause.split(",").map((c) => c.trim().split("=")[0].trim());
       cols.forEach((col, i) => {
-        row[col] = col === "evaluation_criteria" ? JSON.parse(params[i + 1]) : params[i + 1];
+        row[col] = col === "evaluation_criteria" ? JSON.parse(params[i + 2]) : params[i + 2];
       });
       return { rows: [row] };
     }
@@ -183,12 +192,21 @@ test("insertScenarios then listScenarios and getScenario round-trip", async () =
   );
   assert.equal(scenario.status, "pending");
 
-  const scenarios = await listScenarios(evaluation.id, {}, pool);
+  const scenarios = await listScenarios(evaluation.id, "user_1", {}, pool);
   assert.equal(scenarios.length, 1);
   assert.deepEqual(scenarios[0].evaluationCriteria, ["Offers refund or escalation", "Stays professional"]);
 
-  const fetched = await getScenario(scenario.id, {}, pool);
+  const fetched = await getScenario(scenario.id, "user_1", {}, pool);
   assert.equal(fetched.name, "Angry customer wants a refund");
+});
+
+test("getScenario and listScenarios do not return another account's scenario", async () => {
+  const pool = fakePool();
+  const evaluation = await createEvaluation({ clerkUserId: "user_1", name: "Eval" }, {}, pool);
+  const [scenario] = await insertScenarios(evaluation.id, [{ name: "S1", evaluationCriteria: [] }], {}, pool);
+
+  assert.equal(await getScenario(scenario.id, "user_2", {}, pool), null);
+  assert.equal((await listScenarios(evaluation.id, "user_2", {}, pool)).length, 0);
 });
 
 test("updateScenario approves a scenario and rejects an unknown status", async () => {
@@ -196,10 +214,18 @@ test("updateScenario approves a scenario and rejects an unknown status", async (
   const evaluation = await createEvaluation({ clerkUserId: "user_1", name: "Eval" }, {}, pool);
   const [scenario] = await insertScenarios(evaluation.id, [{ name: "S1", evaluationCriteria: [] }], {}, pool);
 
-  const approved = await updateScenario(scenario.id, { status: "approved" }, {}, pool);
+  const approved = await updateScenario(scenario.id, "user_1", { status: "approved" }, {}, pool);
   assert.equal(approved.status, "approved");
 
-  await assert.rejects(() => updateScenario(scenario.id, { status: "bogus" }, {}, pool));
+  await assert.rejects(() => updateScenario(scenario.id, "user_1", { status: "bogus" }, {}, pool));
+});
+
+test("updateScenario refuses to mutate another account's scenario", async () => {
+  const pool = fakePool();
+  const evaluation = await createEvaluation({ clerkUserId: "user_1", name: "Eval" }, {}, pool);
+  const [scenario] = await insertScenarios(evaluation.id, [{ name: "S1", evaluationCriteria: [] }], {}, pool);
+
+  await assert.rejects(() => updateScenario(scenario.id, "user_2", { status: "approved" }, {}, pool));
 });
 
 test("deleteUnapprovedScenarios keeps approved scenarios and drops the rest", async () => {
@@ -214,16 +240,16 @@ test("deleteUnapprovedScenarios keeps approved scenarios and drops the rest", as
     {},
     pool,
   );
-  await updateScenario(keep.id, { status: "approved" }, {}, pool);
+  await updateScenario(keep.id, "user_1", { status: "approved" }, {}, pool);
 
   await deleteUnapprovedScenarios(evaluation.id, {}, pool);
 
-  const remaining = await listScenarios(evaluation.id, {}, pool);
+  const remaining = await listScenarios(evaluation.id, "user_1", {}, pool);
   assert.deepEqual(
     remaining.map((s) => s.name),
     ["Keep me"],
   );
-  assert.equal(await getScenario(drop.id, {}, pool), null);
+  assert.equal(await getScenario(drop.id, "user_1", {}, pool), null);
 });
 
 test("createRun stubs a pending run with no fabricated transcript or verdict", async () => {
@@ -236,11 +262,21 @@ test("createRun stubs a pending run with no fabricated transcript or verdict", a
   assert.equal(run.transcript, null);
   assert.match(run.assessment, /not yet run/i);
 
-  const fetched = await getRun(run.id, {}, pool);
+  const fetched = await getRun(run.id, "user_1", {}, pool);
   assert.equal(fetched.verdict, "pending");
 
   const runs = await listRuns(scenario.id, {}, pool);
   assert.equal(runs.length, 1);
+});
+
+test("getRun does not return another account's run", async () => {
+  const pool = fakePool();
+  const evaluation = await createEvaluation({ clerkUserId: "user_1", name: "Eval" }, {}, pool);
+  const [scenario] = await insertScenarios(evaluation.id, [{ name: "S1", evaluationCriteria: [] }], {}, pool);
+  const run = await createRun(scenario.id, {}, pool);
+
+  assert.equal(await getRun(run.id, "user_2", {}, pool), null);
+  assert.notEqual(await getRun(run.id, null, {}, pool), null);
 });
 
 test("attachTranscript and recordVerdict update a run once a real transcript exists", async () => {

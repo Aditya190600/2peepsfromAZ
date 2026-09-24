@@ -124,31 +124,40 @@ export async function deleteUnapprovedScenarios(evaluationId, env = process.env,
   ]);
 }
 
-export async function listScenarios(evaluationId, env = process.env, pool = getPool(env)) {
+// clerkUserId scopes access to the evaluation that owns this scenario, same
+// per-account isolation as getEvaluation/listEvaluations - see review-1.
+export async function listScenarios(evaluationId, clerkUserId, env = process.env, pool = getPool(env)) {
   requirePool(pool);
   const { rows } = await pool.query(
-    `select id, evaluation_id, name, persona, situation, caller_objectives, expected_behavior,
-            evaluation_criteria, category, status, created_at
-     from qualeval_scenarios where evaluation_id = $1 order by created_at asc`,
-    [evaluationId],
+    `select s.id, s.evaluation_id, s.name, s.persona, s.situation, s.caller_objectives, s.expected_behavior,
+            s.evaluation_criteria, s.category, s.status, s.created_at
+     from qualeval_scenarios s
+     join qualeval_evaluations e on e.id = s.evaluation_id
+     where s.evaluation_id = $1 and e.clerk_user_id = $2
+     order by s.created_at asc`,
+    [evaluationId, clerkUserId],
   );
   return rows.map(scenarioRow);
 }
 
-export async function getScenario(id, env = process.env, pool = getPool(env)) {
+// clerkUserId may be null only for trusted system-internal callers (see
+// dispatchEvaluation in router.js) that aren't acting on behalf of a request.
+export async function getScenario(id, clerkUserId, env = process.env, pool = getPool(env)) {
   requirePool(pool);
   const { rows } = await pool.query(
-    `select id, evaluation_id, name, persona, situation, caller_objectives, expected_behavior,
-            evaluation_criteria, category, status, created_at
-     from qualeval_scenarios where id = $1`,
-    [id],
+    `select s.id, s.evaluation_id, s.name, s.persona, s.situation, s.caller_objectives, s.expected_behavior,
+            s.evaluation_criteria, s.category, s.status, s.created_at
+     from qualeval_scenarios s
+     join qualeval_evaluations e on e.id = s.evaluation_id
+     where s.id = $1 and ($2::text is null or e.clerk_user_id = $2)`,
+    [id, clerkUserId],
   );
   return rows[0] ? scenarioRow(rows[0]) : null;
 }
 
 const VALID_SCENARIO_STATUSES = new Set(["pending", "approved", "rejected"]);
 
-export async function updateScenario(id, fields, env = process.env, pool = getPool(env)) {
+export async function updateScenario(id, clerkUserId, fields, env = process.env, pool = getPool(env)) {
   requirePool(pool);
   if (fields.status !== undefined && !VALID_SCENARIO_STATUSES.has(fields.status)) {
     throw new Error(`status must be one of ${[...VALID_SCENARIO_STATUSES].join(", ")}`);
@@ -165,12 +174,13 @@ export async function updateScenario(id, fields, env = process.env, pool = getPo
   };
   const setKeys = Object.keys(columns).filter((k) => columns[k] !== undefined);
   if (setKeys.length === 0) throw new Error("no fields to update");
-  const setClause = setKeys.map((k, i) => `${k} = $${i + 2}`).join(", ");
+  const setClause = setKeys.map((k, i) => `${k} = $${i + 3}`).join(", ");
   const { rows } = await pool.query(
-    `update qualeval_scenarios set ${setClause} where id = $1
+    `update qualeval_scenarios set ${setClause}
+     where id = $1 and evaluation_id in (select id from qualeval_evaluations where clerk_user_id = $2)
      returning id, evaluation_id, name, persona, situation, caller_objectives, expected_behavior,
                evaluation_criteria, category, status, created_at`,
-    [id, ...setKeys.map((k) => columns[k])],
+    [id, clerkUserId, ...setKeys.map((k) => columns[k])],
   );
   if (rows.length === 0) throw new Error("Scenario not found");
   return scenarioRow(rows[0]);
@@ -180,6 +190,8 @@ export async function updateScenario(id, fields, env = process.env, pool = getPo
 // wired yet (pending Twilio credentials) - the run is recorded honestly as
 // "pending", never a fabricated transcript or verdict. See
 // server/qualeval/router.js's createRun handler for the full contract.
+// Callers must verify scenario ownership themselves first (e.g. via
+// getScenario(id, clerkUserId)) before calling this with a trusted scenarioId.
 export async function createRun(scenarioId, env = process.env, pool = getPool(env)) {
   requirePool(pool);
   const { rows } = await pool.query(
@@ -192,17 +204,24 @@ export async function createRun(scenarioId, env = process.env, pool = getPool(en
   return runRow(rows[0]);
 }
 
-export async function getRun(id, env = process.env, pool = getPool(env)) {
+// clerkUserId may be null only for trusted system-internal callers (see
+// dispatchEvaluation in router.js) that aren't acting on behalf of a request.
+export async function getRun(id, clerkUserId, env = process.env, pool = getPool(env)) {
   requirePool(pool);
   const { rows } = await pool.query(
-    `select id, scenario_id, call_timestamp, transcript, audio_ref, verdict, assessment,
-            criterion_results, evidence_quotes, created_at
-     from qualeval_runs where id = $1`,
-    [id],
+    `select r.id, r.scenario_id, r.call_timestamp, r.transcript, r.audio_ref, r.verdict, r.assessment,
+            r.criterion_results, r.evidence_quotes, r.created_at
+     from qualeval_runs r
+     join qualeval_scenarios s on s.id = r.scenario_id
+     join qualeval_evaluations e on e.id = s.evaluation_id
+     where r.id = $1 and ($2::text is null or e.clerk_user_id = $2)`,
+    [id, clerkUserId],
   );
   return rows[0] ? runRow(rows[0]) : null;
 }
 
+// Callers must verify scenario ownership themselves first (e.g. via
+// getScenario(id, clerkUserId)) before calling this with a trusted scenarioId.
 export async function listRuns(scenarioId, env = process.env, pool = getPool(env)) {
   requirePool(pool);
   const { rows } = await pool.query(
