@@ -104,7 +104,7 @@ export function createBridgeSession({
     } catch {
       return;
     }
-    log("aai message", msg.type);
+    if (msg.type !== "reply.audio") log("aai message", msg.type);
     switch (msg.type) {
       case "session.ready":
         aaiReady = true;
@@ -153,7 +153,7 @@ export function createBridgeSession({
     } catch {
       return;
     }
-    log("twilio event", msg.event);
+    if (msg.event !== "media") log("twilio event", msg.event);
     switch (msg.event) {
       case "start":
         streamSid = msg.start?.streamSid ?? msg.streamSid;
