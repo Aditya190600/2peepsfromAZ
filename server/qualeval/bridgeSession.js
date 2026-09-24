@@ -43,15 +43,26 @@ export function createBridgeSession({
 
   const aaiWs = new WebSocketImpl(wsUrl);
 
-  function finish(reason) {
-    if (finished) return;
-    finished = true;
-    clearTimeout(maxDurationTimer);
+  function closeSockets() {
     try {
       aaiWs.close();
     } catch {
       // already closed
     }
+    try {
+      if (twilioWs.readyState === twilioWs.OPEN || twilioWs.readyState === twilioWs.CONNECTING) {
+        twilioWs.close();
+      }
+    } catch {
+      // already closed
+    }
+  }
+
+  function finish(reason) {
+    if (finished) return;
+    finished = true;
+    clearTimeout(maxDurationTimer);
+    closeSockets();
     onFinished?.({ turns: [...turns], callSid, reason });
   }
 
@@ -59,11 +70,7 @@ export function createBridgeSession({
     if (finished) return;
     finished = true;
     clearTimeout(maxDurationTimer);
-    try {
-      aaiWs.close();
-    } catch {
-      // already closed
-    }
+    closeSockets();
     onError?.(message);
   }
 

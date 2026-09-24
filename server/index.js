@@ -246,17 +246,20 @@ app.use("/v1/evals", requireVisitor, evalRouter());
 // QualEval: black-box qualitative acceptance testing for AI voice agents.
 // See docs/qualeval-foundation.md. Requires Postgres, same hard-fail
 // guard pattern as /v1/api-keys - genuinely new data, not a cache.
-app.use("/v1/qualeval", requireVisitor, qualevalRouter({ visitorId }));
-
 // POST /v1/qualeval/twilio-voice/:runId - Twilio's own webhook, not a
 // visitor route (see server/qualeval/twilioVoice.js for the signature-based
-// auth). Twilio POSTs this as application/x-www-form-urlencoded, so it
-// needs its own body parser rather than the app-wide express.json() above.
+// auth). Registered before the requireVisitor-gated /v1/qualeval router
+// below so Express's prefix matching never routes Twilio's server-to-server
+// POST through the Clerk auth gate. Twilio POSTs this as
+// application/x-www-form-urlencoded, so it needs its own body parser rather
+// than the app-wide express.json() above.
 app.post(
   "/v1/qualeval/twilio-voice/:runId",
   express.urlencoded({ extended: false }),
   (req, res) => twilioVoiceRoute(req, res),
 );
+
+app.use("/v1/qualeval", requireVisitor, qualevalRouter({ visitorId }));
 
 const telephony = telephonyRouter();
 app.post("/v1/telephony/inbound", (req, res, next) => {
