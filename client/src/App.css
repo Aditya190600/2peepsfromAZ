@@ -1406,7 +1406,14 @@ button.site-nav-link {
   gap: 12px;
 }
 
-.print-btn {
+.report-toolbar-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.print-btn,
+.export-json-btn {
   flex-shrink: 0;
 }
 
