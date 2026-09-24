@@ -3,8 +3,10 @@ import { hipaaPack } from "./hipaa.js";
 import { financePack } from "./finance.js";
 import { ferpaPack } from "./ferpa.js";
 import { coppaPack } from "./coppa.js";
+import { tcpaPack } from "./tcpa.js";
+import { recordingConsentPack } from "./recordingConsent.js";
 
-export { genericPack, hipaaPack, financePack, ferpaPack, coppaPack };
+export { genericPack, hipaaPack, financePack, ferpaPack, coppaPack, tcpaPack, recordingConsentPack };
 
 /** @type {Record<string, object>} */
 export const PACKS = {
@@ -13,6 +15,8 @@ export const PACKS = {
   finance: financePack,
   ferpa: ferpaPack,
   coppa: coppaPack,
+  tcpa: tcpaPack,
+  recording_consent: recordingConsentPack,
 };
 
 export const PACK_IDS = Object.keys(PACKS);
@@ -36,6 +40,7 @@ export function packCatalog() {
       alwaysOn: false,
       patternIds: pack.patterns.map((p) => p.id),
       checkpointCount: countCheckpoints(pack),
+      statutoryDamage: pack.statutoryDamage ?? null,
     }));
 }
 
