@@ -61,6 +61,25 @@ export async function ingestSession(apiKey, session) {
   return body;
 }
 
+// Fallback for pasted text that isn't strict session JSON - parseSessionPaste
+// (sessionPaste.js) already tried a cheap client-side JSON.parse first; this
+// hits the LLM Gateway server-side to extract a session from arbitrary text.
+export async function llmParsePastedSession(text) {
+  const resp = await fetch("/v1/parse-pasted-session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  let body;
+  try {
+    body = await resp.json();
+  } catch {
+    throw new ApiError("The compliance server is unreachable right now. Please try again shortly.");
+  }
+  if (!resp.ok) throw new ApiError(body.error ?? "Could not parse this paste. Please try again.");
+  return body.session;
+}
+
 export async function transcribeUpload(file) {
   const resp = await fetch("/v1/transcribe-upload", {
     method: "POST",

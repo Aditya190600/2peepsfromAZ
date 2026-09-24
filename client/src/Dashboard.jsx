@@ -30,6 +30,7 @@ import {
   uploadRecording,
   mapWithConcurrency,
   findRateLimitedFinding,
+  llmParsePastedSession,
 } from "./analyzeClient";
 import { listIndustryPacks } from "./evalsClient";
 import PackEvals from "./PackEvals";
@@ -761,26 +762,22 @@ export default function Dashboard({ navigate, path }) {
     }
   };
 
+  // Strict session JSON parses locally, for free (parseSessionPaste). Any
+  // other text - a raw transcript, a dictation, a rough call log - falls
+  // back to the LLM Gateway (server-side, via llmParsePastedSession) to
+  // extract a session out of it instead of rejecting the paste outright.
   const runPaste = async () => {
     if (!consent) return;
-    const parsed = parseSessionPaste(pasteText);
     setFleetResults(null);
     showAudio(null);
     clearLabErrors();
-    if (!parsed.ok) {
-      setPasteError(parsed.error);
-      setReport(null);
-      return;
-    }
     setPasteLoading(true);
     try {
-      const nextReport = await analyze(parsed.session, patternPackIds);
+      const strict = parseSessionPaste(pasteText);
+      const session = strict.ok ? strict.session : await llmParsePastedSession(pasteText);
+      const nextReport = await analyze(session, patternPackIds);
       setReport(nextReport);
-      recordHistory(
-        `Pasted session (${parsed.session.sessionId ?? "no session id"})`,
-        nextReport,
-        parsed.session
-      );
+      recordHistory(`Pasted session (${session.sessionId ?? "no session id"})`, nextReport, session);
     } catch (err) {
       setPasteError(err.message ?? "Something went wrong analyzing this paste.");
       setReport(null);
@@ -1199,8 +1196,11 @@ export default function Dashboard({ navigate, path }) {
             {sessionTab === "paste" && (
               <div className="section-block tab-panel">
                 <p className="pack-note">
-                  Paste a completed AssemblyAI session object with a <code>turns</code> array. Same
-                  shape as the samples. This is recorded-content ingest, not a live call.
+                  Paste doesn't have to be strict JSON - it can be anything: a completed AssemblyAI
+                  session object, a raw transcript, a dictation, or a rough call log. Valid session
+                  JSON parses instantly; anything else is sent to the LLM Gateway to figure out the
+                  turns and turn them into a session automatically. This is recorded-content ingest,
+                  not a live call.
                 </p>
                 <textarea
                   className="session-paste"
