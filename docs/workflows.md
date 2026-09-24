@@ -28,7 +28,7 @@ What the user actually does in ComplyLine today, and why they'd bother. One prod
 
 ## 5. Turn on an industry-specific PII pack
 
-**What they do:** Before analyzing a session, check any of "HIPAA identifiers," "GLBA finance identifiers," or "FERPA identifiers" in the pattern-pack multi-select. The generic SSN/credit-card/account-number scan always runs; these add on top of it.
+**What they do:** Before analyzing a session, check any of "HIPAA identifiers," "GLBA finance identifiers," "FERPA identifiers," or "GDPR EU caller data" in the pattern-pack multi-select. The generic SSN/credit-card/account-number scan always runs; these add on top of it.
 
 **Value prop:** Shows the architecture is genuinely extensible - a healthcare or banking prospect can see their specific identifiers get caught without waiting for a bespoke build, which matters for the "will this work for my industry" objection.
 
