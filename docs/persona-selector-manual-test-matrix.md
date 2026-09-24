@@ -59,13 +59,14 @@ setup.
     existing `micSilent` banner should still fire after ~15s regardless of
     which persona is active - persona wiring must not have broken the
     existing silence-detection plumbing.
-11. **Multi-pack persona (School nurse)** - click "School nurse". Both the
-    HIPAA and FERPA pack checkboxes check themselves automatically (not just
-    one). Uncheck HIPAA only - FERPA stays checked (opt-out is per pack, not
-    all-or-nothing). Start a call, ask about your own child's visit (agent
-    answers), then ask for another student's health visit or grades - agent
-    should refuse both, per its CAN/CANNOT scope. Switch to "Bank teller" -
-    HIPAA/FERPA both uncheck, GLBA/finance checks itself instead.
+11. **Multi-pack persona (School nurse)** - click "School nurse". The
+    HIPAA, FERPA, and COPPA pack checkboxes all check themselves automatically
+    (not just one). Uncheck HIPAA only - FERPA and COPPA stay checked (opt-out
+    is per pack, not all-or-nothing). Start a call, ask about your own child's
+    visit (agent answers), then ask for another student's health visit or
+    grades - agent should refuse both, per its CAN/CANNOT scope. Switch to
+    "Bank teller" - HIPAA/FERPA/COPPA all uncheck, GLBA/finance checks itself
+    instead.
 12. **Try as webhook sandbox** - switch to the "Try as webhook sandbox" tab
     before any persona call ends (or with "Neutral assistant" selected) -
     it shows placeholder guidance to start a non-neutral persona call on the
