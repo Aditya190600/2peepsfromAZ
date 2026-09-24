@@ -81,6 +81,39 @@ test("violating session flags missing consent, missing disclosure, and SSN", asy
   assert.equal(byCheck.recording_consent.status, "flag");
   assert.equal(byCheck.pii_scan.status, "flag");
   assert.equal(byCheck.pii_scan.items[0].patternId, "ssn");
+  assert.equal(report.violationCount, 4);
+});
+
+test("report shape carries a violation count and a usage total (item 8: live-analysis metrics)", async () => {
+  const llmGateway = async () => ({
+    content: JSON.stringify({ disclosed: true, turnIndex: 0, quote: "I'm an AI" }),
+    usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
+    costUsd: 0.00003,
+  });
+  const report = await analyzeSession(cleanSession, { llmGateway });
+  assert.equal(report.violationCount, 0);
+  // disclosureCheck and piiScan both call the Gateway with this session - two calls' worth of usage.
+  assert.equal(report.usage.calls, 2);
+  assert.equal(report.usage.totalTokens, 240);
+  assert.ok(Math.abs(report.usage.estimatedCostUsd - 0.00006) < 1e-9);
+});
+
+test("onCheckComplete fires once per check with running done/total counts", async () => {
+  const llmGateway = fakeLlmGateway();
+  const seen = [];
+  await analyzeSession(violatingSession, {
+    llmGateway,
+    onCheckComplete: (finding, done, total) => seen.push({ check: finding.check, done, total }),
+  });
+  assert.equal(seen.length, 6);
+  assert.deepEqual(
+    seen.map((s) => s.total),
+    [6, 6, 6, 6, 6, 6],
+  );
+  assert.deepEqual(
+    seen.map((s) => s.done).sort((a, b) => a - b),
+    [1, 2, 3, 4, 5, 6],
+  );
 });
 
 test("no opt-out request reports n/a, not a false flag", async () => {

@@ -1,14 +1,39 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { callLlmGateway } from "./llmGateway.js";
+import { callLlmGateway, callLlmGatewayWithUsage, estimateCostUsd } from "./llmGateway.js";
 
-function fakeResponse(content) {
+function fakeResponse(content, usage) {
   return {
     ok: true,
-    json: async () => ({ choices: [{ message: { content } }] }),
+    json: async () => ({ choices: [{ message: { content } }], ...(usage ? { usage } : {}) }),
     text: async () => "",
   };
 }
+
+test("callLlmGatewayWithUsage returns input/output/total tokens from the Gateway's usage object", async () => {
+  global.fetch = async () =>
+    fakeResponse("ok", { input_tokens: 120, output_tokens: 25, total_tokens: 145 });
+
+  const result = await callLlmGatewayWithUsage([], { apiKey: "k", model: "qwen3.5-4b-32k-fast" });
+  assert.equal(result.content, "ok");
+  assert.deepEqual(result.usage, { inputTokens: 120, outputTokens: 25, totalTokens: 145 });
+  assert.equal(typeof result.costUsd, "number");
+  assert.ok(result.costUsd > 0);
+});
+
+test("callLlmGateway (back-compat) still resolves to the plain content string", async () => {
+  global.fetch = async () => fakeResponse("ok", { input_tokens: 1, output_tokens: 1, total_tokens: 2 });
+  assert.equal(await callLlmGateway([], { apiKey: "k" }), "ok");
+});
+
+test("estimateCostUsd returns null for an unpriced model instead of a misleading $0", () => {
+  assert.equal(estimateCostUsd("some-unlisted-model", { inputTokens: 100, outputTokens: 100 }), null);
+});
+
+test("estimateCostUsd applies published per-1M-token pricing for the default model", () => {
+  const cost = estimateCostUsd("qwen3.5-4b-32k-fast", { inputTokens: 1_000_000, outputTokens: 1_000_000 });
+  assert.ok(Math.abs(cost - 0.6) < 1e-9);
+});
 
 test("callLlmGateway serializes concurrent calls, never more than one in flight", async () => {
   let inFlight = 0;
