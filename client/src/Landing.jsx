@@ -25,10 +25,6 @@ export default function Landing({ onGetStarted, navigate, path }) {
           <li>Spot an SSN or account number leaking into a transcript before it spreads.</li>
           <li>Print a report you can hand to legal, not a wall of raw transcript.</li>
         </ul>
-
-        <button className="btn btn-primary hero-cta" onClick={onGetStarted}>
-          Get started
-        </button>
       </main>
 
       <section className="how-it-works">
@@ -40,7 +36,7 @@ export default function Landing({ onGetStarted, navigate, path }) {
           </li>
           <li>
             <strong>2. We ingest the finished session.</strong>
-            <p>One completed session (its transcript, timing, and consent event) is handed to our checks - live from the browser, or pasted/uploaded after the fact.</p>
+            <p>One completed session (its transcript, timing, and consent event) is handed to our checks - live from the browser, pasted/uploaded after the fact, or pushed by your own backend the instant a call ends.</p>
           </li>
           <li>
             <strong>3. AssemblyAI's LLM Gateway drives the compliance analysis.</strong>
@@ -90,7 +86,7 @@ export default function Landing({ onGetStarted, navigate, path }) {
         </div>
         <div className="trust-strip-item">
           <strong>Pluggable by industry.</strong>
-          <p>Generic PII scan out of the box, with HIPAA and GLBA identifier packs as drop-in extensions.</p>
+          <p>Generic PII scan out of the box, with HIPAA, GLBA, and FERPA identifier packs as drop-in extensions.</p>
         </div>
       </section>
 
