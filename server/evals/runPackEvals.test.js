@@ -56,6 +56,22 @@ test("FERPA suite passes with the offline gateway", async () => {
   assert.match(run.suites[0].asserts, /not a FERPA compliance determination/i);
 });
 
+test("GDPR suite passes with the offline gateway", async () => {
+  const run = await evaluatePacks(["gdpr"]);
+  assert.equal(
+    run.failed,
+    0,
+    JSON.stringify(
+      run.suites.flatMap((s) => s.cases.filter((c) => !c.passed)),
+      null,
+      2,
+    ),
+  );
+  assert.ok(run.passed > 0);
+  assert.equal(run.suites.length, 1);
+  assert.equal(run.suites[0].packId, "gdpr");
+});
+
 test("HIPAA+GLBA omitted trial keeps the other pack enabled", async () => {
   const run = await evaluatePacks(["hipaa", "finance"]);
   assert.equal(run.failed, 0);
