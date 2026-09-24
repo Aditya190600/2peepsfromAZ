@@ -3,6 +3,7 @@ import { SignedIn, SignedOut, SignInButton } from "@clerk/clerk-react";
 import Landing from "./Landing";
 import Home from "./Home";
 import Try from "./Try";
+import Examples from "./Examples";
 import History from "./History";
 import SessionInspector from "./SessionInspector";
 import ApiKeys from "./ApiKeys";
@@ -75,6 +76,12 @@ export default function App() {
         <Try navigate={navigate} path={viewPath} />
       </RequireVisitor>
     );
+  }
+  if (view.name === "examples") {
+    // Zero-setup by design: playable samples and scripted violation demos
+    // must work with no sign-in, so this route is deliberately NOT wrapped
+    // in RequireVisitor (unlike every other product screen below).
+    return <Examples navigate={navigate} path={viewPath} />;
   }
   if (view.name === "sessions") {
     return (

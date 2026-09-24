@@ -1,12 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import RateLimitBanner from "./RateLimitBanner";
 import { useVoiceAgent } from "./useVoiceAgent";
-import {
-  SAMPLE_SESSIONS,
-  SAMPLE_AUDIO_URLS,
-  NORTHSTAR_SESSIONS,
-  SCRIPTED_VIOLATION_DEMO_KEYS,
-} from "./sampleSessions";
+import { SAMPLE_SESSIONS, NORTHSTAR_SESSIONS } from "./sampleSessions";
 import { AppShell } from "./Chrome";
 import { summarizeFleet, monitorTiles } from "./fleetStats";
 import AudioPlayer from "./AudioPlayer";
@@ -28,7 +23,6 @@ import {
   transcribeUpload,
   ingestSession,
   uploadRecording,
-  mapWithConcurrency,
   findRateLimitedFinding,
   llmParsePastedSession,
 } from "./analyzeClient";
@@ -67,7 +61,7 @@ const STATUS_LABEL = {
   error: "Connection error",
 };
 
-const PLAYABLE_SAMPLE_LABEL = {
+export const PLAYABLE_SAMPLE_LABEL = {
   "clean-call": "Clean call — everything passes",
   "tcpa-violation": "TCPA violation — no consent, SSN spoken",
   "optout-ignored": "Opt-out request ignored by agent",
@@ -94,7 +88,7 @@ export function sampleLabel(key) {
   return key;
 }
 
-const INDUSTRY_PACKS = [
+export const INDUSTRY_PACKS = [
   { id: "hipaa", name: "HIPAA identifiers (healthcare)" },
   { id: "finance", name: "GLBA finance identifiers (banking)" },
   { id: "ferpa", name: "FERPA identifiers (education)" },
@@ -102,7 +96,7 @@ const INDUSTRY_PACKS = [
   { id: "recording_consent", name: "Call-recording consent (two-party-consent states)" },
 ];
 
-function sessionByKey(key) {
+export function sessionByKey(key) {
   return SAMPLE_SESSIONS[key] ?? NORTHSTAR_SESSIONS[key];
 }
 
@@ -157,7 +151,7 @@ function Finding({ finding, onSeek }) {
   );
 }
 
-function IntroSteps() {
+function IntroSteps({ navigate }) {
   return (
     <div className="intro-steps">
       <h2>How this works</h2>
@@ -198,8 +192,21 @@ function IntroSteps() {
         </li>
       </ol>
       <p className="intro-alt">
-        Prefer not to use your mic right now? Skip straight to a <strong>sample session</strong>{" "}
-        above - same report, no live call needed.
+        Prefer not to use your mic right now? Skip straight to the{" "}
+        {navigate ? (
+          <a
+            href="/examples"
+            onClick={(e) => {
+              e.preventDefault();
+              navigate("/examples");
+            }}
+          >
+            Examples
+          </a>
+        ) : (
+          "Examples"
+        )}{" "}
+        page - same reports, no sign-in or live call needed.
       </p>
     </div>
   );
@@ -534,17 +541,11 @@ export default function Dashboard({ navigate, path }) {
   const [webhookStatus, setWebhookStatus] = useState("idle"); // idle | sending | sent | error
   const [webhookError, setWebhookError] = useState(null);
   const [report, setReport] = useState(null);
-  const [fleetResults, setFleetResults] = useState(null);
-  const [fleetLoading, setFleetLoading] = useState(false);
-  const [fleetProgress, setFleetProgress] = useState(null);
-  const [fleetError, setFleetError] = useState(null);
   const [activeAudioUrl, setActiveAudioUrl] = useState(null);
   const [activeAudioOffsetMs, setActiveAudioOffsetMs] = useState(0);
   const [uploadStatus, setUploadStatus] = useState("idle"); // idle | uploading | error
   const [uploadError, setUploadError] = useState(null);
   const [dragActive, setDragActive] = useState(false);
-  const [sampleLoadingKey, setSampleLoadingKey] = useState(null);
-  const [sampleError, setSampleError] = useState(null);
   const [liveLoading, setLiveLoading] = useState(false);
   const [liveError, setLiveError] = useState(null);
   const [analysisProgress, setAnalysisProgress] = useState(null);
@@ -554,7 +555,6 @@ export default function Dashboard({ navigate, path }) {
   const [industryPacks, setIndustryPacks] = useState(INDUSTRY_PACKS);
   const [packCatalogStale, setPackCatalogStale] = useState(false);
   const [sessionTab, setSessionTab] = useState("live"); // live | webhook | paste
-  const [sampleTab, setSampleTab] = useState("samples"); // samples | scripted | fleet
   const [tourStep, setTourStep] = useState(-1); // -1 = not running
   const audioRef = useRef(null);
   const reportHeadingRef = useRef(null);
@@ -666,10 +666,8 @@ export default function Dashboard({ navigate, path }) {
 
   const clearLabErrors = () => {
     setLiveError(null);
-    setSampleError(null);
     setUploadError(null);
     setUploadStatus("idle");
-    setFleetError(null);
     setPasteError(null);
   };
 
@@ -695,7 +693,6 @@ export default function Dashboard({ navigate, path }) {
 
   const runLiveReport = async () => {
     if (!lastSession) return;
-    setFleetResults(null);
     clearLabErrors();
     setLiveLoading(true);
     setAnalysisProgress(null);
@@ -764,76 +761,12 @@ export default function Dashboard({ navigate, path }) {
     }
   };
 
-  const runSample = async (key) => {
-    setFleetResults(null);
-    clearLabErrors();
-    setSampleLoadingKey(key);
-    showAudio(SAMPLE_AUDIO_URLS[key] && PLAYABLE_SAMPLE_LABEL[key] ? SAMPLE_AUDIO_URLS[key] : null);
-    try {
-      const session = sessionByKey(key);
-      const nextReport = await analyze(session, patternPackIds);
-      setReport(nextReport);
-      recordHistory(sampleLabel(key), nextReport, session, {
-        audioKey: PLAYABLE_SAMPLE_LABEL[key] ? key : undefined,
-      });
-    } catch (err) {
-      setSampleError(err.message ?? "Something went wrong generating this report.");
-      setReport(null);
-    } finally {
-      setSampleLoadingKey(null);
-    }
-  };
-
-  const runFleetOn = async (keys) => {
-    setFleetLoading(true);
-    clearLabErrors();
-    setReport(null);
-    showAudio(null);
-    setFleetResults([]);
-    setFleetProgress({ done: 0, total: keys.length, tokensUsed: 0, costUsd: 0, costKnown: false, violationCount: 0 });
-    try {
-      const reports = await mapWithConcurrency(
-        keys,
-        2,
-        (key) =>
-          analyze(sessionByKey(key), patternPackIds, (event) =>
-            setFleetProgress((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    tokensUsed: prev.tokensUsed + (event.usage?.totalTokens ?? 0),
-                    costUsd: prev.costUsd + (typeof event.costUsd === "number" ? event.costUsd : 0),
-                    costKnown: prev.costKnown || typeof event.costUsd === "number",
-                    violationCount: prev.violationCount + (event.status === "flag" ? 1 : 0),
-                  }
-                : prev
-            )
-          ),
-        (done, total) => setFleetProgress((prev) => (prev ? { ...prev, done, total } : prev))
-      );
-      const results = keys.map((key, i) => ({ key, report: reports[i] }));
-      setFleetResults(results);
-      for (const { key, report: r } of results) {
-        recordHistory(sampleLabel(key), r, sessionByKey(key), {
-          audioKey: PLAYABLE_SAMPLE_LABEL[key] ? key : undefined,
-        });
-      }
-    } catch (err) {
-      setFleetError(err.message ?? "Something went wrong running the fleet analysis.");
-      setFleetResults(null);
-    } finally {
-      setFleetLoading(false);
-      setFleetProgress(null);
-    }
-  };
-
   // Strict session JSON parses locally, for free (parseSessionPaste). Any
   // other text - a raw transcript, a dictation, a rough call log - falls
   // back to the LLM Gateway (server-side, via llmParsePastedSession) to
   // extract a session out of it instead of rejecting the paste outright.
   const runPaste = async () => {
     if (!consent) return;
-    setFleetResults(null);
     showAudio(null);
     clearLabErrors();
     setPasteLoading(true);
@@ -853,7 +786,6 @@ export default function Dashboard({ navigate, path }) {
 
   const runUpload = async (file, { label = "Uploaded audio", consentEvent } = {}) => {
     if (!consent || !file) return;
-    setFleetResults(null);
     setReport(null);
     clearLabErrors();
     setUploadStatus("uploading");
@@ -875,43 +807,6 @@ export default function Dashboard({ navigate, path }) {
       setUploadStatus("error");
       setUploadError(err.message ?? "Something went wrong processing this file.");
     }
-  };
-
-  // Fetches a playable sample MP3 and runs it through the real upload /
-  // diarization pipeline (not the canned SAMPLE_SESSIONS text path), so the
-  // demo can prove speaker_labels produces multi-turn timestamps.
-  const runDiarizedSample = async (key) => {
-    if (!consent) return;
-    const url = SAMPLE_AUDIO_URLS[key];
-    if (!url) return;
-    setSampleLoadingKey(key);
-    try {
-      const resp = await fetch(url);
-      if (!resp.ok) throw new Error(`Could not load sample audio (${resp.status}).`);
-      const blob = await resp.blob();
-      const file = new File([blob], `${key}.mp3`, { type: blob.type || "audio/mpeg" });
-      await runUpload(file, {
-        label: `${sampleLabel(key)} (diarized upload)`,
-        consentEvent: sessionByKey(key)?.consentEvent ?? null,
-      });
-    } catch (err) {
-      setUploadStatus("error");
-      setUploadError(err.message ?? "Something went wrong loading this sample.");
-    } finally {
-      setSampleLoadingKey(null);
-    }
-  };
-
-  const openStoredOrRunSample = (key) => {
-    const entry = findEntryBySessionId(SAMPLE_SESSIONS[key]?.sessionId);
-    if (!entry?.report) {
-      runSample(key);
-      return;
-    }
-    setFleetResults(null);
-    clearLabErrors();
-    showAudio(entry.audioKey ? SAMPLE_AUDIO_URLS[entry.audioKey] ?? null : null);
-    setReport(entry.report);
   };
 
   const onDrop = (e) => {
@@ -969,38 +864,26 @@ export default function Dashboard({ navigate, path }) {
   };
   const prevTourStep = () => setTourStep((s) => Math.max(0, s - 1));
 
-  const playableKeys = Object.keys(PLAYABLE_SAMPLE_LABEL);
-  const reportLoading =
-    liveLoading ||
-    pasteLoading ||
-    sampleLoadingKey != null ||
-    uploadStatus === "uploading" ||
-    (fleetLoading && (!fleetResults || fleetResults.length === 0));
-  const reportError =
-    liveError ||
-    pasteError ||
-    sampleError ||
-    (uploadStatus === "error" ? uploadError : null) ||
-    fleetError;
-  const fleetReady = Array.isArray(fleetResults) && fleetResults.length > 0;
+  const reportLoading = liveLoading || pasteLoading || uploadStatus === "uploading";
+  const reportError = liveError || pasteError || (uploadStatus === "error" ? uploadError : null);
 
   useEffect(() => {
-    if (!reportLoading && !report && !fleetReady) return;
+    if (!reportLoading && !report) return;
     const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     reportHeadingRef.current?.scrollIntoView({
       behavior: reduceMotion ? "auto" : "smooth",
       block: "start",
     });
-  }, [reportLoading, report, fleetReady]);
+  }, [reportLoading, report]);
 
   return (
     <AppShell path={path} navigate={navigate} title="Try">
       <main className="layout">
         <section className="panel session-panel">
           <p className="app-lede">
-            Try is the analysis lab: run a live mic call against the AssemblyAI Voice Agent, upload a
-            recorded call, or pick a sample session - then check the industry pattern packs you want
-            layered on top of the generic scan before generating a report.
+            Try is the analysis lab: run a live mic call against the AssemblyAI Voice Agent, send a
+            call through the webhook sandbox, or paste a transcript - then check the industry pattern
+            packs you want layered on top of the generic scan before generating a report.
           </p>
 
           <div className="section-block" ref={personaSectionRef}>
@@ -1338,110 +1221,6 @@ export default function Dashboard({ navigate, path }) {
               </label>
               {uploadStatus === "error" && <p className="error-banner">{uploadError}</p>}
             </div>
-
-            <div className="tab-bar">
-              <button
-                type="button"
-                className={`tab-btn ${sampleTab === "samples" ? "is-active" : ""}`}
-                onClick={() => setSampleTab("samples")}
-              >
-                Playable samples
-              </button>
-              <button
-                type="button"
-                className={`tab-btn ${sampleTab === "scripted" ? "is-active" : ""}`}
-                onClick={() => setSampleTab("scripted")}
-              >
-                Scripted violation demos
-              </button>
-              <button
-                type="button"
-                className={`tab-btn ${sampleTab === "fleet" ? "is-active" : ""}`}
-                onClick={() => setSampleTab("fleet")}
-              >
-                Analyze a fleet
-              </button>
-            </div>
-
-            {sampleTab === "samples" && (
-              <div className="section-block tab-panel">
-                <p className="pack-note">
-                  Analyze uses the canned transcript. Diarize re-uploads the MP3 through AssemblyAI
-                  speaker labels — use that to demo the upload path without bringing your own file.
-                </p>
-                <div className="sample-buttons">
-                  {playableKeys.map((key) => (
-                    <div key={key} className="sample-row">
-                      <div className="sample-actions">
-                        <button
-                          className="btn btn-outline"
-                          onClick={() => openStoredOrRunSample(key)}
-                          disabled={sampleLoadingKey === key || uploadStatus === "uploading"}
-                        >
-                          {sampleLoadingKey === key && uploadStatus !== "uploading"
-                            ? "Analyzing…"
-                            : sampleLabel(key)}
-                        </button>
-                        <button
-                          className="btn btn-outline sample-diarize-btn"
-                          onClick={() => runDiarizedSample(key)}
-                          disabled={!consent || sampleLoadingKey === key || uploadStatus === "uploading"}
-                        >
-                          {sampleLoadingKey === key && uploadStatus === "uploading"
-                            ? "Diarizing…"
-                            : "Diarize upload"}
-                        </button>
-                      </div>
-                      <AudioPlayer src={SAMPLE_AUDIO_URLS[key]} compact />
-                    </div>
-                  ))}
-                </div>
-                {sampleError && <p className="error-banner">{sampleError}</p>}
-              </div>
-            )}
-
-            {sampleTab === "scripted" && (
-              <div className="section-block tab-panel">
-                <p className="pack-note">
-                  Two concrete, scripted scenarios built to trip the HIPAA and GLBA pattern packs.
-                  Check the matching industry pack above, then Analyze.
-                </p>
-                <div className="sample-buttons">
-                  {SCRIPTED_VIOLATION_DEMO_KEYS.map((key) => (
-                    <div key={key} className="sample-row">
-                      <div className="sample-actions">
-                        <button
-                          className="btn btn-outline"
-                          onClick={() => openStoredOrRunSample(key)}
-                          disabled={sampleLoadingKey === key || uploadStatus === "uploading"}
-                        >
-                          {sampleLoadingKey === key ? "Analyzing…" : sampleLabel(key)}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {sampleTab === "fleet" && (
-              <div className="section-block tab-panel">
-                <p className="pack-note">
-                  Runs the same compliance analysis used above on all {playableKeys.length} playable
-                  sample calls at once, then rolls the results into one fleet-wide compliance rate and
-                  a shared report - a quick way to see how a whole book of calls would score, instead
-                  of checking one call at a time.
-                </p>
-                <button
-                  className="btn btn-outline generate-btn"
-                  onClick={() => runFleetOn(playableKeys)}
-                  disabled={fleetLoading}
-                >
-                  {fleetLoading ? "Analyzing…" : `Analyze ${playableKeys.length} sample sessions`}
-                </button>
-                {fleetError && <p className="error-banner">{fleetError}</p>}
-              </div>
-            )}
           </div>
 
           {tourStep >= 0 && (
@@ -1454,12 +1233,7 @@ export default function Dashboard({ navigate, path }) {
             />
           )}
 
-          {fleetReady ? (
-            <>
-              <h2 ref={reportHeadingRef}>Fleet compliance report</h2>
-              <FleetView results={fleetResults} progress={fleetProgress} navigate={navigate} />
-            </>
-          ) : reportLoading || reportError || report ? (
+          {reportLoading || reportError || report ? (
             <>
               <h2 className="report-heading" ref={reportHeadingRef}>
                 Compliance report
@@ -1480,7 +1254,7 @@ export default function Dashboard({ navigate, path }) {
             <>
               <h2 className="report-heading">Compliance report</h2>
               <Report report={null} />
-              <IntroSteps />
+              <IntroSteps navigate={navigate} />
             </>
           )}
         </section>

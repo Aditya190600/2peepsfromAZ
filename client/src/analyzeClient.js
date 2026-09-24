@@ -107,6 +107,28 @@ export async function llmParsePastedSession(text) {
   return body.session;
 }
 
+// Examples page counterpart to transcribeUpload + analyze: transcribes one
+// of the fixed playable sample mp3s and analyzes the result in one
+// unauthenticated (zero-setup) round trip via /v1/examples/diarize/:key,
+// since it only ever reads a known sample file server-side, never a
+// client-uploaded one or a client-supplied session. Resolves to
+// { session, report }.
+export async function diarizeSample(key, patternPackIds) {
+  const resp = await fetch(`/v1/examples/diarize/${encodeURIComponent(key)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ patternPackIds }),
+  });
+  let body;
+  try {
+    body = await resp.json();
+  } catch {
+    throw new ApiError("The compliance server is unreachable right now. Please try again shortly.");
+  }
+  if (!resp.ok) throw new ApiError(body.error ?? "Transcription failed. Please try again.");
+  return body;
+}
+
 export async function transcribeUpload(file) {
   const resp = await fetch("/v1/transcribe-upload", {
     method: "POST",
