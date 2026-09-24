@@ -822,19 +822,34 @@ export default function Dashboard({ navigate, path }) {
               scope and its own failure-mode boundary. Picking a persona auto-selects its matching
               pattern pack(s) below (uncheck any you don't want).
             </p>
-            <div className="pack-select">
-              {PERSONAS.map((persona) => (
-                <label className={`check-row ${!canStart ? "disabled" : ""}`} key={persona.id}>
-                  <input
-                    type="radio"
-                    name="persona"
-                    checked={personaId === persona.id}
-                    onChange={() => selectPersona(persona.id)}
-                    disabled={!canStart}
-                  />
-                  <strong>{persona.label}</strong> — {persona.description}
-                </label>
-              ))}
+            <div className="persona-grid">
+              {PERSONAS.map((persona) => {
+                const packLabels = [
+                  "PII scan",
+                  ...persona.packIds.map(
+                    (id) => industryPacks.find((pack) => pack.id === id)?.name ?? id,
+                  ),
+                ];
+                return (
+                  <label
+                    className={`persona-card ${personaId === persona.id ? "selected" : ""} ${
+                      !canStart ? "disabled" : ""
+                    }`}
+                    key={persona.id}
+                  >
+                    <input
+                      type="radio"
+                      name="persona"
+                      checked={personaId === persona.id}
+                      onChange={() => selectPersona(persona.id)}
+                      disabled={!canStart}
+                    />
+                    <span className="persona-card-name">{persona.label}</span>
+                    <span className="persona-card-description">{persona.description}</span>
+                    <span className="persona-card-packs">Checks: {packLabels.join(", ")}</span>
+                  </label>
+                );
+              })}
             </div>
             {selectedPersona.violation && (
               <label className={`check-row ${!canStart ? "disabled" : ""}`}>
