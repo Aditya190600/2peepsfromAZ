@@ -98,6 +98,8 @@ const INDUSTRY_PACKS = [
   { id: "hipaa", name: "HIPAA identifiers (healthcare)" },
   { id: "finance", name: "GLBA finance identifiers (banking)" },
   { id: "ferpa", name: "FERPA identifiers (education)" },
+  { id: "tcpa", name: "TCPA consent (robocall / marketing calls)" },
+  { id: "recording_consent", name: "Call-recording consent (two-party-consent states)" },
 ];
 
 function sessionByKey(key) {
