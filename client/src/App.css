@@ -558,6 +558,14 @@ button.site-nav-link {
   margin: 12px 0 0;
 }
 
+.tagline-subhead {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+  max-width: 62ch;
+  margin: 6px 0 0;
+}
+
 .layout {
   display: grid;
   grid-template-columns: minmax(0, 380px) minmax(0, 1fr);

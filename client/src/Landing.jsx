@@ -9,7 +9,10 @@ export default function Landing({ onGetStarted, navigate, path }) {
     <div className="page">
       <Nav path={path} navigate={navigate} />
       <header className="masthead">
-        <p className="tagline">Post-call compliance review for AI voice agents.</p>
+        <p className="tagline">The compliance layer for AI voice agents.</p>
+        <p className="tagline-subhead">
+          Regulatory and custom rules, checked automatically, with a real dollar cost attached.
+        </p>
       </header>
 
       <main className="hero">
