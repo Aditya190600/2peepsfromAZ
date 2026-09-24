@@ -105,14 +105,14 @@ test("onCheckComplete fires once per check with running done/total counts", asyn
     llmGateway,
     onCheckComplete: (finding, done, total) => seen.push({ check: finding.check, done, total }),
   });
-  assert.equal(seen.length, 6);
+  assert.equal(seen.length, 7);
   assert.deepEqual(
     seen.map((s) => s.total),
-    [6, 6, 6, 6, 6, 6],
+    [7, 7, 7, 7, 7, 7, 7],
   );
   assert.deepEqual(
     seen.map((s) => s.done).sort((a, b) => a - b),
-    [1, 2, 3, 4, 5, 6],
+    [1, 2, 3, 4, 5, 6, 7],
   );
 });
 
