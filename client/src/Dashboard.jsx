@@ -320,6 +320,24 @@ export function FleetView({ results, progress, navigate }) {
   );
 }
 
+function downloadReportJson(report, verdict) {
+  const payload = {
+    sessionId: report.sessionId ?? null,
+    generatedAt: report.generatedAt,
+    verdict: verdict.label,
+    findings: sortFindingsBySeverity(report.findings),
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `compliance-report-${report.sessionId ?? "session"}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 export function Report({
   report,
   audioUrl,
@@ -361,9 +379,17 @@ export function Report({
             {verdict.label}
           </span>
         </div>
-        <button className="btn btn-outline print-btn" onClick={() => window.print()}>
-          Print / export report
-        </button>
+        <div className="report-toolbar-actions">
+          <button className="btn btn-outline print-btn" onClick={() => window.print()}>
+            Print report
+          </button>
+          <button
+            className="btn btn-outline export-json-btn"
+            onClick={() => downloadReportJson(report, verdict)}
+          >
+            Export as JSON
+          </button>
+        </div>
       </div>
       {showStorageNote && (
         <p className="pack-note report-storage-note">
