@@ -19,6 +19,8 @@ import { handleIngest } from "./webhooks/ingest.js";
 import { handleAssemblyAiWebhook } from "./webhooks/assemblyaiWebhook.js";
 import { recordingsRouter } from "./recordingsStore.js";
 import { qualevalRouter } from "./qualeval/router.js";
+import { twilioVoiceRoute } from "./qualeval/twilioVoice.js";
+import { attachTwilioStreamServer } from "./qualeval/twilioStream.js";
 import {
   NORTHSTAR_SESSIONS,
   NORTHSTAR_SESSION_KEYS,
@@ -34,6 +36,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, "..", ".env") });
 
 const app = express();
+// Needed so req.protocol reflects Railway's terminating proxy's
+// X-Forwarded-Proto (https) - without it every request looks like plain
+// http, which would make server/qualeval/twilioVoice.js mint a ws:// (not
+// wss://) Media Streams URL that Twilio refuses.
+app.set("trust proxy", true);
 app.use(cors());
 
 const reportCache = new Map();
@@ -239,6 +246,19 @@ app.use("/v1/evals", requireVisitor, evalRouter());
 // QualEval: black-box qualitative acceptance testing for AI voice agents.
 // See docs/qualeval-foundation.md. Requires Postgres, same hard-fail
 // guard pattern as /v1/api-keys - genuinely new data, not a cache.
+// POST /v1/qualeval/twilio-voice/:runId - Twilio's own webhook, not a
+// visitor route (see server/qualeval/twilioVoice.js for the signature-based
+// auth). Registered before the requireVisitor-gated /v1/qualeval router
+// below so Express's prefix matching never routes Twilio's server-to-server
+// POST through the Clerk auth gate. Twilio POSTs this as
+// application/x-www-form-urlencoded, so it needs its own body parser rather
+// than the app-wide express.json() above.
+app.post(
+  "/v1/qualeval/twilio-voice/:runId",
+  express.urlencoded({ extended: false }),
+  (req, res) => twilioVoiceRoute(req, res),
+);
+
 app.use("/v1/qualeval", requireVisitor, qualevalRouter({ visitorId }));
 
 const telephony = telephonyRouter();
@@ -437,12 +457,17 @@ if (existsSync(dist)) {
 
 const port = process.env.PORT || 8787;
 
-await new Promise((resolve) => {
-  app.listen(port, () => {
+const httpServer = await new Promise((resolve) => {
+  const server = app.listen(port, () => {
     console.log(`R3-21 compliance report server listening on :${port}`);
-    resolve();
+    resolve(server);
   });
 });
+
+// Twilio Media Streams (server/qualeval/twilioStream.js) needs a raw
+// WebSocket upgrade on the same http.Server Express is listening on -
+// Express itself has no WebSocket support.
+attachTwilioStreamServer(httpServer);
 
 if (dbConfigured()) {
   try {

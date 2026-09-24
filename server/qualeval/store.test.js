@@ -13,6 +13,9 @@ import {
   getRun,
   listRuns,
   attachTranscript,
+  markRunInProgress,
+  markRunError,
+  markRunAwaitingEvaluation,
   recordVerdict,
   NOT_CONFIGURED_ERROR,
 } from "./store.js";
@@ -129,6 +132,31 @@ function fakePool() {
       cols.forEach((col, i) => {
         row[col] = col === "evaluation_criteria" ? JSON.parse(params[i + 2]) : params[i + 2];
       });
+      return { rows: [row] };
+    }
+    if (sql.startsWith("update qualeval_runs") && sql.includes("set verdict = 'in_progress'")) {
+      const [id, twilioCallSid] = params;
+      const row = rows.find((r) => r.id === id);
+      if (!row) return { rows: [] };
+      row.verdict = "in_progress";
+      row.twilio_call_sid = twilioCallSid;
+      return { rows: [row] };
+    }
+    if (sql.startsWith("update qualeval_runs") && sql.includes("set verdict = 'error'")) {
+      const [id, message] = params;
+      const row = rows.find((r) => r.id === id);
+      if (!row) return { rows: [] };
+      row.verdict = "error";
+      row.error = message;
+      return { rows: [row] };
+    }
+    if (sql.startsWith("update qualeval_runs") && sql.includes("set verdict = 'awaiting_evaluation'")) {
+      const [id, transcript] = params;
+      const row = rows.find((r) => r.id === id);
+      if (!row) return { rows: [] };
+      row.verdict = "awaiting_evaluation";
+      row.transcript = JSON.parse(transcript);
+      row.call_timestamp = new Date().toISOString();
       return { rows: [row] };
     }
     if (sql.startsWith("update qualeval_runs") && sql.includes("set transcript")) {
@@ -297,6 +325,41 @@ test("attachTranscript and recordVerdict update a run once a real transcript exi
   );
   assert.equal(withVerdict.verdict, "pass");
   assert.equal(withVerdict.assessment, "Handled well");
+});
+
+test("markRunInProgress records the Twilio call sid and moves the run out of pending", async () => {
+  const pool = fakePool();
+  const evaluation = await createEvaluation({ clerkUserId: "user_1", name: "Eval" }, {}, pool);
+  const [scenario] = await insertScenarios(evaluation.id, [{ name: "S1", evaluationCriteria: [] }], {}, pool);
+  const run = await createRun(scenario.id, {}, pool);
+
+  const updated = await markRunInProgress(run.id, "CA123", {}, pool);
+  assert.equal(updated.verdict, "in_progress");
+  assert.equal(updated.twilioCallSid, "CA123");
+});
+
+test("markRunError records a call-placement failure without fabricating a verdict", async () => {
+  const pool = fakePool();
+  const evaluation = await createEvaluation({ clerkUserId: "user_1", name: "Eval" }, {}, pool);
+  const [scenario] = await insertScenarios(evaluation.id, [{ name: "S1", evaluationCriteria: [] }], {}, pool);
+  const run = await createRun(scenario.id, {}, pool);
+
+  const updated = await markRunError(run.id, "Twilio rejected the call", {}, pool);
+  assert.equal(updated.verdict, "error");
+  assert.equal(updated.error, "Twilio rejected the call");
+});
+
+test("markRunAwaitingEvaluation attaches the transcript and moves the run to awaiting_evaluation, never straight to pass/fail", async () => {
+  const pool = fakePool();
+  const evaluation = await createEvaluation({ clerkUserId: "user_1", name: "Eval" }, {}, pool);
+  const [scenario] = await insertScenarios(evaluation.id, [{ name: "S1", evaluationCriteria: [] }], {}, pool);
+  const run = await createRun(scenario.id, {}, pool);
+  await markRunInProgress(run.id, "CA123", {}, pool);
+
+  const transcript = { turns: [{ role: "agent", text: "Hello", tMs: 0 }] };
+  const updated = await markRunAwaitingEvaluation(run.id, transcript, {}, pool);
+  assert.equal(updated.verdict, "awaiting_evaluation");
+  assert.deepEqual(updated.transcript, transcript);
 });
 
 test("every write function throws the not-configured error when Postgres isn't set up", async () => {
