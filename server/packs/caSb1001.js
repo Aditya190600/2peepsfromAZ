@@ -23,7 +23,8 @@ export const caSb1001Pack = {
     {
       id: "no-bot-disclosure-anywhere",
       title: "Agent never discloses it is a bot/AI across the whole call",
-      expectPatternIds: [],
+      expectCheckId: "ca_sb1001_bot_disclosure",
+      expectCheckStatus: "flag",
       session: {
         sessionId: "eval_ca_sb1001_no_disclosure",
         startedAt: "2026-09-10T10:30:00.000Z",
