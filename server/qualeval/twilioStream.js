@@ -21,13 +21,62 @@ export function attachTwilioStreamServer(
     markRunAwaitingEvaluation = store.markRunAwaitingEvaluation,
     markRunError = store.markRunError,
     dispatch = dispatchEvaluation,
+    createSession = createBridgeSession,
   } = {},
 ) {
   const wss = new WebSocketServer({ noServer: true });
 
   wss.on("connection", async (twilioWs, req) => {
-    const url = new URL(req.url, "http://localhost");
-    const runId = url.searchParams.get("runId");
+    // Twilio's <Stream url> never carries a query string (confirmed live
+    // 2026-09-24: Twilio strips it before connecting, and Twilio's own docs
+    // say as much - https://www.twilio.com/docs/voice/twiml/stream#custom-parameters
+    // says the `url` "does not support query string parameters"). The runId
+    // is only knowable once the Media Streams "start" event arrives, via
+    // start.customParameters.runId (set by server/qualeval/twilioVoice.js's
+    // <Parameter>) - so every message before that is buffered here and
+    // replayed once createBridgeSession's own listener takes over, instead
+    // of being lost during the async run/scenario/token lookup below.
+    const buffered = [];
+    function bufferMessage(raw) {
+      buffered.push(raw);
+    }
+    twilioWs.on("message", bufferMessage);
+
+    function waitForStart() {
+      return new Promise((resolve, reject) => {
+        function onClose() {
+          twilioWs.off("message", onMessage);
+          reject(new Error("Twilio closed the stream before a start event arrived"));
+        }
+        function onMessage(raw) {
+          let msg;
+          try {
+            msg = JSON.parse(raw.toString());
+          } catch {
+            return;
+          }
+          if (msg.event === "start") {
+            twilioWs.off("message", onMessage);
+            twilioWs.off("close", onClose);
+            resolve(msg);
+          }
+        }
+        twilioWs.on("message", onMessage);
+        twilioWs.once("close", onClose);
+      });
+    }
+
+    let startMsg;
+    try {
+      startMsg = await waitForStart();
+    } catch (err) {
+      twilioWs.off("message", bufferMessage);
+      console.error(`QualEval call bridge: ${err.message}`);
+      return;
+    }
+
+    const runId = startMsg.start?.customParameters?.runId ?? null;
+    console.log(`QualEval call bridge: twilio-stream start event received for run ${runId}`);
 
     async function onFinished({ turns, reason }) {
       if (turns.length === 0) {
@@ -48,9 +97,8 @@ export function attachTwilioStreamServer(
       await markRunError(runId, message).catch(() => {});
     }
 
-    console.log(`QualEval call bridge: twilio-stream upgrade accepted for run ${runId}`);
-
     if (!runId) {
+      twilioWs.off("message", bufferMessage);
       twilioWs.close(1008, "missing runId");
       return;
     }
@@ -63,14 +111,19 @@ export function attachTwilioStreamServer(
       const token = await mintToken();
       console.log(`QualEval call bridge: run ${runId} - AssemblyAI token minted, opening bridge session`);
 
-      createBridgeSession({
+      twilioWs.off("message", bufferMessage);
+      createSession({
         twilioWs,
         token,
         systemPrompt: buildCallerSystemPrompt(scenario),
         onFinished,
         onError,
       });
+      // Replay the start event (so createBridgeSession learns streamSid/
+      // callSid) plus any media that arrived during the lookups above.
+      for (const raw of buffered) twilioWs.emit("message", raw);
     } catch (err) {
+      twilioWs.off("message", bufferMessage);
       await onError(err.message);
       try {
         twilioWs.close();
@@ -81,7 +134,6 @@ export function attachTwilioStreamServer(
   });
 
   httpServer.on("upgrade", (req, socket, head) => {
-    console.log(`QualEval call bridge: raw upgrade request url = ${req.url}`);
     const { pathname } = new URL(req.url, "http://localhost");
     if (pathname !== STREAM_PATH) return;
     wss.handleUpgrade(req, socket, head, (ws) => {
