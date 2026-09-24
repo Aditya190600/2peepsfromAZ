@@ -51,6 +51,13 @@ liability estimate per violation, not just a pass/fail.
 - [x] Live-run metrics: tokens used, dollar cost of the analysis itself, violation
       counts.
 - [x] Recordings: stored, owner-only playback, explicit "share with audio" links.
+- [x] State-specific AI-disclosure/deceptive-practice packs: California SB 1001
+      (bot disclosure, whole-call scan) and California AB 489 (self-claimed
+      healthcare-credential detection). Texas SB 140, floated as a third
+      example, was verified against its enrolled text on 2026-09-24 and contains
+      no AI/synthetic-voice disclosure or opt-out requirement - it's a
+      telemarketing registration/bonding expansion law - so no pack was built
+      under that citation.
 
 ## What's not built yet
 

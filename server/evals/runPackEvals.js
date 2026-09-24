@@ -18,7 +18,12 @@ function piiFinding(report) {
   return (report.findings ?? []).find((f) => f.check === "pii_scan") ?? { items: [], patternPacksUsed: [] };
 }
 
-function gradeEnabled(cse, pack, pii) {
+function checkFinding(report, checkId) {
+  return (report.findings ?? []).find((f) => f.check === checkId) ?? null;
+}
+
+function gradeEnabled(cse, pack, report) {
+  const pii = piiFinding(report);
   const used = pii.patternPacksUsed ?? [];
   const items = ownerItems(pii, cse.ownerPackId);
   const checkpoints = [];
@@ -70,6 +75,18 @@ function gradeEnabled(cse, pack, pii) {
     });
   }
 
+  if (cse.kind === "scenario" && cse.expectCheckId) {
+    const finding = checkFinding(report, cse.expectCheckId);
+    const matched = finding?.status === cse.expectCheckStatus;
+    checkpoints.push({
+      kind: "check-status",
+      passed: matched,
+      detail: matched
+        ? `${cse.expectCheckId} reported status "${cse.expectCheckStatus}"`
+        : `${cse.expectCheckId} reported status "${finding?.status ?? "missing"}", expected "${cse.expectCheckStatus}"`,
+    });
+  }
+
   return {
     mode: "enabled",
     patternPackIds: null, // filled by caller
@@ -78,7 +95,8 @@ function gradeEnabled(cse, pack, pii) {
   };
 }
 
-function gradeOmitted(cse, pii) {
+function gradeOmitted(cse, report) {
+  const pii = piiFinding(report);
   const used = pii.patternPacksUsed ?? [];
   const items = ownerItems(pii, cse.ownerPackId);
   const checkpoints = [
@@ -98,6 +116,19 @@ function gradeOmitted(cse, pii) {
           : `owner items leaked: ${items.map((i) => i.patternId).join(", ")}`,
     },
   ];
+
+  if (cse.kind === "scenario" && cse.expectCheckId) {
+    const finding = checkFinding(report, cse.expectCheckId);
+    checkpoints.push({
+      kind: "check-absent",
+      passed: finding === null,
+      detail:
+        finding === null
+          ? `${cse.expectCheckId} did not run with the pack off`
+          : `${cse.expectCheckId} still ran with status "${finding.status}"`,
+    });
+  }
+
   return {
     mode: "owner-omitted",
     patternPackIds: null,
@@ -135,9 +166,9 @@ export async function evaluatePacks(packIds, opts = {}) {
         patternPackIds: omittedIds,
         llmGateway,
       });
-      const enabled = gradeEnabled(cse, pack, piiFinding(enabledReport));
+      const enabled = gradeEnabled(cse, pack, enabledReport);
       enabled.patternPackIds = enabledIds;
-      const ownerOmitted = gradeOmitted(cse, piiFinding(omittedReport));
+      const ownerOmitted = gradeOmitted(cse, omittedReport);
       ownerOmitted.patternPackIds = omittedIds;
       results.push({
         id: cse.id,

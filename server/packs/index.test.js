@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { genericPack, hipaaPack, financePack, ferpaPack } from "../checks/patternPacks.js";
-import { PACKS, packCatalog, auditPackCoverage, INDUSTRY_PACK_IDS } from "./index.js";
+import { PACKS, packCatalog, auditPackCoverage, INDUSTRY_PACK_IDS, caSb1001Pack, caAb489Pack } from "./index.js";
 
 test("patternPacks.js still re-exports every shipped pack", () => {
   assert.equal(genericPack.id, "generic");
@@ -10,6 +10,16 @@ test("patternPacks.js still re-exports every shipped pack", () => {
   assert.equal(ferpaPack.id, "ferpa");
   assert.equal(PACKS.hipaa, hipaaPack);
   assert.equal(PACKS.ferpa, ferpaPack);
+});
+
+test("state-law packs are registered and selectable like any other industry pack", () => {
+  assert.equal(caSb1001Pack.id, "ca_sb1001");
+  assert.equal(caAb489Pack.id, "ca_ab489");
+  assert.equal(PACKS.ca_sb1001, caSb1001Pack);
+  assert.equal(PACKS.ca_ab489, caAb489Pack);
+  assert.ok(INDUSTRY_PACK_IDS.includes("ca_sb1001"));
+  assert.ok(INDUSTRY_PACK_IDS.includes("ca_ab489"));
+  assert.equal(typeof caSb1001Pack.check, "function");
 });
 
 test("every pattern in every pack carries positive and negative specimens", () => {
