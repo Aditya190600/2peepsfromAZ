@@ -19,6 +19,8 @@ import { handleIngest } from "./webhooks/ingest.js";
 import { recordingsRouter } from "./recordingsStore.js";
 import { NORTHSTAR_SESSIONS, NORTHSTAR_SESSION_KEYS } from "../client/src/sampleSessions.js";
 import * as providers from "./providers/registry.js";
+import { llmParsePastedSession } from "./checks/sessionPasteParse.js";
+import { LlmGatewayRateLimitError } from "./checks/llmGateway.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, "..", ".env") });
@@ -283,6 +285,30 @@ app.post("/v1/analyze-session", requireVisitor, async (req, res) => {
     } else {
       res.status(502).json({ error: `Analysis failed: ${err.message}` });
     }
+  }
+});
+
+// Fallback for the Try page's "Paste session transcript" tab: the client
+// already tries a cheap strict-JSON parse itself (client/src/sessionPaste.js)
+// and only calls this when that fails, since arbitrary pasted text (a raw
+// transcript, a dictation, a rough call log) isn't valid session JSON but can
+// still be turned into one via the LLM Gateway. Body: { text }.
+app.post("/v1/parse-pasted-session", requireVisitor, async (req, res) => {
+  const { text } = req.body ?? {};
+  if (typeof text !== "string" || !text.trim()) {
+    return res.status(400).json({ error: "text is required" });
+  }
+  try {
+    const result = await llmParsePastedSession(text, { llmGateway: providers.getModel().complete });
+    if (!result.ok) return res.status(422).json({ error: result.error });
+    res.json({ session: result.session });
+  } catch (err) {
+    const rateLimited = err instanceof LlmGatewayRateLimitError;
+    res.status(502).json({
+      error: rateLimited
+        ? "AssemblyAI's LLM Gateway rate limit was hit while parsing this paste. Wait a minute and retry."
+        : `Could not parse this paste: ${err.message}`,
+    });
   }
 });
 
