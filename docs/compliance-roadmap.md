@@ -29,6 +29,14 @@ liability estimate per violation, not just a pass/fail.
 - [x] Phone number import (Twilio/Telnyx) with inbound calls auto-checked.
 - [x] Fixed regulatory compliance packs: HIPAA, GLBA, FERPA, COPPA (children's
       privacy - self-stated age/grade and child name+school disclosure signals).
+- [x] TCPA pack (47 U.S.C. §227) - selectable in the pack catalog, wraps the
+      existing always-on consent-event check rather than duplicating detection;
+      carries statutory-damage metadata ($500-$1,500 per call, no proof of harm
+      required).
+- [x] Call-recording-consent pack (two-party-consent states, e.g. Cal. Penal
+      Code §632) - selectable in the pack catalog, wraps the existing always-on
+      recording-disclosure check; carries statutory-damage metadata (CA: greater
+      of $5,000 or 3x actual damages per violation).
 - [x] Personas mapped to the packs they need, including multi-pack personas (e.g. a
       school nurse persona checking HIPAA and FERPA together).
 - [x] Self-serve API keys, scoped to one or more packs (or all).
