@@ -52,14 +52,21 @@ function SignOutConfirm({ onCancel, onConfirm }) {
   );
 }
 
-// Signed-in top-right navbar: Sign out only. Home/Sessions/Try live in the
-// app shell's left rail (see AppShell below) - the navbar used to duplicate
-// them, which read as two separate, possibly-inconsistent nav sources.
-function SignedInNav({ navigate }) {
+// Signed-in top-right navbar: Sign out, plus (on the splash page only) a
+// "Go to app" link back into the app - the splash page has no other route
+// back in for a signed-in visitor. Home/Sessions/Try still live in the app
+// shell's left rail (see AppShell below) once inside the app, so this stays
+// a single link rather than duplicating that nav.
+function SignedInNav({ navigate, splash }) {
   const { signOut } = useClerk();
   const [confirming, setConfirming] = useState(false);
   return (
     <>
+      {splash ? (
+        <a className="site-nav-link" href="/home" onClick={(e) => go(navigate, "/home", e)}>
+          Go to app
+        </a>
+      ) : null}
       <button type="button" className="site-nav-link" onClick={() => setConfirming(true)}>
         Sign out
       </button>
@@ -77,7 +84,7 @@ function SignedInNav({ navigate }) {
 // Signed-in: Home/Sessions/Try links plus a Sign out control.
 // Shared by the splash-page top nav and the product app-shell topbar so both
 // render the same auth slot. No-op pass-through when Clerk isn't configured.
-export function AuthNav({ path, navigate }) {
+export function AuthNav({ path, navigate, splash }) {
   if (!CLERK_ENABLED) {
     return <ProductLinks path={path} navigate={navigate} />;
   }
@@ -91,7 +98,7 @@ export function AuthNav({ path, navigate }) {
         </SignInButton>
       </SignedOut>
       <SignedIn>
-        <SignedInNav navigate={navigate} />
+        <SignedInNav navigate={navigate} splash={splash} />
       </SignedIn>
     </>
   );
@@ -105,7 +112,7 @@ export function Nav({ path, navigate }) {
         <h1>ComplyLine</h1>
       </a>
       <div className="site-nav-links">
-        <AuthNav path={path} navigate={navigate} />
+        <AuthNav path={path} navigate={navigate} splash />
       </div>
     </nav>
   );
