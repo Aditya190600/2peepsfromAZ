@@ -9,6 +9,7 @@ import SessionInspector from "./SessionInspector";
 import ApiKeys from "./ApiKeys";
 import Evals from "./Evals";
 import PhoneNumbers from "./PhoneNumbers";
+import QualEval from "./QualEval";
 import { matchRoute } from "./routes";
 import "./App.css";
 
@@ -108,6 +109,13 @@ export default function App() {
     return (
       <RequireVisitor>
         <PhoneNumbers navigate={navigate} path={viewPath} />
+      </RequireVisitor>
+    );
+  }
+  if (view.name === "qualeval" || view.name === "qualeval-evaluation") {
+    return (
+      <RequireVisitor>
+        <QualEval navigate={navigate} path={viewPath} evaluationId={view.evaluationId} />
       </RequireVisitor>
     );
   }
