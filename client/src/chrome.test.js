@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import { PRODUCT_NAV } from "./chromeNav.js";
 
 describe("PRODUCT_NAV", () => {
-  it("is Home, Sessions, Try, Numbers, API Keys, Evals", () => {
+  it("is Home, Sessions, Try, Examples, Numbers, API Keys, Evals, QualEval", () => {
     assert.deepEqual(
       PRODUCT_NAV.map((item) => item.label),
-      ["Home", "Sessions", "Try", "Numbers", "API Keys", "Evals"]
+      ["Home", "Sessions", "Try", "Examples", "Numbers", "API Keys", "Evals", "QualEval"]
     );
   });
 

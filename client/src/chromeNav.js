@@ -10,4 +10,9 @@ export const PRODUCT_NAV = [
   { href: "/numbers", label: "Numbers", match: (path) => path === "/numbers" },
   { href: "/api-keys", label: "API Keys", match: (path) => path === "/api-keys" },
   { href: "/evals", label: "Evals", match: (path) => path === "/evals" },
+  {
+    href: "/qualeval",
+    label: "QualEval",
+    match: (path) => path === "/qualeval" || path.startsWith("/qualeval/"),
+  },
 ];
