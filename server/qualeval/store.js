@@ -48,9 +48,14 @@ function runRow(row) {
     assessment: row.assessment,
     criterionResults: row.criterion_results,
     evidenceQuotes: row.evidence_quotes,
+    twilioCallSid: row.twilio_call_sid,
+    error: row.error,
     createdAt: row.created_at,
   };
 }
+
+const RUN_COLUMNS =
+  "id, scenario_id, call_timestamp, transcript, audio_ref, verdict, assessment, criterion_results, evidence_quotes, twilio_call_sid, error, created_at";
 
 export async function createEvaluation(
   { clerkUserId = "anon", name, agentPhoneNumber, description, requirements },
@@ -197,8 +202,7 @@ export async function createRun(scenarioId, env = process.env, pool = getPool(en
   const { rows } = await pool.query(
     `insert into qualeval_runs (scenario_id, verdict, assessment)
      values ($1, 'pending', $2)
-     returning id, scenario_id, call_timestamp, transcript, audio_ref, verdict, assessment,
-               criterion_results, evidence_quotes, created_at`,
+     returning ${RUN_COLUMNS}`,
     [scenarioId, "Not yet run - pending Twilio call-placement credentials."],
   );
   return runRow(rows[0]);
@@ -210,7 +214,7 @@ export async function getRun(id, clerkUserId, env = process.env, pool = getPool(
   requirePool(pool);
   const { rows } = await pool.query(
     `select r.id, r.scenario_id, r.call_timestamp, r.transcript, r.audio_ref, r.verdict, r.assessment,
-            r.criterion_results, r.evidence_quotes, r.created_at
+            r.criterion_results, r.evidence_quotes, r.twilio_call_sid, r.error, r.created_at
      from qualeval_runs r
      join qualeval_scenarios s on s.id = r.scenario_id
      join qualeval_evaluations e on e.id = s.evaluation_id
@@ -225,24 +229,70 @@ export async function getRun(id, clerkUserId, env = process.env, pool = getPool(
 export async function listRuns(scenarioId, env = process.env, pool = getPool(env)) {
   requirePool(pool);
   const { rows } = await pool.query(
-    `select id, scenario_id, call_timestamp, transcript, audio_ref, verdict, assessment,
-            criterion_results, evidence_quotes, created_at
+    `select ${RUN_COLUMNS}
      from qualeval_runs where scenario_id = $1 order by created_at desc`,
     [scenarioId],
   );
   return rows.map(runRow);
 }
 
+// Marks a freshly-created run as having a real Twilio call in flight. See
+// server/qualeval/callBridge.js - called right after createRun so the run
+// row exists (and its id can be returned to the client) before the call is
+// actually placed.
+export async function markRunInProgress(id, twilioCallSid, env = process.env, pool = getPool(env)) {
+  requirePool(pool);
+  const { rows } = await pool.query(
+    `update qualeval_runs set verdict = 'in_progress', twilio_call_sid = $2
+     where id = $1
+     returning ${RUN_COLUMNS}`,
+    [id, twilioCallSid],
+  );
+  if (rows.length === 0) throw new Error("Run not found");
+  return runRow(rows[0]);
+}
+
+// Records that call placement itself failed (Twilio rejected the call, no
+// number configured, etc.) - distinct from an evaluator "fail" verdict,
+// which judges a real transcript. Never used to fabricate a verdict.
+export async function markRunError(id, message, env = process.env, pool = getPool(env)) {
+  requirePool(pool);
+  const { rows } = await pool.query(
+    `update qualeval_runs set verdict = 'error', error = $2
+     where id = $1
+     returning ${RUN_COLUMNS}`,
+    [id, message],
+  );
+  if (rows.length === 0) throw new Error("Run not found");
+  return runRow(rows[0]);
+}
+
 // Attaches a real transcript to a run and records the call timestamp. Called
-// once a real call-placement path exists (out of scope for this task - see
-// AGENTS.md's QualEval section); never called with a fabricated transcript.
+// once a real call-placement path exists; never called with a fabricated
+// transcript. Leaves verdict untouched - see markRunAwaitingEvaluation for
+// the state-machine transition the real call bridge uses.
 export async function attachTranscript(id, transcript, env = process.env, pool = getPool(env)) {
   requirePool(pool);
   const { rows } = await pool.query(
     `update qualeval_runs set transcript = $2, call_timestamp = now()
      where id = $1
-     returning id, scenario_id, call_timestamp, transcript, audio_ref, verdict, assessment,
-               criterion_results, evidence_quotes, created_at`,
+     returning ${RUN_COLUMNS}`,
+    [id, JSON.stringify(transcript)],
+  );
+  if (rows.length === 0) throw new Error("Run not found");
+  return runRow(rows[0]);
+}
+
+// The real call bridge's transcript-landed transition: attaches the
+// transcript AND moves verdict from 'in_progress' to 'awaiting_evaluation' in
+// one write, honestly reflecting that the call finished but the evaluator
+// hasn't judged it yet - never jumps straight to pass/fail.
+export async function markRunAwaitingEvaluation(id, transcript, env = process.env, pool = getPool(env)) {
+  requirePool(pool);
+  const { rows } = await pool.query(
+    `update qualeval_runs set verdict = 'awaiting_evaluation', transcript = $2, call_timestamp = now()
+     where id = $1
+     returning ${RUN_COLUMNS}`,
     [id, JSON.stringify(transcript)],
   );
   if (rows.length === 0) throw new Error("Run not found");
@@ -260,8 +310,7 @@ export async function recordVerdict(
     `update qualeval_runs
      set verdict = $2, assessment = $3, criterion_results = $4, evidence_quotes = $5
      where id = $1
-     returning id, scenario_id, call_timestamp, transcript, audio_ref, verdict, assessment,
-               criterion_results, evidence_quotes, created_at`,
+     returning ${RUN_COLUMNS}`,
     [id, verdict, assessment ?? null, JSON.stringify(criterionResults ?? []), JSON.stringify(evidenceQuotes ?? [])],
   );
   if (rows.length === 0) throw new Error("Run not found");

@@ -3,6 +3,7 @@ import * as store from "./store.js";
 import { generateScenarios } from "./generator.js";
 import { evaluateTranscript } from "./evaluator.js";
 import * as providers from "../providers/registry.js";
+import { placeCall, twilioConfigured } from "./callBridge.js";
 
 function wrap(fn) {
   return async (req, res) => {
@@ -111,12 +112,16 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
     }),
   );
 
-  // Stubbed call-placement step: creates a Run recorded honestly as
-  // "pending - not yet run" rather than a fabricated transcript/verdict.
-  // Real outbound calling needs Twilio credentials this task doesn't have
-  // (see AGENTS.md's QualEval section) - a follow-up task wires this to a
-  // real call and then to server/qualeval/store.js's attachTranscript +
-  // this module's dispatchEvaluation.
+  // Creates a Run for an approved scenario and, when Twilio is configured
+  // (TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN + QUALEVAL_PERSONA_NUMBER - see
+  // AGENTS.md), places a real outbound call instead of leaving the run
+  // stubbed. The run row is created and returned first, fast, exactly like
+  // every other create endpoint in this router; call placement is
+  // dispatched async off the response path (same fast-ack shape as
+  // server/webhooks/ingest.js's processIngestedSession) since Twilio's
+  // create-call API can take a moment and the run id is all the client
+  // needs to start polling. Without Twilio configured, the run stays the
+  // original honest "pending - not yet run" stub.
   router.post(
     "/scenarios/:id/runs",
     wrap(async (req, res) => {
@@ -127,6 +132,16 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
       }
       const run = await store.createRun(scenario.id);
       res.status(201).json(run);
+
+      if (twilioConfigured()) {
+        const baseUrl = `${req.protocol}://${req.get("host")}`;
+        store
+          .getEvaluation(scenario.evaluationId, visitorId(req))
+          .then((evaluation) => placeCall(run, scenario, evaluation, { baseUrl }))
+          .catch((err) => {
+            console.error(`QualEval run ${run.id}: call placement dispatch failed: ${err.message}`);
+          });
+      }
     }),
   );
 
