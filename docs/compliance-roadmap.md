@@ -27,7 +27,8 @@ liability estimate per violation, not just a pass/fail.
 - [x] Manual customer-push ingestion (`POST /v1/ingest/:apiKey`) for any other
       provider, wired by hand today.
 - [x] Phone number import (Twilio/Telnyx) with inbound calls auto-checked.
-- [x] Fixed regulatory compliance packs: HIPAA, GLBA, FERPA.
+- [x] Fixed regulatory compliance packs: HIPAA, GLBA, FERPA, COPPA (children's
+      privacy - self-stated age/grade and child name+school disclosure signals).
 - [x] Personas mapped to the packs they need, including multi-pack personas (e.g. a
       school nurse persona checking HIPAA and FERPA together).
 - [x] Self-serve API keys, scoped to one or more packs (or all).
