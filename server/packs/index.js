@@ -2,8 +2,9 @@ import { genericPack } from "./generic.js";
 import { hipaaPack } from "./hipaa.js";
 import { financePack } from "./finance.js";
 import { ferpaPack } from "./ferpa.js";
+import { coppaPack } from "./coppa.js";
 
-export { genericPack, hipaaPack, financePack, ferpaPack };
+export { genericPack, hipaaPack, financePack, ferpaPack, coppaPack };
 
 /** @type {Record<string, object>} */
 export const PACKS = {
@@ -11,6 +12,7 @@ export const PACKS = {
   hipaa: hipaaPack,
   finance: financePack,
   ferpa: ferpaPack,
+  coppa: coppaPack,
 };
 
 export const PACK_IDS = Object.keys(PACKS);
