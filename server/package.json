@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "start:evals": "node evals/serve.js",
-    "test": "node --test checks/*.test.js providers/*.test.js evals/*.test.js packs/*.test.js webhooks/*.test.js telephony/*.test.js apiKeys.test.js recordingsStore.test.js"
+    "test": "node --test checks/*.test.js providers/*.test.js evals/*.test.js packs/*.test.js webhooks/*.test.js telephony/*.test.js qualeval/*.test.js apiKeys.test.js recordingsStore.test.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1138.0",

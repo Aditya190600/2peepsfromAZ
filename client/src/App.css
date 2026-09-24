@@ -642,6 +642,37 @@ button.site-nav-link {
   border-top: none;
 }
 
+.qualeval-review {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.qualeval-review-scenarios {
+  min-width: 0;
+}
+
+.qualeval-review-feedback {
+  position: sticky;
+  top: 24px;
+}
+
+.qualeval-scenario.is-approved {
+  border-left: 3px solid var(--pass, #2e7d32);
+  padding-left: 12px;
+}
+
+.qualeval-scenario.is-rejected {
+  opacity: 0.6;
+}
+
+@media (max-width: 900px) {
+  .qualeval-review {
+    grid-template-columns: 1fr;
+  }
+}
+
 .check-row {
   display: flex;
   align-items: flex-start;

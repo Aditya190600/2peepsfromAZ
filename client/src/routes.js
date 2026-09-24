@@ -7,6 +7,12 @@ export function matchRoute(pathname, search = "") {
   if (pathname === "/api-keys") return { name: "api-keys" };
   if (pathname === "/evals") return { name: "evals" };
   if (pathname === "/numbers") return { name: "numbers" };
+  if (pathname === "/qualeval") return { name: "qualeval" };
+  if (pathname.startsWith("/qualeval/")) {
+    const evaluationId = decodeURIComponent(pathname.slice("/qualeval/".length));
+    if (!evaluationId) return { name: "qualeval" };
+    return { name: "qualeval-evaluation", evaluationId };
+  }
   if (pathname === "/sessions" || pathname === "/sessions/") {
     return { name: "sessions" };
   }

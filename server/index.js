@@ -18,6 +18,7 @@ import { createApiKey, listApiKeys, revokeApiKey, updateApiKeyExpiry, DEFAULT_EX
 import { handleIngest } from "./webhooks/ingest.js";
 import { handleAssemblyAiWebhook } from "./webhooks/assemblyaiWebhook.js";
 import { recordingsRouter } from "./recordingsStore.js";
+import { qualevalRouter } from "./qualeval/router.js";
 import {
   NORTHSTAR_SESSIONS,
   NORTHSTAR_SESSION_KEYS,
@@ -234,6 +235,11 @@ app.post("/v1/api-keys/:id/revoke", requireVisitor, requireRealAccount, async (r
 });
 
 app.use("/v1/evals", requireVisitor, evalRouter());
+
+// QualEval: black-box qualitative acceptance testing for AI voice agents.
+// See docs/qualeval-foundation.md. Requires Postgres, same hard-fail
+// guard pattern as /v1/api-keys - genuinely new data, not a cache.
+app.use("/v1/qualeval", requireVisitor, qualevalRouter({ visitorId }));
 
 const telephony = telephonyRouter();
 app.post("/v1/telephony/inbound", (req, res, next) => {
