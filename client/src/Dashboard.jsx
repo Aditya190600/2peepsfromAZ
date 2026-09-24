@@ -37,6 +37,21 @@ import { parseSessionPaste } from "./sessionPaste";
 import { PERSONAS, findPersona } from "./personas";
 import "./App.css";
 
+// Folds one streamed check-progress event (see analyzeClient.js's
+// analyze(..., onProgress)) into the running totals shown in the
+// "Analyzing…" state - see compliance.js's formatAnalyzingMessage.
+export function accumulateProgress(prev, event) {
+  const base = prev ?? { checksDone: 0, checksTotal: 0, tokensUsed: 0, costUsd: 0, costKnown: false, violationCount: 0 };
+  return {
+    checksDone: base.checksDone + 1,
+    checksTotal: event.checksTotal ?? base.checksTotal,
+    tokensUsed: base.tokensUsed + (event.usage?.totalTokens ?? 0),
+    costUsd: base.costUsd + (typeof event.costUsd === "number" ? event.costUsd : 0),
+    costKnown: base.costKnown || typeof event.costUsd === "number",
+    violationCount: base.violationCount + (event.status === "flag" ? 1 : 0),
+  };
+}
+
 export function formatTMs(tMs) {
   const totalSeconds = Math.floor(tMs / 1000);
   const minutes = Math.floor(totalSeconds / 60);
@@ -195,7 +210,11 @@ function FleetSummary({ results, progress }) {
     <div className="fleet-board">
       {progress && progress.done < progress.total && (
         <p className="fleet-progress">
-          Analyzing… {progress.done} of {progress.total} sessions complete.
+          Analyzing… {progress.done} of {progress.total} sessions complete
+          {progress.tokensUsed > 0 && ` · ${progress.tokensUsed.toLocaleString()} tokens used`}
+          {progress.costKnown && ` · ~$${progress.costUsd.toFixed(4)} estimated`}
+          {progress.violationCount != null &&
+            ` · ${progress.violationCount} violation${progress.violationCount === 1 ? "" : "s"} found so far`}
         </p>
       )}
       <section className="monitor-card fleet-progress-card">
@@ -308,6 +327,7 @@ export function Report({
   onSeek,
   loading = false,
   error = null,
+  progress = null,
   idleMessage,
   showStorageNote = false,
   navigate,
@@ -315,7 +335,7 @@ export function Report({
   const [rateLimitDismissed, setRateLimitDismissed] = useState(false);
   useEffect(() => setRateLimitDismissed(false), [report]);
 
-  const view = reportView({ report, loading, error });
+  const view = reportView({ report, loading, error, progress });
   if (view.kind !== "ready") {
     return (
       <div className={`report-state ${view.className}`}>
@@ -427,6 +447,7 @@ export default function Dashboard({ navigate, path }) {
   const [sampleError, setSampleError] = useState(null);
   const [liveLoading, setLiveLoading] = useState(false);
   const [liveError, setLiveError] = useState(null);
+  const [analysisProgress, setAnalysisProgress] = useState(null);
   const [pasteText, setPasteText] = useState("");
   const [pasteLoading, setPasteLoading] = useState(false);
   const [pasteError, setPasteError] = useState(null);
@@ -570,6 +591,7 @@ export default function Dashboard({ navigate, path }) {
     setFleetResults(null);
     clearLabErrors();
     setLiveLoading(true);
+    setAnalysisProgress(null);
     const historyId = liveHistoryIdRef.current;
     const isCurrent = () => liveHistoryIdRef.current === historyId;
     try {
@@ -583,7 +605,9 @@ export default function Dashboard({ navigate, path }) {
       const bucketUrl =
         recordingUploadRef.current.sessionId === sessionId ? await recordingUploadRef.current.promise : null;
       if (isCurrent()) showAudio(bucketUrl ?? getLiveAudioBlob(sessionId), recordingOffsetMs, sessionId);
-      const nextReport = await analyze(lastSession, patternPackIds);
+      const nextReport = await analyze(lastSession, patternPackIds, (event) => {
+        if (isCurrent()) setAnalysisProgress((prev) => accumulateProgress(prev, event));
+      });
       const attached = findEntryBySessionId(sessionId);
       saveLiveHistory(
         nextReport,
@@ -659,13 +683,26 @@ export default function Dashboard({ navigate, path }) {
     setReport(null);
     showAudio(null);
     setFleetResults([]);
-    setFleetProgress({ done: 0, total: keys.length });
+    setFleetProgress({ done: 0, total: keys.length, tokensUsed: 0, costUsd: 0, costKnown: false, violationCount: 0 });
     try {
       const reports = await mapWithConcurrency(
         keys,
         2,
-        (key) => analyze(sessionByKey(key), patternPackIds),
-        (done, total) => setFleetProgress({ done, total })
+        (key) =>
+          analyze(sessionByKey(key), patternPackIds, (event) =>
+            setFleetProgress((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    tokensUsed: prev.tokensUsed + (event.usage?.totalTokens ?? 0),
+                    costUsd: prev.costUsd + (typeof event.costUsd === "number" ? event.costUsd : 0),
+                    costKnown: prev.costKnown || typeof event.costUsd === "number",
+                    violationCount: prev.violationCount + (event.status === "flag" ? 1 : 0),
+                  }
+                : prev
+            )
+          ),
+        (done, total) => setFleetProgress((prev) => (prev ? { ...prev, done, total } : prev))
       );
       const results = keys.map((key, i) => ({ key, report: reports[i] }));
       setFleetResults(results);
@@ -1196,6 +1233,7 @@ export default function Dashboard({ navigate, path }) {
                 report={report}
                 loading={reportLoading}
                 error={reportError}
+                progress={analysisProgress}
                 audioUrl={activeAudioUrl}
                 audioRef={audioRef}
                 onSeek={onSeek}

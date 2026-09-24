@@ -25,11 +25,16 @@ export async function fetchBootStatus() {
   }
 }
 
-export async function analyze(session, patternPackIds) {
+// onProgress(event), if given, requests the streamed (newline-delimited
+// JSON) response instead of a single JSON body, and is called once per
+// check as it completes with { check, status, checksDone, checksTotal,
+// usage, costUsd } - see server/index.js's stream=true branch of
+// /v1/analyze-session. Resolves to the same report shape either way.
+export async function analyze(session, patternPackIds, onProgress) {
   const resp = await fetch("/v1/analyze-session", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ session, patternPackIds }),
+    body: JSON.stringify({ session, patternPackIds, stream: Boolean(onProgress) }),
   });
   if (!resp.ok) {
     throw new ApiError(
@@ -38,7 +43,29 @@ export async function analyze(session, patternPackIds) {
         : "This session couldn't be analyzed - check that it has a valid transcript and try again."
     );
   }
-  return resp.json();
+  if (!onProgress) return resp.json();
+  return readNdjsonReport(resp, onProgress);
+}
+
+async function readNdjsonReport(resp, onProgress) {
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop();
+    for (const line of lines) {
+      if (!line) continue;
+      const event = JSON.parse(line);
+      if (event.type === "progress") onProgress(event);
+      else if (event.type === "done") return event.report;
+      else if (event.type === "error") throw new ApiError(event.error);
+    }
+  }
+  throw new ApiError("The compliance server closed the connection before the analysis finished.");
 }
 
 // Exercises the real webhook/ingest path (POST /v1/ingest/:apiKey) a
