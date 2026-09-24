@@ -66,10 +66,13 @@ setup.
     answers), then ask for another student's health visit or grades - agent
     should refuse both, per its CAN/CANNOT scope. Switch to "Bank teller" -
     HIPAA/FERPA both uncheck, GLBA/finance checks itself instead.
-12. **Try as webhook sandbox** - start and end a call with any non-neutral
-    persona. The "Try as webhook sandbox" block appears (it's hidden for
-    "Neutral assistant"). Paste a real ComplyLine API key (mint one at
-    `/api-keys`) and click "Send to webhook receiver" - status should flip
-    to "Sent" with no inline report (the ingest endpoint acks immediately
-    and analyzes asynchronously). Retry with a bad/expired key - status
-    should flip to "error" with the server's rejection message shown.
+12. **Try as webhook sandbox** - switch to the "Try as webhook sandbox" tab
+    before any persona call ends (or with "Neutral assistant" selected) -
+    it shows placeholder guidance to start a non-neutral persona call on the
+    Live call tab first, no API key field. Start and end a call with any
+    non-neutral persona, then switch back to this tab - the API key field
+    and "Send to webhook receiver" now appear. Paste a real ComplyLine API
+    key (mint one at `/api-keys`) and click it - status should flip to
+    "Sent" with no inline report (the ingest endpoint acks immediately and
+    analyzes asynchronously). Retry with a bad/expired key - status should
+    flip to "error" with the server's rejection message shown.
