@@ -27,6 +27,7 @@ export const PACK_CITATION = {
   hipaa: "HIPAA Privacy Rule Safe Harbor, 45 CFR §164.514(b)(2) — 18 identifier categories requiring de-identification.",
   finance: "GLBA Safeguards Rule, 15 U.S.C. §6801 — nonpublic personal financial information must be protected.",
   ferpa: "FERPA, 34 CFR §99.3 — education-record PII includes student numbers and direct or indirect identifiers linked to a student.",
+  gdpr: "EU Regulation 2016/679 (GDPR), Art. 6/7 lawful basis and consent, Art. 13/14 required information to the data subject.",
   llm_gateway_ner: "State data-breach notification laws — free-form PII (names, emails, addresses) is regulated personal information.",
 };
 

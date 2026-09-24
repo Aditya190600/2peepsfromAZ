@@ -12,6 +12,7 @@ const FALLBACK_INDUSTRY_PACKS = [
   { id: "ferpa", name: "FERPA identifiers (education)" },
   { id: "tcpa", name: "TCPA consent (robocall / marketing calls)" },
   { id: "recording_consent", name: "Call-recording consent (two-party-consent states)" },
+  { id: "gdpr", name: "GDPR EU caller data (data protection/consent)" },
 ];
 
 const ALL_SCOPES = "all";

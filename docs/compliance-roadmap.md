@@ -30,7 +30,9 @@ liability estimate per violation, not just a pass/fail.
 - [x] Fixed regulatory compliance packs: HIPAA, GLBA, FERPA, COPPA (children's
       privacy - self-stated age/grade and child name+school disclosure signals),
       PCI DSS (spoken CVV, card expiration, and retention-intent detection -
-      PCI DSS Req. 3.3.1).
+      PCI DSS Req. 3.3.1), GDPR (transcript-signal detection only - EU national
+      ID/passport, IBAN, EU residency statements - not a lawful-basis or
+      consent determination).
 - [x] TCPA pack (47 U.S.C. §227) - selectable in the pack catalog, wraps the
       existing always-on consent-event check rather than duplicating detection;
       carries statutory-damage metadata ($500-$1,500 per call, no proof of harm
