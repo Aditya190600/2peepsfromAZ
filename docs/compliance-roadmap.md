@@ -34,7 +34,8 @@ liability estimate per violation, not just a pass/fail.
       ID/passport, IBAN, EU residency statements - not a lawful-basis or
       consent determination), FDCPA (prohibited debt-collection statements;
       statutory damages verified: up to $1,000/action, 15 U.S.C.
-      §1692k(a)(2)(A) - not TCPA's per-call figure).
+      §1692k(a)(2)(A) - not TCPA's per-call figure), FCRA (adverse-action
+      disclosure, permissible-purpose, and credit-score/report readback checks).
 - [x] TCPA pack (47 U.S.C. §227) - selectable in the pack catalog, wraps the
       existing always-on consent-event check rather than duplicating detection;
       carries statutory-damage metadata ($500-$1,500 per call, no proof of harm
