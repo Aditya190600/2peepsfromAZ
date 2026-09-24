@@ -4,12 +4,13 @@ export const fdcpaPack = {
   citation:
     "Fair Debt Collection Practices Act, 15 U.S.C. §1692d (harassment/threats) and §1692e(4)-(5) (false or " +
     "illegal threats of arrest, legal action, or asset seizure) and §1692e(1)/(3) (false claims of law-" +
-    "enforcement or attorney authority).",
+    "enforcement or attorney authority) and §1692e(11) (missing mini-Miranda debt-collection disclosure).",
   asserts:
     "Detects 3 spoken prohibited-statement shapes (illegal arrest/jail threats, false law-enforcement/" +
-    "attorney claims, unqualified wage-garnishment/asset-seizure threats). Does not detect a missing " +
-    "mini-Miranda disclosure (15 U.S.C. §1692e(11)) or a restricted-hours violation (15 U.S.C. §1692c(a)(1), " +
-    "8am-9pm recipient local time) - both require timing/absence judgment this pattern-match scan can't make. " +
+    "attorney claims, unqualified wage-garnishment/asset-seizure threats) plus a missing mini-Miranda " +
+    "debt-collection disclosure (15 U.S.C. §1692e(11)), via the mini_miranda check. Does not detect a " +
+    "restricted-hours violation (15 U.S.C. §1692c(a)(1), 8am-9pm recipient local time) - that requires the " +
+    "recipient's local timezone, which this app has no reliable source for, so it is not mechanically checked. " +
     "Not an FDCPA compliance determination.",
   alwaysOn: false,
   statutoryDamage: {
