@@ -107,12 +107,18 @@ export async function llmParsePastedSession(text) {
   return body.session;
 }
 
-// Examples page counterpart to transcribeUpload: transcribes one of the
-// fixed playable sample mp3s via /v1/examples/diarize/:key, which is
-// unauthenticated (zero-setup) since it only ever reads a known sample file
-// server-side, never a client-uploaded one.
-export async function diarizeSample(key) {
-  const resp = await fetch(`/v1/examples/diarize/${encodeURIComponent(key)}`, { method: "POST" });
+// Examples page counterpart to transcribeUpload + analyze: transcribes one
+// of the fixed playable sample mp3s and analyzes the result in one
+// unauthenticated (zero-setup) round trip via /v1/examples/diarize/:key,
+// since it only ever reads a known sample file server-side, never a
+// client-uploaded one or a client-supplied session. Resolves to
+// { session, report }.
+export async function diarizeSample(key, patternPackIds) {
+  const resp = await fetch(`/v1/examples/diarize/${encodeURIComponent(key)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ patternPackIds }),
+  });
   let body;
   try {
     body = await resp.json();

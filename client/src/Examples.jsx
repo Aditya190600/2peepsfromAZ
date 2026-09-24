@@ -122,11 +122,9 @@ export default function Examples({ navigate, path }) {
     setDiarizeStatus("uploading");
     try {
       showAudio(url);
-      const session = await diarizeSample(key);
-      const analyzedSession = { ...session, consentEvent: sessionByKey(key)?.consentEvent ?? null };
-      const nextReport = await analyze(analyzedSession, patternPackIds);
+      const { session, report: nextReport } = await diarizeSample(key, patternPackIds);
       setReport(nextReport);
-      recordHistory(`${sampleLabel(key)} (diarized upload)`, nextReport, analyzedSession, {
+      recordHistory(`${sampleLabel(key)} (diarized upload)`, nextReport, session, {
         audioKey: key,
       });
       setDiarizeStatus("idle");
