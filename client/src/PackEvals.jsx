@@ -42,6 +42,10 @@ export default function PackEvals({ selectedPacks, catalog }) {
       <button type="button" className="btn" onClick={onRun} disabled={busy}>
         {busy ? "Running evals…" : `Verify ${selected.length === 1 ? selected[0].name : "selected packs"}`}
       </button>
+      <p className="pack-note pack-evals-explainer">
+        Self-test only: runs built-in sample transcripts against the checked pack(s) to confirm
+        their identifier detection works. It does not scan any of your own calls or data.
+      </p>
       {error && <p className="banner-error">{error}</p>}
       {run && (
         <div className="pack-evals-run">
