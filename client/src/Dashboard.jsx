@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import RateLimitBanner from "./RateLimitBanner";
 import { useVoiceAgent } from "./useVoiceAgent";
 import {
@@ -859,33 +859,36 @@ export default function Dashboard({ navigate, path }) {
   // Take-a-tour: highlights the live-call flow in order. Targets live in two
   // different panels (persona/consent on the left, call controls + report on
   // the right), so starting the tour also forces the Live call tab active.
-  const tourSteps = [
-    {
-      ref: personaSectionRef,
-      title: "1. Pick a persona",
-      body: "Choose who the AI agent plays on this call. Each persona has its own scope and voice - picking one also auto-selects the matching pattern packs below.",
-    },
-    {
-      ref: consentRowRef,
-      title: "2. Give consent",
-      body: "Check this box to allow the call to be analyzed. Start call stays disabled until it's checked.",
-    },
-    {
-      ref: startCallRef,
-      title: "3. Start the call",
-      body: "Click Start call, then allow microphone access when your browser asks for it.",
-    },
-    {
-      ref: callStatusRef,
-      title: "4. Watch the live status",
-      body: "This shows the call's connection state - Connecting, then Live once the agent is on the line and your transcript is filling in.",
-    },
-    {
-      ref: reportHeadingRef,
-      title: "5. Get your report",
-      body: "Click End call and a compliance report generates automatically here, ranked by severity with a citation on every finding.",
-    },
-  ];
+  const tourSteps = useMemo(
+    () => [
+      {
+        ref: personaSectionRef,
+        title: "1. Pick a persona",
+        body: "Choose who the AI agent plays on this call. Each persona has its own scope and voice - picking one also auto-selects the matching pattern packs below.",
+      },
+      {
+        ref: consentRowRef,
+        title: "2. Give consent",
+        body: "Check this box to allow the call to be analyzed. Start call stays disabled until it's checked.",
+      },
+      {
+        ref: startCallRef,
+        title: "3. Start the call",
+        body: "Click Start call, then allow microphone access when your browser asks for it.",
+      },
+      {
+        ref: callStatusRef,
+        title: "4. Watch the live status",
+        body: "This shows the call's connection state - Connecting, then Live once the agent is on the line and your transcript is filling in.",
+      },
+      {
+        ref: reportHeadingRef,
+        title: "5. Get your report",
+        body: "Click End call and a compliance report generates automatically here, ranked by severity with a citation on every finding.",
+      },
+    ],
+    [],
+  );
 
   const startTour = () => {
     setSessionTab("live");
