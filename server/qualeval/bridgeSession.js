@@ -43,6 +43,15 @@ export function createBridgeSession({
 
   const aaiWs = new WebSocketImpl(wsUrl);
 
+  // Diagnostic-only tracing added while debugging real duration-0 outbound
+  // calls (see AGENTS.md's Twilio call-bridge notes) - these lines are
+  // intentionally kept since Twilio's own side reports failures via generic
+  // error codes (e.g. 31921) with no payload, so this is the only visibility
+  // into which leg closed first and why.
+  function log(...args) {
+    console.log(`QualEval bridge [${callSid ?? "no-call-sid"}]:`, ...args);
+  }
+
   function closeSockets() {
     try {
       aaiWs.close();
@@ -75,6 +84,7 @@ export function createBridgeSession({
   }
 
   aaiWs.on("open", () => {
+    log("aai socket open");
     aaiWs.send(
       JSON.stringify({
         type: "session.update",
@@ -94,6 +104,7 @@ export function createBridgeSession({
     } catch {
       return;
     }
+    if (msg.type !== "reply.audio") log("aai message", msg.type);
     switch (msg.type) {
       case "session.ready":
         aaiReady = true;
@@ -126,8 +137,12 @@ export function createBridgeSession({
     }
   });
 
-  aaiWs.on("error", (err) => fail(`AssemblyAI connection error: ${err.message}`));
-  aaiWs.on("close", () => {
+  aaiWs.on("error", (err) => {
+    log("aai socket error", err.message);
+    fail(`AssemblyAI connection error: ${err.message}`);
+  });
+  aaiWs.on("close", (code, reason) => {
+    log("aai socket close", code, reason?.toString());
     if (!finished) finish("aai_closed");
   });
 
@@ -138,6 +153,7 @@ export function createBridgeSession({
     } catch {
       return;
     }
+    if (msg.event !== "media") log("twilio event", msg.event);
     switch (msg.event) {
       case "start":
         streamSid = msg.start?.streamSid ?? msg.streamSid;
@@ -163,10 +179,14 @@ export function createBridgeSession({
     }
   });
 
-  twilioWs.on("close", () => {
+  twilioWs.on("close", (code, reason) => {
+    log("twilio socket close", code, reason?.toString());
     if (!finished) finish("twilio_closed");
   });
-  twilioWs.on("error", (err) => fail(`Twilio stream error: ${err.message}`));
+  twilioWs.on("error", (err) => {
+    log("twilio socket error", err.message);
+    fail(`Twilio stream error: ${err.message}`);
+  });
 
   return {
     stop: () => {

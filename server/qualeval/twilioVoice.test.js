@@ -45,7 +45,7 @@ test("returns 403 on an invalid Twilio signature", () => {
   assert.equal(ctx.status, 403);
 });
 
-test("returns bidirectional Connect/Stream TwiML pointed at the wss stream route with the runId", () => {
+test("returns bidirectional Connect/Stream TwiML pointed at the wss stream route, with the runId as a Custom Parameter", () => {
   const ctx = fakeReqRes({ params: { runId: "run_42" } });
   let validated;
   twilioVoiceRoute(ctx.req, ctx.res, {
@@ -56,7 +56,14 @@ test("returns bidirectional Connect/Stream TwiML pointed at the wss stream route
     },
   });
   assert.equal(ctx.contentType, "text/xml");
-  assert.match(ctx.body, /<Connect><Stream url="wss:\/\/app\.example\.com\/v1\/qualeval\/twilio-stream\?runId=run_42"\/><\/Connect>/);
+  // The `url` itself must carry no query string - Twilio silently drops
+  // query params on <Stream url> (see twilioVoice.js's header comment) - so
+  // the runId must travel as a <Parameter> instead, read back from the
+  // Media Streams "start" event's customParameters.
+  assert.match(
+    ctx.body,
+    /<Connect><Stream url="wss:\/\/app\.example\.com\/v1\/qualeval\/twilio-stream"><Parameter name="runId" value="run_42"\/><\/Stream><\/Connect>/,
+  );
   assert.equal(validated[0], ENV.TWILIO_AUTH_TOKEN);
   assert.equal(validated[1], "sig");
   assert.equal(validated[2], "https://app.example.com/v1/qualeval/twilio-voice/run_42");
