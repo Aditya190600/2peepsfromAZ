@@ -10,6 +10,7 @@ export const CHECK_LABEL = {
   opt_out: "Opt-out honored (TCPA)",
   pii_scan: "PII pattern scan",
   scope_adherence: "Stayed within persona scope",
+  mini_miranda: "Mini-Miranda disclosure (FDCPA)",
 };
 
 export const CHECK_CITATION = {
@@ -20,6 +21,7 @@ export const CHECK_CITATION = {
   pii_scan: "Pattern pack dependent — see citation on each matched pack below.",
   scope_adherence:
     "Unauthorized disclosure of information outside the agent's declared authority (e.g. FERPA §99.31 third-party disclosure limits, HIPAA minimum-necessary standard) depending on the persona.",
+  mini_miranda: "FDCPA, 15 U.S.C. §1692e(11) — debt collectors must disclose the call is an attempt to collect a debt.",
 };
 
 export const PACK_CITATION = {
@@ -41,6 +43,7 @@ export const CHECK_SEVERITY = {
   recording_consent: "medium",
   opt_out: "high",
   scope_adherence: "critical",
+  mini_miranda: "high",
 };
 
 export const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
