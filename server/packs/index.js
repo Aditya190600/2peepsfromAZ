@@ -10,6 +10,7 @@ import { gdprPack } from "./gdpr.js";
 import { fdcpaPack } from "./fdcpa.js";
 import { caSb1001Pack } from "./caSb1001.js";
 import { caAb489Pack } from "./caAb489.js";
+import { fcraPack } from "./fcra.js";
 
 export {
   genericPack,
@@ -24,6 +25,7 @@ export {
   fdcpaPack,
   caSb1001Pack,
   caAb489Pack,
+  fcraPack,
 };
 
 /** @type {Record<string, object>} */
@@ -40,6 +42,7 @@ export const PACKS = {
   fdcpa: fdcpaPack,
   ca_sb1001: caSb1001Pack,
   ca_ab489: caAb489Pack,
+  fcra: fcraPack,
 };
 
 export const PACK_IDS = Object.keys(PACKS);
