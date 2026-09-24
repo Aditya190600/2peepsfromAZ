@@ -51,6 +51,14 @@ export async function analyzeSession(
     .filter(Boolean);
   const gatewayOpts = { ...(llmGateway ? { llmGateway } : {}), deterministic };
 
+  // Packs whose requirement can't be expressed as a piiScan pattern (e.g.
+  // a whole-call presence check with inverse polarity, or one needing LLM
+  // judgment) carry their own `check` function instead of `patterns` - see
+  // caSb1001Pack. They stay opt-in via patternPackIds like every other pack.
+  const packChecks = patternPacks
+    .filter((pack) => typeof pack.check === "function")
+    .map((pack) => () => pack.check(session, gatewayOpts));
+
   const checks = [
     () => consentCheck(session),
     () => disclosureCheck(session, gatewayOpts),
@@ -59,6 +67,7 @@ export async function analyzeSession(
     () => piiScan(session, patternPacks, gatewayOpts),
     () => scopeAdherenceCheck(session, gatewayOpts),
     () => miniMirandaCheck(session, { patternPackIds }),
+    ...packChecks,
   ];
 
   let checksDone = 0;
