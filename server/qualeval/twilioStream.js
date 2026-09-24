@@ -48,6 +48,8 @@ export function attachTwilioStreamServer(
       await markRunError(runId, message).catch(() => {});
     }
 
+    console.log(`QualEval call bridge: twilio-stream upgrade accepted for run ${runId}`);
+
     if (!runId) {
       twilioWs.close(1008, "missing runId");
       return;
@@ -59,6 +61,7 @@ export function attachTwilioStreamServer(
       const scenario = await getScenario(run.scenarioId, null);
       if (!scenario) throw new Error("Scenario not found for run");
       const token = await mintToken();
+      console.log(`QualEval call bridge: run ${runId} - AssemblyAI token minted, opening bridge session`);
 
       createBridgeSession({
         twilioWs,
