@@ -11,10 +11,9 @@ import {
 } from "./Dashboard";
 import { SAMPLE_SESSIONS, SAMPLE_AUDIO_URLS, SCRIPTED_VIOLATION_DEMO_KEYS } from "./sampleSessions";
 import { saveHistoryEntry, buildHistoryEntry, findEntryBySessionId } from "./reportHistory";
-import { registerLiveAudioBlob } from "./liveAudioBlobs";
 import { seekAudio } from "./seek";
 import { headlineVerdict } from "./compliance";
-import { analyze, transcribeUpload, mapWithConcurrency } from "./analyzeClient";
+import { analyze, diarizeSample, mapWithConcurrency } from "./analyzeClient";
 import { listIndustryPacks } from "./evalsClient";
 import "./App.css";
 
@@ -110,9 +109,10 @@ export default function Examples({ navigate, path }) {
     setReport(entry.report);
   };
 
-  // Fetches a playable sample MP3 and runs it through the real upload /
-  // diarization pipeline (not the canned SAMPLE_SESSIONS text path), so the
-  // demo can prove speaker_labels produces multi-turn timestamps.
+  // Runs a playable sample's MP3 through the real diarization pipeline (not
+  // the canned SAMPLE_SESSIONS text path) via the unauthenticated
+  // /v1/examples/diarize/:key route, so the demo can prove speaker_labels
+  // produces multi-turn timestamps with zero setup.
   const runDiarizedSample = async (key) => {
     const url = SAMPLE_AUDIO_URLS[key];
     if (!url) return;
@@ -121,18 +121,14 @@ export default function Examples({ navigate, path }) {
     setSampleLoadingKey(key);
     setDiarizeStatus("uploading");
     try {
-      const resp = await fetch(url);
-      if (!resp.ok) throw new Error(`Could not load sample audio (${resp.status}).`);
-      const blob = await resp.blob();
-      const file = new File([blob], `${key}.mp3`, { type: blob.type || "audio/mpeg" });
-      const blobUrl = URL.createObjectURL(file);
-      showAudio(blobUrl);
-      const session = await transcribeUpload(file);
+      showAudio(url);
+      const session = await diarizeSample(key);
       const analyzedSession = { ...session, consentEvent: sessionByKey(key)?.consentEvent ?? null };
       const nextReport = await analyze(analyzedSession, patternPackIds);
       setReport(nextReport);
-      registerLiveAudioBlob(analyzedSession.sessionId, blobUrl);
-      recordHistory(`${sampleLabel(key)} (diarized upload)`, nextReport, analyzedSession);
+      recordHistory(`${sampleLabel(key)} (diarized upload)`, nextReport, analyzedSession, {
+        audioKey: key,
+      });
       setDiarizeStatus("idle");
     } catch (err) {
       setDiarizeStatus("error");
