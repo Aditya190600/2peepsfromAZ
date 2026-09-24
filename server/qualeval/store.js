@@ -191,10 +191,11 @@ export async function updateScenario(id, clerkUserId, fields, env = process.env,
   return scenarioRow(rows[0]);
 }
 
-// Creates a stub Run for an approved scenario. Real call-placement is not
-// wired yet (pending Twilio credentials) - the run is recorded honestly as
-// "pending", never a fabricated transcript or verdict. See
-// server/qualeval/router.js's createRun handler for the full contract.
+// Creates the initial "pending" Run row for an approved scenario. The
+// caller (server/qualeval/router.js's createRun handler) advances it to
+// "in_progress" via callBridge.js's placeCall when Twilio is configured;
+// otherwise it stays "pending" as an honest stub, never a fabricated
+// transcript or verdict.
 // Callers must verify scenario ownership themselves first (e.g. via
 // getScenario(id, clerkUserId)) before calling this with a trusted scenarioId.
 export async function createRun(scenarioId, env = process.env, pool = getPool(env)) {

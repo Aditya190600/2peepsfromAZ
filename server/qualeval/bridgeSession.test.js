@@ -135,3 +135,34 @@ test("an AssemblyAI session.error calls onError instead of onFinished", async ()
   assert.equal(finished, undefined);
   assert.match(error, /boom/);
 });
+
+test("AssemblyAI session.ended closes the Twilio leg so the real PSTN call hangs up", async () => {
+  const twilioWs = new FakeSocket();
+  const aaiWs = new FakeSocket();
+  createBridgeSession({
+    twilioWs,
+    token: "tok",
+    WebSocketImpl: fakeWebSocketImpl(aaiWs),
+    systemPrompt: "be a caller",
+  });
+
+  aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
+
+  assert.equal(twilioWs.readyState, twilioWs.CLOSED);
+});
+
+test("AssemblyAI session.error also closes the Twilio leg, not just the AssemblyAI socket", async () => {
+  const twilioWs = new FakeSocket();
+  const aaiWs = new FakeSocket();
+  createBridgeSession({
+    twilioWs,
+    token: "tok",
+    WebSocketImpl: fakeWebSocketImpl(aaiWs),
+    systemPrompt: "be a caller",
+    onError: () => {},
+  });
+
+  aaiWs.emit("message", JSON.stringify({ type: "session.error", error: "boom" }));
+
+  assert.equal(twilioWs.readyState, twilioWs.CLOSED);
+});

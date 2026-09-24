@@ -198,7 +198,7 @@ function ScenarioCard({ scenario, onApprove, onReject, onRun, busy }) {
         )}
         {scenario.status === "approved" && (
           <button type="button" className="btn btn-outline" onClick={() => onRun(scenario)} disabled={busy}>
-            Run (stub - real call placement pending Twilio credentials)
+            Run
           </button>
         )}
       </div>
