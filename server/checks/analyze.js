@@ -4,6 +4,7 @@ import { recordingConsentCheck } from "./recordingConsentCheck.js";
 import { optOutCheck } from "./optOutCheck.js";
 import { piiScan } from "./piiScan.js";
 import { scopeAdherenceCheck } from "./scopeAdherenceCheck.js";
+import { miniMirandaCheck } from "./miniMirandaCheck.js";
 import { PACKS as AVAILABLE_PACKS } from "../packs/index.js";
 
 // Sums each finding's optional llmUsage/llmCostUsd (see llmGateway.js's
@@ -57,6 +58,7 @@ export async function analyzeSession(
     () => optOutCheck(session),
     () => piiScan(session, patternPacks, gatewayOpts),
     () => scopeAdherenceCheck(session, gatewayOpts),
+    () => miniMirandaCheck(session, { patternPackIds }),
   ];
 
   let checksDone = 0;
