@@ -5,7 +5,7 @@
 // scopeAdherenceCheck.js uses for persona-gated checks.
 const MINI_MIRANDA_WINDOW_MS = 10_000;
 const MINI_MIRANDA_PHRASES =
-  /\b(this is an attempt to collect a debt|attempting to collect a debt|this call is (?:an attempt|from a debt collector) to collect a debt|we are (?:a debt collector|attempting to collect) )\b/i;
+  /\b(this is an attempt to collect a debt|attempting to collect a debt|this call is (?:an attempt|from a debt collector) to collect a debt|we are (?:a debt collector|attempting to collect))\b/i;
 
 export function miniMirandaCheck(session, { patternPackIds = [] } = {}) {
   if (!patternPackIds.includes("fdcpa")) {
