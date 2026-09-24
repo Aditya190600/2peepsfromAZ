@@ -18,7 +18,13 @@ import { createApiKey, listApiKeys, revokeApiKey, updateApiKeyExpiry, DEFAULT_EX
 import { handleIngest } from "./webhooks/ingest.js";
 import { handleAssemblyAiWebhook } from "./webhooks/assemblyaiWebhook.js";
 import { recordingsRouter } from "./recordingsStore.js";
-import { NORTHSTAR_SESSIONS, NORTHSTAR_SESSION_KEYS } from "../client/src/sampleSessions.js";
+import {
+  NORTHSTAR_SESSIONS,
+  NORTHSTAR_SESSION_KEYS,
+  SAMPLE_SESSIONS,
+  PLAYABLE_SAMPLE_KEYS,
+} from "../client/src/sampleSessions.js";
+import { readFile } from "node:fs/promises";
 import * as providers from "./providers/registry.js";
 import { llmParsePastedSession } from "./checks/sessionPasteParse.js";
 import { LlmGatewayRateLimitError } from "./checks/llmGateway.js";
@@ -64,6 +70,30 @@ const requireVisitor = CLERK_ENABLED ? requireAuth() : (_req, _res, next) => nex
 // single-tenant local-dev default everywhere else in this file.
 function visitorId(req) {
   return CLERK_ENABLED ? getAuth(req).userId : "anon";
+}
+
+// The Examples page (client/src/Examples.jsx) is deliberately zero-setup -
+// no sign-in required even when Clerk is on - because its samples/scripted
+// demos are canned, static fixtures, never live user audio or PII. This
+// looks the posted session up by sessionId against the same canned fixtures
+// (SAMPLE_SESSIONS/NORTHSTAR_SESSIONS) already imported for the Northstar
+// boot-warm cache, and substitutes the canonical server-side copy - so a
+// signed-out request can never smuggle arbitrary content past auth by
+// spoofing a known sessionId with different turns.
+const CANNED_SESSIONS_BY_ID = new Map(
+  [...Object.values(SAMPLE_SESSIONS), ...Object.values(NORTHSTAR_SESSIONS)].map((session) => [
+    session.sessionId,
+    session,
+  ])
+);
+
+function requireVisitorUnlessCannedSample(req, res, next) {
+  const canned = CANNED_SESSIONS_BY_ID.get(req.body?.session?.sessionId);
+  if (canned) {
+    req.body.session = canned;
+    return next();
+  }
+  return requireVisitor(req, res, next);
 }
 
 const API_KEY = process.env.ASSEMBLYAI_API_KEY;
@@ -229,7 +259,7 @@ app.post("/v1/pack-evals", requireVisitor, async (req, res) => {
 // Post-hoc compliance report for one completed (or synthetic) Voice Agent
 // session: consent-event-logged (TCPA), AI-disclosure-timing (e.g. CA AB
 // 2905), and a pluggable PII pattern-set scan. Body: { session, patternPackIds }.
-app.post("/v1/analyze-session", requireVisitor, async (req, res) => {
+app.post("/v1/analyze-session", requireVisitorUnlessCannedSample, async (req, res) => {
   const { session, patternPackIds = ["generic"], stream = false } = req.body ?? {};
   if (!session || !Array.isArray(session.turns)) {
     return res.status(400).json({ error: "session with a turns array is required" });
@@ -348,6 +378,44 @@ app.post(
     }
   }
 );
+
+// Zero-setup counterpart to /v1/transcribe-upload + /v1/analyze-session for
+// the Examples page's "Diarize upload" demo: unlike those routes, this never
+// accepts client-uploaded content and never analyzes a client-supplied
+// session body - it only transcribes one of the fixed playable sample mp3s
+// (client/public/samples), read server-side by key, and analyzes the result
+// it produced itself, so a signed-out request can't smuggle arbitrary audio
+// or an arbitrary session past auth via this route.
+app.post("/v1/examples/diarize/:key", async (req, res) => {
+  const { key } = req.params;
+  if (!PLAYABLE_SAMPLE_KEYS.includes(key)) {
+    return res.status(404).json({ error: "Unknown sample key." });
+  }
+  const { patternPackIds = ["generic"] } = req.body ?? {};
+  try {
+    const samplesDir = existsSync(dist)
+      ? path.join(dist, "samples")
+      : path.join(__dirname, "..", "client", "public", "samples");
+    const audio = await readFile(path.join(samplesDir, `${key}.mp3`));
+    const turns = await providers.getTranscriber().transcribe(audio);
+    if (turns.length === 0) {
+      return res.status(422).json({ error: "No speech detected in the sample audio." });
+    }
+    const session = {
+      sessionId: `sess_upload_${Date.now()}`,
+      startedAt: new Date().toISOString(),
+      consentEvent: SAMPLE_SESSIONS[key]?.consentEvent ?? null,
+      turns,
+    };
+    const report = await analyzeSession(session, {
+      patternPackIds,
+      llmGateway: providers.getModel().complete,
+    });
+    res.json({ session, report });
+  } catch (err) {
+    res.status(502).json({ error: `Transcription failed: ${err.message}` });
+  }
+});
 
 app.use(recordingsRouter({ requireVisitor, visitorId }));
 

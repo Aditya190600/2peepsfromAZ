@@ -7,9 +7,9 @@ click-through of individual reports.
 
 ## What it does
 
-"Analyze all N sample sessions" (in the Session panel, below the single-sample
-buttons) runs the existing per-session analysis across every synthetic sample
-session and renders:
+"Analyze all N sample sessions" (on the Examples page, `client/src/Examples.jsx`
+- relocated there from Try's tabs, see `AGENTS.md`) runs the existing
+per-session analysis across every synthetic sample session and renders:
 
 1. **Summary** - how many sessions passed all checks vs. were flagged, plus a
    pass/flag breakdown per check (consent, AI disclosure, PII scan) across the
@@ -20,9 +20,9 @@ session and renders:
 
 ## How it works
 
-No server changes. The client (`client/src/App.jsx`) batches calls to the
-existing `POST /v1/analyze-session` endpoint - one request per sample session,
-via `Promise.all` - then aggregates the results client-side:
+No server changes. The client (`client/src/Examples.jsx`) batches calls to the
+existing `POST /v1/analyze-session` endpoint - one request per sample session -
+then aggregates the results client-side:
 
 - `runFleet()` calls `analyze()` once per key in `SAMPLE_SESSIONS`
   (`client/src/sampleSessions.js`) and stores `{ key, report }[]` in
