@@ -15,15 +15,19 @@ create table if not exists qualeval_demo_agent_variants (
   updated_at timestamptz not null default now()
 );
 
-insert into qualeval_demo_agent_variants (key, name) values
-  ('compliant', 'Compliant support agent'),
-  ('flawed', 'Flawed support agent (seeded gap)')
-on conflict (key) do nothing;
-
+-- Forward-migrate an earlier draft of this table (raw prompt text, all
+-- not-null) before inserting the seed rows below - otherwise the insert's
+-- omitted system_prompt/greeting/voice would violate those columns' old
+-- not-null constraints on an already-mutated table.
 alter table qualeval_demo_agent_variants add column if not exists agent_id text;
 alter table qualeval_demo_agent_variants drop column if exists system_prompt;
 alter table qualeval_demo_agent_variants drop column if exists greeting;
 alter table qualeval_demo_agent_variants drop column if exists voice;
+
+insert into qualeval_demo_agent_variants (key, name) values
+  ('compliant', 'Compliant support agent'),
+  ('flawed', 'Flawed support agent (seeded gap)')
+on conflict (key) do nothing;
 
 -- Single-row runtime setting: which variant QUALEVAL_AGENT_NUMBER currently
 -- answers as. server/qualeval/demoAgentVoice.js reads this at call time via
