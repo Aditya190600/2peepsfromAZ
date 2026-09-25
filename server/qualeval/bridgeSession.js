@@ -42,6 +42,16 @@ export function createBridgeSession({
   systemPrompt,
   greeting,
   voice,
+  // Binds a pre-configured AssemblyAI stored agent (server/qualeval/
+  // demoAgentAgents.js) instead of inline session fields. Mutually
+  // exclusive with systemPrompt/greeting/voice/input/output on the WS
+  // session.update payload - AssemblyAI rejects a session.update carrying
+  // both (docs/voice-agents/voice-agent-api/deploy) - so when agentId is
+  // set, this bridge sends only `{agent_id}` and nothing else; the bound
+  // agent's own stored input/output.format (set at creation time, see
+  // server/qualeval/demoAgentDefaults.js) must already be audio/pcmu for a
+  // Twilio bridge, since it can't be overridden per-connection this way.
+  agentId,
   transcriptUserRole = "agent",
   transcriptAgentRole = "user",
   onReady,
@@ -101,18 +111,21 @@ export function createBridgeSession({
 
   aaiWs.on("open", () => {
     log("aai socket open");
-    aaiWs.send(
-      JSON.stringify({
-        type: "session.update",
-        session: {
+    const session = agentId
+      ? { agent_id: agentId }
+      : {
           system_prompt: systemPrompt,
           ...(greeting ? { greeting } : {}),
-          ...(voice ? { voice: { voice_id: voice } } : {}),
           input: { format: { encoding: "audio/pcmu" } },
-          output: { format: { encoding: "audio/pcmu" } },
-        },
-      }),
-    );
+          // `voice` is a plain string nested under `output` on the WS
+          // session.update payload - NOT the top-level `{voice: {voice_id}}`
+          // shape used by the separate REST /v1/agents "create agent"
+          // endpoint. Verified live 2026-09-25 after `session.error: Invalid
+          // message format for type 'session.update'` from using the wrong
+          // shape here.
+          output: { ...(voice ? { voice } : {}), format: { encoding: "audio/pcmu" } },
+        };
+    aaiWs.send(JSON.stringify({ type: "session.update", session }));
   });
 
   aaiWs.on("message", (data) => {

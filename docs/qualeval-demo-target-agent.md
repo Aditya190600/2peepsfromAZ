@@ -10,10 +10,15 @@ exercises the full real pipeline (real outbound call -> real two-sided
 conversation -> real transcript -> real evaluator verdict) rather than
 against a scripted line that can only ever fail.
 
-## Two variants, one number
+## Two variants, one number, backed by AssemblyAI's own stored agents
 
+Each variant is an AssemblyAI **stored agent** (`POST`/`PUT /v1/agents` -
+`server/qualeval/demoAgentAgents.js`), not prompt text we store ourselves:
+`agent_id` is a direct drop-in for a WS session's `system_prompt`/`greeting`/
+`voice`/`input`/`output` (bind with `{session: {agent_id}}`, mutually
+exclusive with those inline fields - see `docs/voice-agents/voice-agent-api/deploy`).
 `qualeval_demo_agent_variants` (`server/migrations/005_qualeval_demo_agent.sql`)
-holds two operator-editable rows:
+just maps our two variant keys to their `agent_id`:
 
 - `compliant` - discloses it's an AI in its first sentence and verifies the
   caller's identity (name + last four of the account number) before
@@ -22,14 +27,24 @@ holds two operator-editable rows:
   an AI, and answers account questions as soon as a name or account number is
   stated, with no identity verification at all.
 
+`server/qualeval/demoAgentDefaults.js` holds the two agents' default bodies
+(prompt/greeting/voice, with `input`/`output.format` fixed to `audio/pcmu`
+since that has to live on the stored agent - it can't be set inline once
+`agent_id` is used). `server/qualeval/demoAgentAgentsProvision.js` creates
+each agent once on boot, the first time its variant row has no `agent_id`
+yet, and persists the id - it never recreates an already-provisioned agent.
+
 `qualeval_demo_agent_state` is a single-row runtime toggle (`active_variant`)
 read by `server/qualeval/targetAgentStream.js` at connect time - there's only
 one number, so switching variants is a toggle, not two simultaneous numbers.
 Manage both through `server/qualeval/router.js`:
 
-- `GET /v1/qualeval/demo-agent/variants` - both variants plus the active key.
-- `PATCH /v1/qualeval/demo-agent/variants/:key` - edit `name`/`systemPrompt`/
-  `greeting`/`voice` for `compliant` or `flawed`.
+- `GET /v1/qualeval/demo-agent/variants` - both variants (with their live
+  `systemPrompt`/`greeting`/`voice` read straight off AssemblyAI via
+  `demoAgentConfig.getVariantWithAgent`) plus the active key.
+- `PATCH /v1/qualeval/demo-agent/variants/:key` - `name`/`agentId` update the
+  local row directly; `systemPrompt`/`greeting`/`voice` instead forward to
+  `PUT /v1/agents/{agentId}`, editing the live AssemblyAI record.
 - `POST /v1/qualeval/demo-agent/active` with `{"variant": "compliant"|"flawed"}`
   - switches which variant answers the next call.
 
@@ -39,11 +54,12 @@ Manage both through `server/qualeval/router.js`:
 returns `<Connect><Stream url="wss://.../v1/qualeval/target-agent-stream"/>`,
 the same bidirectional-Media-Streams pattern the outbound/persona side uses
 (`twilioVoice.js` -> `twilioStream.js`). `server/qualeval/targetAgentStream.js`
-accepts that WebSocket, resolves the currently active variant
-(`demoAgentConfig.getActiveVariant()`), mints an AssemblyAI token, and bridges
+accepts that WebSocket, resolves the currently active variant's `agentId`
+(`demoAgentConfig.getActiveVariant()`), mints an AssemblyAI token, and binds
 via `server/qualeval/bridgeSession.js`'s `createBridgeSession` - the same
-generic primitive the caller side uses, parameterized with the active
-variant's `systemPrompt`/`greeting`/`voice`.
+generic primitive the caller side uses, but with `agentId` instead of
+`systemPrompt` (mutually exclusive per AssemblyAI's own rule; `bridgeSession.js`
+sends `{session: {agent_id}}` alone when `agentId` is set).
 
 Unlike the caller side, this stream isn't tied to a run: which prompt to
 bridge with is a global setting, not something carried on the call, so

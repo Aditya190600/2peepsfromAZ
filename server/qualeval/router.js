@@ -173,10 +173,11 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
   router.get(
     "/demo-agent/variants",
     wrap(async (req, res) => {
-      const [variants, activeKey] = await Promise.all([
-        demoAgentConfig.listVariants(),
-        demoAgentConfig.getActiveVariantKey(),
-      ]);
+      const [keys, activeKey] = await Promise.all([demoAgentConfig.listVariants(), demoAgentConfig.getActiveVariantKey()]);
+      // Reads each variant's live prompt/greeting/voice straight off its
+      // AssemblyAI agent record (getVariantWithAgent), not a local copy that
+      // could drift once PATCH starts writing to AssemblyAI directly.
+      const variants = await Promise.all(keys.map((v) => demoAgentConfig.getVariantWithAgent(v.key)));
       res.json({ variants, activeKey });
     }),
   );

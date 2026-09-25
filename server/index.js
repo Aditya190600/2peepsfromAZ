@@ -22,6 +22,7 @@ import { qualevalRouter } from "./qualeval/router.js";
 import { twilioVoiceRoute } from "./qualeval/twilioVoice.js";
 import { demoAgentVoiceRoute } from "./qualeval/demoAgentVoice.js";
 import { ensureDemoAgentNumberConfigured } from "./qualeval/demoAgentProvision.js";
+import { ensureDemoAgentsProvisioned } from "./qualeval/demoAgentAgentsProvision.js";
 import { attachTwilioStreamServer } from "./qualeval/twilioStream.js";
 import { attachTargetAgentStreamServer } from "./qualeval/targetAgentStream.js";
 import {
@@ -491,6 +492,13 @@ attachTargetAgentStreamServer(httpServer);
 // comment for why an unconfigured number silently fails every call to it.
 ensureDemoAgentNumberConfigured().catch((err) => {
   console.error(`QualEval: demo-agent number provisioning failed: ${err.message}`);
+});
+
+// Idempotently creates the two AssemblyAI stored agents (compliant/flawed)
+// behind QUALEVAL_AGENT_NUMBER's variants the first time each is missing an
+// agent_id - see server/qualeval/demoAgentAgentsProvision.js.
+ensureDemoAgentsProvisioned().catch((err) => {
+  console.error(`QualEval: demo-agent AssemblyAI agent provisioning failed: ${err.message}`);
 });
 
 if (dbConfigured()) {

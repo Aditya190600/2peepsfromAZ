@@ -41,13 +41,11 @@ export function attachTargetAgentStreamServer(
 
     try {
       const [variant, token] = await Promise.all([getActiveVariant(), mintToken()]);
-      console.log(`QualEval target-agent bridge: bridging as variant "${variant.key}"`);
+      console.log(`QualEval target-agent bridge: bridging as variant "${variant.key}" (agent ${variant.agentId})`);
       createSession({
         twilioWs,
         token,
-        systemPrompt: variant.systemPrompt,
-        greeting: variant.greeting,
-        voice: variant.voice,
+        agentId: variant.agentId,
         // No swap needed on this side - see bridgeSession.js's header
         // comment for why the two directions map roles oppositely.
         transcriptUserRole: "user",

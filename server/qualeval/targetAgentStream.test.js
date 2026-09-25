@@ -29,9 +29,7 @@ test("bridges immediately using the active variant, without waiting for a start 
   const httpServer = new EventEmitter();
   const getActiveVariant = async () => ({
     key: "flawed",
-    systemPrompt: "be flawed",
-    greeting: "hi",
-    voice: "george",
+    agentId: "agent_flawed",
   });
   const mintToken = async () => "tok";
   let sessionArgs;
@@ -47,9 +45,7 @@ test("bridges immediately using the active variant, without waiting for a start 
 
   assert.ok(sessionArgs, "createSession should have been called without needing a start event");
   assert.equal(sessionArgs.token, "tok");
-  assert.equal(sessionArgs.systemPrompt, "be flawed");
-  assert.equal(sessionArgs.greeting, "hi");
-  assert.equal(sessionArgs.voice, "george");
+  assert.equal(sessionArgs.agentId, "agent_flawed");
   // No swap on this side - see bridgeSession.js's header comment.
   assert.equal(sessionArgs.transcriptUserRole, "user");
   assert.equal(sessionArgs.transcriptAgentRole, "agent");

@@ -95,7 +95,7 @@ test("swaps AssemblyAI's user/agent roles into QualEval's caller/target transcri
   assert.equal(finished.turns[1].text, "I'd like a refund.");
 });
 
-test("target-agent side: no role swap, and greeting/voice are sent on session.update", async () => {
+test("target-agent side: binds by agent_id (mutually exclusive with inline fields), no role swap", async () => {
   const twilioWs = new FakeSocket();
   const aaiWs = new FakeSocket();
   let finished;
@@ -103,17 +103,16 @@ test("target-agent side: no role swap, and greeting/voice are sent on session.up
     twilioWs,
     token: "tok",
     WebSocketImpl: fakeWebSocketImpl(aaiWs),
-    systemPrompt: "be the target agent",
-    greeting: "Thanks for calling, how can I help?",
-    voice: "george",
+    agentId: "agent_flawed",
     transcriptUserRole: "user",
     transcriptAgentRole: "agent",
     onFinished: (result) => (finished = result),
   });
   aaiWs.emit("open");
 
-  assert.equal(aaiWs.sent[0].session.greeting, "Thanks for calling, how can I help?");
-  assert.equal(aaiWs.sent[0].session.voice.voice_id, "george");
+  // agent_id session.update carries nothing else - see bridgeSession.js's
+  // header comment on why inline fields can't ride alongside it.
+  assert.deepEqual(aaiWs.sent[0].session, { agent_id: "agent_flawed" });
 
   twilioWs.emit("message", JSON.stringify({ event: "start", start: { streamSid: "MZ1", callSid: "CA1" } }));
   aaiWs.emit("message", JSON.stringify({ type: "session.ready" }));

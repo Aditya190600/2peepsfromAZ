@@ -7,13 +7,14 @@ import {
   getActiveVariantKey,
   setActiveVariant,
   getActiveVariant,
+  getVariantWithAgent,
   NOT_CONFIGURED_ERROR,
 } from "./demoAgentConfig.js";
 
 function fakePool() {
   const variants = [
-    { key: "compliant", name: "Compliant support agent", system_prompt: "be compliant", greeting: "hi compliant", voice: "anna", updated_at: "t0" },
-    { key: "flawed", name: "Flawed support agent", system_prompt: "be flawed", greeting: "hi flawed", voice: "george", updated_at: "t0" },
+    { key: "compliant", name: "Compliant support agent", agent_id: "agent_compliant", updated_at: "t0" },
+    { key: "flawed", name: "Flawed support agent", agent_id: "agent_flawed", updated_at: "t0" },
   ];
   let activeVariant = "compliant";
 
@@ -64,21 +65,39 @@ test("listVariants returns both variants sorted by key", async () => {
     rows.map((r) => r.key),
     ["compliant", "flawed"],
   );
-  assert.equal(rows[0].systemPrompt, "be compliant");
+  assert.equal(rows[0].agentId, "agent_compliant");
 });
 
 test("getVariant rejects an invalid key", async () => {
   await assert.rejects(getVariant("bogus", {}, fakePool()), /must be one of/);
 });
 
-test("updateVariant persists edited fields, leaving others untouched", async () => {
+test("updateVariant persists name/agentId locally without calling AssemblyAI", async () => {
   const pool = fakePool();
-  const updated = await updateVariant("flawed", { systemPrompt: "be even more flawed" }, {}, pool);
-  assert.equal(updated.systemPrompt, "be even more flawed");
-  assert.equal(updated.greeting, "hi flawed");
+  const updated = await updateVariant("flawed", { name: "Renamed" }, {}, pool);
+  assert.equal(updated.name, "Renamed");
+  assert.equal(updated.agentId, "agent_flawed");
+});
 
-  const refetched = await getVariant("flawed", {}, pool);
-  assert.equal(refetched.systemPrompt, "be even more flawed");
+test("updateVariant forwards systemPrompt/greeting/voice to the live AssemblyAI agent", async () => {
+  const pool = fakePool();
+  const calls = [];
+  const fakeUpdateAgent = async (agentId, body) => {
+    calls.push({ agentId, body });
+    return { id: agentId, ...body };
+  };
+  const updated = await updateVariant(
+    "flawed",
+    { systemPrompt: "be even more flawed", greeting: "hi", voice: "george" },
+    {},
+    pool,
+    { updateAgent: fakeUpdateAgent },
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].agentId, "agent_flawed");
+  assert.equal(calls[0].body.system_prompt, "be even more flawed");
+  assert.deepEqual(calls[0].body.voice, { voice_id: "george" });
+  assert.equal(updated.key, "flawed");
 });
 
 test("getActiveVariantKey and setActiveVariant round-trip", async () => {
@@ -93,7 +112,26 @@ test("getActiveVariant resolves the full active variant row via the join", async
   await setActiveVariant("flawed", {}, pool);
   const active = await getActiveVariant({}, pool);
   assert.equal(active.key, "flawed");
-  assert.equal(active.voice, "george");
+  assert.equal(active.agentId, "agent_flawed");
+});
+
+test("getActiveVariant throws when the active variant has no agent_id yet", async () => {
+  const pool = fakePool();
+  await updateVariant("compliant", { agentId: null }, {}, pool);
+  await assert.rejects(getActiveVariant({}, pool), /no AssemblyAI agent_id/);
+});
+
+test("getVariantWithAgent reads live prompt/greeting/voice off the AssemblyAI record", async () => {
+  const pool = fakePool();
+  const fakeGetAgent = async (agentId) => ({
+    id: agentId,
+    system_prompt: "be compliant",
+    greeting: "hi",
+    voice: { voice_id: "anna" },
+  });
+  const withAgent = await getVariantWithAgent("compliant", {}, pool, { getAgent: fakeGetAgent });
+  assert.equal(withAgent.systemPrompt, "be compliant");
+  assert.equal(withAgent.voice, "anna");
 });
 
 test("every call throws NOT_CONFIGURED_ERROR without a pool", async () => {
