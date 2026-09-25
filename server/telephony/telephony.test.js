@@ -112,7 +112,8 @@ test("unreachable SIP gateway fails loudly and Twilio rejection hides the token"
 });
 
 test("Twilio and Telnyx API imports store the number and hide the key", async (t) => {
-  const { app } = await appFor();
+  const probed = [];
+  const { app } = await appFor(async (host) => { probed.push(host); });
   const server = await listen(app);
   t.after(() => new Promise((resolve) => server.close(resolve)));
   const twilio = await request(server, "/v1/telephony/imports/twilio", {
@@ -122,6 +123,8 @@ test("Twilio and Telnyx API imports store the number and hide the key", async (t
   assert.equal(twilio.status, 201);
   assert.equal(twilio.body.number.provider, "twilio");
   assert.equal(twilio.body.trunk.username, SID);
+  assert.deepEqual(twilio.body.trunk.gateways, []);
+  assert.deepEqual(probed, []);
   assert.equal(twilio.text.includes(TOKEN), false);
   const telnyx = await request(server, "/v1/telephony/imports/telnyx", {
     method: "POST",

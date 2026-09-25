@@ -45,7 +45,12 @@ export function telephonyRouter({ store = new TelephonyStore(), fetchImpl = fetc
 
   async function saveTrunk({ provider, label, gateways, username, secret }) {
     if (!TRUNK_PROVIDERS.has(provider)) fail("Unknown trunk provider");
-    const hosts = await probeGateways(gateways, { connect: probe });
+    // Twilio has no shared SIP host. sip.twilio.com has no A/AAAA record, so a
+    // default probe always fails with ENOTFOUND. The Accounts API check is the
+    // validation. Probe only a SIP domain the operator actually supplies.
+    const hosts = provider === "twilio" && (!gateways || gateways.length === 0)
+      ? []
+      : await probeGateways(gateways, { connect: probe });
     const saved = await store.saveCredential({
       provider,
       label: labelOf(label, provider),
@@ -134,7 +139,7 @@ export function telephonyRouter({ store = new TelephonyStore(), fetchImpl = fetc
     const trunk = await saveTrunk({
       provider: "twilio",
       label: body.label ?? "Twilio",
-      gateways: body.gateways ?? ["sip.twilio.com"],
+      gateways: body.gateways,
       username: body.accountSid,
       secret: body.authToken,
     });
