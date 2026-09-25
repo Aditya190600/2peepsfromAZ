@@ -85,9 +85,10 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
     wrap(async (req, res) => {
       const evaluation = await store.getEvaluation(req.params.id, visitorId(req));
       if (!evaluation) return res.status(404).json({ error: "Evaluation not found" });
-      const { feedback } = req.body ?? {};
+      const { feedback, count } = req.body ?? {};
       const generated = await generateScenarios(evaluation, {
         feedback,
+        count,
         llmGateway: providers.getModel().complete,
       });
       await store.deleteUnapprovedScenarios(evaluation.id);
