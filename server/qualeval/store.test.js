@@ -15,6 +15,7 @@ import {
   attachTranscript,
   markRunInProgress,
   markRunError,
+  markRunErrorIfStale,
   markRunAwaitingEvaluation,
   recordVerdict,
   NOT_CONFIGURED_ERROR,
@@ -140,6 +141,14 @@ function fakePool() {
       if (!row) return { rows: [] };
       row.verdict = "in_progress";
       row.twilio_call_sid = twilioCallSid;
+      return { rows: [row] };
+    }
+    if (sql.startsWith("update qualeval_runs") && sql.includes("set verdict = 'error'") && sql.includes("and verdict = 'in_progress'")) {
+      const [id, message] = params;
+      const row = rows.find((r) => r.id === id && r.verdict === "in_progress");
+      if (!row) return { rows: [] };
+      row.verdict = "error";
+      row.error = message;
       return { rows: [row] };
     }
     if (sql.startsWith("update qualeval_runs") && sql.includes("set verdict = 'error'")) {
@@ -347,6 +356,33 @@ test("markRunError records a call-placement failure without fabricating a verdic
   const updated = await markRunError(run.id, "Twilio rejected the call", {}, pool);
   assert.equal(updated.verdict, "error");
   assert.equal(updated.error, "Twilio rejected the call");
+});
+
+test("markRunErrorIfStale marks a still-in_progress run as error (the watchdog's normal case)", async () => {
+  const pool = fakePool();
+  const evaluation = await createEvaluation({ clerkUserId: "user_1", name: "Eval" }, {}, pool);
+  const [scenario] = await insertScenarios(evaluation.id, [{ name: "S1", evaluationCriteria: [] }], {}, pool);
+  const run = await createRun(scenario.id, {}, pool);
+  await markRunInProgress(run.id, "CA123", {}, pool);
+
+  const updated = await markRunErrorIfStale(run.id, "Call did not complete in time", {}, pool);
+  assert.equal(updated.verdict, "error");
+  assert.equal(updated.error, "Call did not complete in time");
+});
+
+test("markRunErrorIfStale is a no-op once the run already moved past in_progress, never clobbering a real result", async () => {
+  const pool = fakePool();
+  const evaluation = await createEvaluation({ clerkUserId: "user_1", name: "Eval" }, {}, pool);
+  const [scenario] = await insertScenarios(evaluation.id, [{ name: "S1", evaluationCriteria: [] }], {}, pool);
+  const run = await createRun(scenario.id, {}, pool);
+  await markRunInProgress(run.id, "CA123", {}, pool);
+  await recordVerdict(run.id, { verdict: "pass", assessment: "Handled well" }, {}, pool);
+
+  const result = await markRunErrorIfStale(run.id, "Call did not complete in time", {}, pool);
+  assert.equal(result, null);
+
+  const stillPassing = await getRun(run.id, null, {}, pool);
+  assert.equal(stillPassing.verdict, "pass");
 });
 
 test("markRunAwaitingEvaluation attaches the transcript and moves the run to awaiting_evaluation, never straight to pass/fail", async () => {
