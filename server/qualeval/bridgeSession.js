@@ -66,6 +66,12 @@ export function createBridgeSession({
   let aaiReady = false;
   const turns = [];
   let maxDurationTimer = null;
+  // Diagnostic-only frame counters (verified live 2026-09-25 while checking
+  // whether Twilio actually bridges audio between two independently-Stream-
+  // tapped legs of the same call) - log the first frame and then every 100th
+  // so real inbound-media flow is visible without flooding the log per chunk.
+  let receivedMediaCount = 0;
+  let sentReplyAudioCount = 0;
 
   const aaiWs = new WebSocketImpl(wsUrl);
 
@@ -153,6 +159,8 @@ export function createBridgeSession({
       case "reply.audio":
         if (streamSid && twilioWs.readyState === twilioWs.OPEN) {
           twilioWs.send(JSON.stringify({ event: "media", streamSid, media: { payload: msg.data } }));
+          sentReplyAudioCount += 1;
+          if (sentReplyAudioCount === 1 || sentReplyAudioCount % 100 === 0) log("sent reply.audio frames:", sentReplyAudioCount);
         }
         break;
       case "session.ended":
@@ -190,6 +198,8 @@ export function createBridgeSession({
         startedAtMs = Date.now();
         break;
       case "media":
+        receivedMediaCount += 1;
+        if (receivedMediaCount === 1 || receivedMediaCount % 100 === 0) log("received twilio media frames:", receivedMediaCount);
         // Bidirectional streams only forward the "inbound" track (the far
         // end's voice) to us - our own outbound audio never echoes back.
         if (aaiReady && aaiWs.readyState === aaiWs.OPEN) {
