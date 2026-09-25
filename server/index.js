@@ -23,6 +23,7 @@ import { twilioVoiceRoute } from "./qualeval/twilioVoice.js";
 import { demoAgentVoiceRoute } from "./qualeval/demoAgentVoice.js";
 import { ensureDemoAgentNumberConfigured } from "./qualeval/demoAgentProvision.js";
 import { attachTwilioStreamServer } from "./qualeval/twilioStream.js";
+import { attachTargetAgentStreamServer } from "./qualeval/targetAgentStream.js";
 import {
   NORTHSTAR_SESSIONS,
   NORTHSTAR_SESSION_KEYS,
@@ -479,6 +480,11 @@ const httpServer = await new Promise((resolve) => {
 // WebSocket upgrade on the same http.Server Express is listening on -
 // Express itself has no WebSocket support.
 attachTwilioStreamServer(httpServer);
+
+// Same as above, for the TARGET-AGENT side (server/qualeval/
+// targetAgentStream.js, answering QUALEVAL_AGENT_NUMBER via
+// server/qualeval/demoAgentVoice.js).
+attachTargetAgentStreamServer(httpServer);
 
 // Keeps QUALEVAL_AGENT_NUMBER's Voice Configuration pointed at our own
 // demo-agent-voice TwiML on every boot - see demoAgentProvision.js's header

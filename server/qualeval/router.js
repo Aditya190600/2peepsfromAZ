@@ -1,5 +1,6 @@
 import { Router } from "express";
 import * as store from "./store.js";
+import * as demoAgentConfig from "./demoAgentConfig.js";
 import { generateScenarios } from "./generator.js";
 import { evaluateTranscript } from "./evaluator.js";
 import * as providers from "../providers/registry.js";
@@ -162,6 +163,39 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
       const run = await store.getRun(req.params.id, visitorId(req));
       if (!run) return res.status(404).json({ error: "Run not found" });
       res.json(run);
+    }),
+  );
+
+  // Minimal operator surface for QUALEVAL_AGENT_NUMBER's two target-agent
+  // variants (server/qualeval/demoAgentConfig.js) - list/edit both prompts
+  // and switch which one is currently active. There's only one number, so
+  // "active" is a runtime toggle rather than two simultaneous numbers.
+  router.get(
+    "/demo-agent/variants",
+    wrap(async (req, res) => {
+      const [variants, activeKey] = await Promise.all([
+        demoAgentConfig.listVariants(),
+        demoAgentConfig.getActiveVariantKey(),
+      ]);
+      res.json({ variants, activeKey });
+    }),
+  );
+
+  router.patch(
+    "/demo-agent/variants/:key",
+    wrap(async (req, res) => {
+      const { name, systemPrompt, greeting, voice } = req.body ?? {};
+      const variant = await demoAgentConfig.updateVariant(req.params.key, { name, systemPrompt, greeting, voice });
+      res.json(variant);
+    }),
+  );
+
+  router.post(
+    "/demo-agent/active",
+    wrap(async (req, res) => {
+      const { variant } = req.body ?? {};
+      const activeKey = await demoAgentConfig.setActiveVariant(variant);
+      res.json({ activeKey });
     }),
   );
 

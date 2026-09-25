@@ -15,19 +15,35 @@ import WS from "ws";
 // no resampling, per AssemblyAI's own telephony-encoding guidance (verified
 // live 2026-09-24, docs/voice-agents/voice-agent-api/audio-format).
 //
-// Role mapping is intentionally swapped from AssemblyAI's own naming:
-// AssemblyAI's `transcript.user` is the transcription of the audio we fed it
-// (the target agent's voice coming over the phone), and `transcript.agent`
-// is what AssemblyAI's own LLM said (our simulated caller). QualEval's
-// transcript shape reads naturally the opposite way round - "agent" is
-// always the thing under test - so this module swaps them when building
-// `turns`.
+// Role mapping is configurable because this bridge is used on BOTH sides of
+// a call now, and AssemblyAI's own user/agent naming means opposite things
+// on each side:
+//
+// - Outbound/persona side (server/qualeval/twilioStream.js): this AssemblyAI
+//   session plays the SIMULATED CALLER. AssemblyAI's `transcript.user` is the
+//   transcription of the audio we fed it - the target agent's voice coming
+//   over the phone - and `transcript.agent` is what AssemblyAI's own LLM said
+//   (our simulated caller). QualEval's transcript shape reads the opposite
+//   way round - "agent" is always the thing under test - so this side swaps:
+//   transcriptUserRole="agent", transcriptAgentRole="user" (the defaults
+//   below, unchanged from before this file supported both directions).
+// - Inbound/target-agent side (server/qualeval/targetAgentStream.js): this
+//   AssemblyAI session plays the TARGET AGENT under test. The audio we feed
+//   it is the far end's voice (the simulated caller, coming over the phone),
+//   so `transcript.user` (what we fed it) IS the caller and needs no swap;
+//   `transcript.agent` (AssemblyAI's own LLM) IS the target agent and also
+//   needs no swap. That side passes transcriptUserRole="user",
+//   transcriptAgentRole="agent".
 export function createBridgeSession({
   twilioWs,
   token,
   WebSocketImpl = WS,
   wsUrl = `wss://agents.assemblyai.com/v1/ws?token=${encodeURIComponent(token)}`,
   systemPrompt,
+  greeting,
+  voice,
+  transcriptUserRole = "agent",
+  transcriptAgentRole = "user",
   onReady,
   onFinished,
   onError,
@@ -90,6 +106,8 @@ export function createBridgeSession({
         type: "session.update",
         session: {
           system_prompt: systemPrompt,
+          ...(greeting ? { greeting } : {}),
+          ...(voice ? { voice: { voice_id: voice } } : {}),
           input: { format: { encoding: "audio/pcmu" } },
           output: { format: { encoding: "audio/pcmu" } },
         },
@@ -114,12 +132,10 @@ export function createBridgeSession({
         }, maxDurationMs);
         break;
       case "transcript.user":
-        // The far end (target agent under test) - see role-swap note above.
-        turns.push({ role: "agent", text: msg.text ?? "", tMs: startedAtMs ? Date.now() - startedAtMs : 0 });
+        turns.push({ role: transcriptUserRole, text: msg.text ?? "", tMs: startedAtMs ? Date.now() - startedAtMs : 0 });
         break;
       case "transcript.agent":
-        // Our simulated caller - see role-swap note above.
-        turns.push({ role: "user", text: msg.text ?? "", tMs: startedAtMs ? Date.now() - startedAtMs : 0 });
+        turns.push({ role: transcriptAgentRole, text: msg.text ?? "", tMs: startedAtMs ? Date.now() - startedAtMs : 0 });
         break;
       case "reply.audio":
         if (streamSid && twilioWs.readyState === twilioWs.OPEN) {

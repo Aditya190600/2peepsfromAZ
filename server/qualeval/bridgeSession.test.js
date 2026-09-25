@@ -95,6 +95,42 @@ test("swaps AssemblyAI's user/agent roles into QualEval's caller/target transcri
   assert.equal(finished.turns[1].text, "I'd like a refund.");
 });
 
+test("target-agent side: no role swap, and greeting/voice are sent on session.update", async () => {
+  const twilioWs = new FakeSocket();
+  const aaiWs = new FakeSocket();
+  let finished;
+  createBridgeSession({
+    twilioWs,
+    token: "tok",
+    WebSocketImpl: fakeWebSocketImpl(aaiWs),
+    systemPrompt: "be the target agent",
+    greeting: "Thanks for calling, how can I help?",
+    voice: "george",
+    transcriptUserRole: "user",
+    transcriptAgentRole: "agent",
+    onFinished: (result) => (finished = result),
+  });
+  aaiWs.emit("open");
+
+  assert.equal(aaiWs.sent[0].session.greeting, "Thanks for calling, how can I help?");
+  assert.equal(aaiWs.sent[0].session.voice.voice_id, "george");
+
+  twilioWs.emit("message", JSON.stringify({ event: "start", start: { streamSid: "MZ1", callSid: "CA1" } }));
+  aaiWs.emit("message", JSON.stringify({ type: "session.ready" }));
+
+  // transcript.user = the far end (the simulated caller phoning in) -> role "user", no swap
+  aaiWs.emit("message", JSON.stringify({ type: "transcript.user", text: "I'd like a refund." }));
+  // transcript.agent = AssemblyAI's own LLM (the target agent under test) -> role "agent", no swap
+  aaiWs.emit("message", JSON.stringify({ type: "transcript.agent", text: "Sure, let me help with that." }));
+
+  aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
+
+  assert.deepEqual(
+    finished.turns.map((t) => t.role),
+    ["user", "agent"],
+  );
+});
+
 test("a Twilio hangup with no session.ended still finishes the bridge with whatever transcript exists", async () => {
   const twilioWs = new FakeSocket();
   const aaiWs = new FakeSocket();
