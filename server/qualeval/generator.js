@@ -11,6 +11,8 @@ function systemPrompt(count) {
 const DEFAULT_COUNT = 5;
 const MIN_COUNT = 1;
 const MAX_COUNT = 100;
+const TOKENS_PER_SCENARIO = 450;
+const BASE_TOKENS = 500;
 
 function clampCount(count) {
   const n = Number(count);
@@ -39,7 +41,7 @@ export async function generateScenarios(evaluation, { feedback, count, llmGatewa
       { role: "system", content: systemPrompt(targetCount) },
       { role: "user", content: feedbackUserMessage({ ...evaluation, feedback }) },
     ],
-    { maxTokens: 4000, temperature: 0.4 },
+    { maxTokens: BASE_TOKENS + targetCount * TOKENS_PER_SCENARIO, temperature: 0.4 },
   );
   const text = typeof content === "string" ? content : content.content;
   const parsed = parseJsonResponse(text, null);
