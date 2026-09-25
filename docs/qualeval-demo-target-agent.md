@@ -67,6 +67,38 @@ bridge with is a global setting, not something carried on the call, so
 creating the bridge session (`createBridgeSession` itself picks up
 `streamSid`/`callSid` whenever `start` arrives).
 
+## Twilio doesn't bridge the two legs - we do it ourselves
+
+Verified live 2026-09-25: placing a real outbound call from
+`QUALEVAL_PERSONA_NUMBER` to `QUALEVAL_AGENT_NUMBER` does NOT give the two
+legs each other's real audio, even though both sides' `<Connect><Stream>`
+correctly reach `session.ready` and carry real, continuous Media Stream
+frames. Each standalone `<Connect><Stream>` hijacks only *its own* leg's
+audio path into its own AssemblyAI session - Twilio's normal caller/callee
+audio bridge never forms, because both sides redirected their own audio
+elsewhere. (Twilio Call resource evidence: both legs show
+`parent_call_sid: null` - they're not linked as parent/child at all.)
+
+`server/qualeval/callBridgeBroker.js` is the fix: an in-process registry that
+cross-wires the two `bridgeSession` instances for one call server-side.
+`createBridgeSession` gained two hooks for this:
+
+- `onReplyAudio(audioBase64)` - called with every chunk of this session's own
+  synthesized speech, in addition to the existing relay to its own Twilio leg.
+- `injectAudio(audioBase64)` (on the returned control object) - feeds a chunk
+  into this session's AssemblyAI agent as if it arrived over the phone.
+
+The persona side (`twilioStream.js`) always knows its `runId` up front and
+registers immediately via `registerPersonaLeg`. The target-agent side has no
+run context (it also answers real external callers) and instead calls
+`waitForClaimableRun()`, which polls briefly for a run whose persona leg has
+registered but has no target leg yet, then claims it. The bridge session
+itself is created before that poll starts, so a real external caller's
+greeting is never delayed by it - a caller with nothing to claim just gets
+the standalone bridge, unaffected. Both legs are still real Twilio calls
+carrying real Media Streams; only the "who hears whom" wiring moved from
+Twilio's (nonexistent, for this call shape) native bridge to this broker.
+
 ## Role mapping is reversed from the caller side
 
 `bridgeSession.js`'s `transcriptUserRole`/`transcriptAgentRole` options make
