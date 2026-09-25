@@ -23,12 +23,12 @@ export async function getEvaluation(id) {
   return json(await fetch(`/v1/qualeval/evaluations/${encodeURIComponent(id)}`));
 }
 
-export async function generateScenarios(evaluationId, feedback) {
+export async function generateScenarios(evaluationId, feedback, count) {
   return json(
     await fetch(`/v1/qualeval/evaluations/${encodeURIComponent(evaluationId)}/scenarios/generate`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ feedback }),
+      body: JSON.stringify({ feedback, count }),
     }),
   ).then((body) => body.scenarios);
 }
