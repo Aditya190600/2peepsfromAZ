@@ -44,7 +44,7 @@ test("returns 403 on an invalid Twilio signature", () => {
   assert.equal(ctx.status, 403);
 });
 
-test("returns Say+Pause TwiML so Twilio treats the inbound leg as answered", () => {
+test("returns bidirectional Connect/Stream TwiML pointed at the target-agent stream route", () => {
   const ctx = fakeReqRes();
   let validated;
   demoAgentVoiceRoute(ctx.req, ctx.res, {
@@ -55,8 +55,10 @@ test("returns Say+Pause TwiML so Twilio treats the inbound leg as answered", () 
     },
   });
   assert.equal(ctx.contentType, "text/xml");
-  assert.match(ctx.body, /<Say>/);
-  assert.match(ctx.body, /<Pause length="45"\/>/);
+  assert.match(
+    ctx.body,
+    /<Connect><Stream url="wss:\/\/app\.example\.com\/v1\/qualeval\/target-agent-stream"\/><\/Connect>/,
+  );
   assert.equal(validated[0], ENV.TWILIO_AUTH_TOKEN);
   assert.equal(validated[1], "sig");
   assert.equal(validated[2], "https://app.example.com/v1/qualeval/demo-agent-voice");

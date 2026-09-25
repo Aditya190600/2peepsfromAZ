@@ -95,6 +95,41 @@ test("swaps AssemblyAI's user/agent roles into QualEval's caller/target transcri
   assert.equal(finished.turns[1].text, "I'd like a refund.");
 });
 
+test("target-agent side: binds by agent_id (mutually exclusive with inline fields), no role swap", async () => {
+  const twilioWs = new FakeSocket();
+  const aaiWs = new FakeSocket();
+  let finished;
+  createBridgeSession({
+    twilioWs,
+    token: "tok",
+    WebSocketImpl: fakeWebSocketImpl(aaiWs),
+    agentId: "agent_flawed",
+    transcriptUserRole: "user",
+    transcriptAgentRole: "agent",
+    onFinished: (result) => (finished = result),
+  });
+  aaiWs.emit("open");
+
+  // agent_id session.update carries nothing else - see bridgeSession.js's
+  // header comment on why inline fields can't ride alongside it.
+  assert.deepEqual(aaiWs.sent[0].session, { agent_id: "agent_flawed" });
+
+  twilioWs.emit("message", JSON.stringify({ event: "start", start: { streamSid: "MZ1", callSid: "CA1" } }));
+  aaiWs.emit("message", JSON.stringify({ type: "session.ready" }));
+
+  // transcript.user = the far end (the simulated caller phoning in) -> role "user", no swap
+  aaiWs.emit("message", JSON.stringify({ type: "transcript.user", text: "I'd like a refund." }));
+  // transcript.agent = AssemblyAI's own LLM (the target agent under test) -> role "agent", no swap
+  aaiWs.emit("message", JSON.stringify({ type: "transcript.agent", text: "Sure, let me help with that." }));
+
+  aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
+
+  assert.deepEqual(
+    finished.turns.map((t) => t.role),
+    ["user", "agent"],
+  );
+});
+
 test("a Twilio hangup with no session.ended still finishes the bridge with whatever transcript exists", async () => {
   const twilioWs = new FakeSocket();
   const aaiWs = new FakeSocket();

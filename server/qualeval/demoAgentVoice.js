@@ -1,22 +1,27 @@
 import twilio from "twilio";
 import { twilioConfigured } from "./twilioClient.js";
 
-// POST /v1/qualeval/demo-agent-voice - static TwiML answered by
-// QUALEVAL_AGENT_NUMBER (see AGENTS.md's call-bridge section). Twilio
-// requires *some* Voice Configuration on a Twilio-owned number before it
-// treats an inbound leg to it as answered - including the leg created by
-// this repo's own placeCall() dialing QUALEVAL_AGENT_NUMBER from
-// QUALEVAL_PERSONA_NUMBER, which is exactly what an MVP-verification run
-// does today since there is no real customer target agent yet. A number
-// left unconfigured fails every such call at duration 0 with no
-// Events/Alerts (confirmed live 2026-09-25 while diagnosing the
-// "call fails at duration 0" regression) - this route plus
-// demoAgentProvision.js's boot-time wiring is what keeps that from
-// silently regressing again. See docs/qualeval-demo-agent-number.md.
+// POST /v1/qualeval/demo-agent-voice - the TwiML answered by
+// QUALEVAL_AGENT_NUMBER (see AGENTS.md's demo target-agent section, and
+// docs/qualeval-demo-agent-number.md for why a Voice Configuration is
+// required at all - including for the leg created by this repo's own
+// placeCall() dialing QUALEVAL_AGENT_NUMBER from QUALEVAL_PERSONA_NUMBER,
+// which is what an MVP-verification run does today since there is no real
+// customer target agent yet).
 //
-// Not tied to a specific run (unlike twilioVoice.js's per-run webhook), so
-// it needs no run lookup - only the same Twilio-signature verification
-// posture as every other Twilio-originated webhook in this repo.
+// Bridges to a real AssemblyAI Voice Agent session playing whichever target-
+// agent variant is currently active (server/qualeval/demoAgentConfig.js),
+// via the same bidirectional <Connect><Stream> pattern as the outbound/
+// persona side's twilioVoice.js - see server/qualeval/targetAgentStream.js
+// for the WebSocket half and server/qualeval/bridgeSession.js's header
+// comment for why role mapping is opposite on this side.
+//
+// Not tied to a specific run (unlike twilioVoice.js's per-run webhook, whose
+// runId travels as a <Stream> Custom Parameter) - which variant to bridge
+// with is a global runtime setting read at connect time by
+// targetAgentStream.js, not something this call needs to know - so it needs
+// no run lookup, only the same Twilio-signature verification posture as
+// every other Twilio-originated webhook in this repo.
 export function demoAgentVoiceRoute(req, res, { env = process.env, validate = twilio.validateRequest } = {}) {
   if (!twilioConfigured(env)) return res.status(503).send("Twilio is not configured.");
 
@@ -27,7 +32,11 @@ export function demoAgentVoiceRoute(req, res, { env = process.env, validate = tw
   }
 
   const response = new twilio.twiml.VoiceResponse();
-  response.say("Hello, thank you for calling. My name is Alex. How can I help you today?");
-  response.pause({ length: 45 });
+  response.connect().stream({ url: `${wsBaseUrl(req)}/v1/qualeval/target-agent-stream` });
   res.type("text/xml").send(response.toString());
+}
+
+function wsBaseUrl(req) {
+  const proto = req.protocol === "https" ? "wss" : "ws";
+  return `${proto}://${req.get("host")}`;
 }
