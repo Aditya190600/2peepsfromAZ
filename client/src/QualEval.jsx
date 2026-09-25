@@ -13,7 +13,7 @@ import "./App.css";
 
 const DEFAULT_SCENARIO_COUNT = 5;
 const MIN_SCENARIO_COUNT = 1;
-const MAX_SCENARIO_COUNT = 100;
+const MAX_SCENARIO_COUNT = 43;
 
 const TEMPLATES = {
   healthcare: {

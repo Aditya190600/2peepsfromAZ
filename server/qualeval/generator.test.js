@@ -68,7 +68,7 @@ test("folds the requested count into the system prompt and clamps out-of-range v
   assert.match(capturedSystemMessage, /exactly 12 distinct test scenarios/);
 
   await generateScenarios(evaluation, { llmGateway, count: 500 });
-  assert.match(capturedSystemMessage, /exactly 100 distinct test scenarios/);
+  assert.match(capturedSystemMessage, /exactly 43 distinct test scenarios/);
 
   await generateScenarios(evaluation, { llmGateway, count: 0 });
   assert.match(capturedSystemMessage, /exactly 1 distinct test scenarios/);

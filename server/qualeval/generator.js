@@ -10,10 +10,10 @@ function systemPrompt(count) {
 
 const DEFAULT_COUNT = 5;
 const MIN_COUNT = 1;
-const MAX_COUNT = 100;
 const TOKENS_PER_SCENARIO = 450;
 const BASE_TOKENS = 500;
 const MAX_RESPONSE_TOKENS = 20000;
+export const MAX_COUNT = Math.floor((MAX_RESPONSE_TOKENS - BASE_TOKENS) / TOKENS_PER_SCENARIO);
 
 function clampCount(count) {
   const n = Number(count);
