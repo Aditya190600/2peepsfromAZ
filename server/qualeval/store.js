@@ -268,6 +268,23 @@ export async function markRunError(id, message, env = process.env, pool = getPoo
   return runRow(rows[0]);
 }
 
+// Watchdog-only variant of markRunError (see server/qualeval/streamWatchdog.js):
+// only writes if the run is still 'in_progress', so a watchdog that fires
+// late (after the call bridge already reached awaiting_evaluation/pass/fail
+// on its own) can never clobber a real result with a fabricated timeout
+// error. Returns null (no-op) instead of throwing when the run has already
+// moved on or doesn't exist.
+export async function markRunErrorIfStale(id, message, env = process.env, pool = getPool(env)) {
+  requirePool(pool);
+  const { rows } = await pool.query(
+    `update qualeval_runs set verdict = 'error', error = $2
+     where id = $1 and verdict = 'in_progress'
+     returning ${RUN_COLUMNS}`,
+    [id, message],
+  );
+  return rows[0] ? runRow(rows[0]) : null;
+}
+
 // Attaches a real transcript to a run and records the call timestamp. Called
 // once a real call-placement path exists; never called with a fabricated
 // transcript. Leaves verdict untouched - see markRunAwaitingEvaluation for
