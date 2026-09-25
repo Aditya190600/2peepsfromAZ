@@ -56,3 +56,23 @@ test("folds typed feedback into the regeneration prompt", async () => {
   await generateScenarios(evaluation, { llmGateway, feedback: "Make scenarios cover angrier callers" });
   assert.match(capturedUserMessage, /Make scenarios cover angrier callers/);
 });
+
+test("folds the requested count into the system prompt and clamps out-of-range values", async () => {
+  let capturedSystemMessage;
+  const llmGateway = async (messages) => {
+    capturedSystemMessage = messages[0].content;
+    return JSON.stringify({ scenarios: [{ name: "S1", evaluationCriteria: [] }] });
+  };
+
+  await generateScenarios(evaluation, { llmGateway, count: 12 });
+  assert.match(capturedSystemMessage, /exactly 12 distinct test scenarios/);
+
+  await generateScenarios(evaluation, { llmGateway, count: 500 });
+  assert.match(capturedSystemMessage, /exactly 100 distinct test scenarios/);
+
+  await generateScenarios(evaluation, { llmGateway, count: 0 });
+  assert.match(capturedSystemMessage, /exactly 1 distinct test scenarios/);
+
+  await generateScenarios(evaluation, { llmGateway });
+  assert.match(capturedSystemMessage, /exactly 5 distinct test scenarios/);
+});
