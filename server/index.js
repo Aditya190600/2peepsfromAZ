@@ -22,7 +22,9 @@ import { qualevalRouter } from "./qualeval/router.js";
 import { twilioVoiceRoute } from "./qualeval/twilioVoice.js";
 import { demoAgentVoiceRoute } from "./qualeval/demoAgentVoice.js";
 import { ensureDemoAgentNumberConfigured } from "./qualeval/demoAgentProvision.js";
+import { ensureDemoAgentsProvisioned } from "./qualeval/demoAgentAgentsProvision.js";
 import { attachTwilioStreamServer } from "./qualeval/twilioStream.js";
+import { attachTargetAgentStreamServer } from "./qualeval/targetAgentStream.js";
 import {
   NORTHSTAR_SESSIONS,
   NORTHSTAR_SESSION_KEYS,
@@ -480,6 +482,11 @@ const httpServer = await new Promise((resolve) => {
 // Express itself has no WebSocket support.
 attachTwilioStreamServer(httpServer);
 
+// Same as above, for the TARGET-AGENT side (server/qualeval/
+// targetAgentStream.js, answering QUALEVAL_AGENT_NUMBER via
+// server/qualeval/demoAgentVoice.js).
+attachTargetAgentStreamServer(httpServer);
+
 // Keeps QUALEVAL_AGENT_NUMBER's Voice Configuration pointed at our own
 // demo-agent-voice TwiML on every boot - see demoAgentProvision.js's header
 // comment for why an unconfigured number silently fails every call to it.
@@ -499,6 +506,15 @@ if (dbConfigured()) {
     console.error(`Northstar cache: Postgres hydrate failed (${err.message}).`);
   }
 }
+
+// Idempotently creates the two AssemblyAI stored agents (compliant/flawed)
+// behind QUALEVAL_AGENT_NUMBER's variants the first time each is missing an
+// agent_id - see server/qualeval/demoAgentAgentsProvision.js. Must run after
+// runMigrations() above, since it depends on migration 005's agent_id
+// column existing.
+ensureDemoAgentsProvisioned().catch((err) => {
+  console.error(`QualEval: demo-agent AssemblyAI agent provisioning failed: ${err.message}`);
+});
 
 // Boot-time warming is intentionally pinned to the default AssemblyAI model
 // path (it calls analyzeSession without an llmGateway override, same as

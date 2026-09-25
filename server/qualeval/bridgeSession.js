@@ -15,22 +15,67 @@ import WS from "ws";
 // no resampling, per AssemblyAI's own telephony-encoding guidance (verified
 // live 2026-09-24, docs/voice-agents/voice-agent-api/audio-format).
 //
-// Role mapping is intentionally swapped from AssemblyAI's own naming:
-// AssemblyAI's `transcript.user` is the transcription of the audio we fed it
-// (the target agent's voice coming over the phone), and `transcript.agent`
-// is what AssemblyAI's own LLM said (our simulated caller). QualEval's
-// transcript shape reads naturally the opposite way round - "agent" is
-// always the thing under test - so this module swaps them when building
-// `turns`.
+// Role mapping is configurable because this bridge is used on BOTH sides of
+// a call now, and AssemblyAI's own user/agent naming means opposite things
+// on each side:
+//
+// - Outbound/persona side (server/qualeval/twilioStream.js): this AssemblyAI
+//   session plays the SIMULATED CALLER. AssemblyAI's `transcript.user` is the
+//   transcription of the audio we fed it - the target agent's voice coming
+//   over the phone - and `transcript.agent` is what AssemblyAI's own LLM said
+//   (our simulated caller). QualEval's transcript shape reads the opposite
+//   way round - "agent" is always the thing under test - so this side swaps:
+//   transcriptUserRole="agent", transcriptAgentRole="user" (the defaults
+//   below, unchanged from before this file supported both directions).
+// - Inbound/target-agent side (server/qualeval/targetAgentStream.js): this
+//   AssemblyAI session plays the TARGET AGENT under test. The audio we feed
+//   it is the far end's voice (the simulated caller, coming over the phone),
+//   so `transcript.user` (what we fed it) IS the caller and needs no swap;
+//   `transcript.agent` (AssemblyAI's own LLM) IS the target agent and also
+//   needs no swap. That side passes transcriptUserRole="user",
+//   transcriptAgentRole="agent".
+//
+// `onReplyAudio`/`injectAudio` exist because Twilio does NOT bridge real
+// audio between the persona leg and the target-agent leg of a QualEval-
+// placed call: each leg's own standalone `<Connect><Stream>` (twilioVoice.js
+// and demoAgentVoice.js respectively) hijacks THAT leg's own audio path into
+// its own AssemblyAI session, so the two real phone legs never actually
+// carry each other's voice (verified live 2026-09-25 - steady real media
+// flow on both legs, zero cross-talk ever transcribed). server/qualeval/
+// callBridgeBroker.js cross-wires the two bridgeSession instances for one
+// call server-side instead: each side's `onReplyAudio` callback hands its
+// own synthesized speech to the broker, which calls the OTHER side's
+// `injectAudio` to feed it in as if it arrived over the phone. Both legs are
+// still real Twilio calls carrying real Media Streams - only the "who hears
+// whom" wiring moved from Twilio's native call bridge (which doesn't apply
+// here) to our own server code.
 export function createBridgeSession({
   twilioWs,
   token,
   WebSocketImpl = WS,
   wsUrl = `wss://agents.assemblyai.com/v1/ws?token=${encodeURIComponent(token)}`,
   systemPrompt,
+  greeting,
+  voice,
+  // Binds a pre-configured AssemblyAI stored agent (server/qualeval/
+  // demoAgentAgents.js) instead of inline session fields. Mutually
+  // exclusive with systemPrompt/greeting/voice/input/output on the WS
+  // session.update payload - AssemblyAI rejects a session.update carrying
+  // both (docs/voice-agents/voice-agent-api/deploy) - so when agentId is
+  // set, this bridge sends only `{agent_id}` and nothing else; the bound
+  // agent's own stored input/output.format (set at creation time, see
+  // server/qualeval/demoAgentDefaults.js) must already be audio/pcmu for a
+  // Twilio bridge, since it can't be overridden per-connection this way.
+  agentId,
+  transcriptUserRole = "agent",
+  transcriptAgentRole = "user",
   onReady,
   onFinished,
   onError,
+  // Called with each base64 audio/pcmu chunk this session's AssemblyAI
+  // agent speaks, in addition to the existing relay to this session's own
+  // Twilio leg - see the header comment above.
+  onReplyAudio,
   maxDurationMs = 5 * 60 * 1000,
 }) {
   let startedAtMs = null;
@@ -85,16 +130,21 @@ export function createBridgeSession({
 
   aaiWs.on("open", () => {
     log("aai socket open");
-    aaiWs.send(
-      JSON.stringify({
-        type: "session.update",
-        session: {
+    const session = agentId
+      ? { agent_id: agentId }
+      : {
           system_prompt: systemPrompt,
+          ...(greeting ? { greeting } : {}),
           input: { format: { encoding: "audio/pcmu" } },
-          output: { format: { encoding: "audio/pcmu" } },
-        },
-      }),
-    );
+          // `voice` is a plain string nested under `output` on the WS
+          // session.update payload - NOT the top-level `{voice: {voice_id}}`
+          // shape used by the separate REST /v1/agents "create agent"
+          // endpoint. Verified live 2026-09-25 after `session.error: Invalid
+          // message format for type 'session.update'` from using the wrong
+          // shape here.
+          output: { ...(voice ? { voice } : {}), format: { encoding: "audio/pcmu" } },
+        };
+    aaiWs.send(JSON.stringify({ type: "session.update", session }));
   });
 
   aaiWs.on("message", (data) => {
@@ -114,17 +164,16 @@ export function createBridgeSession({
         }, maxDurationMs);
         break;
       case "transcript.user":
-        // The far end (target agent under test) - see role-swap note above.
-        turns.push({ role: "agent", text: msg.text ?? "", tMs: startedAtMs ? Date.now() - startedAtMs : 0 });
+        turns.push({ role: transcriptUserRole, text: msg.text ?? "", tMs: startedAtMs ? Date.now() - startedAtMs : 0 });
         break;
       case "transcript.agent":
-        // Our simulated caller - see role-swap note above.
-        turns.push({ role: "user", text: msg.text ?? "", tMs: startedAtMs ? Date.now() - startedAtMs : 0 });
+        turns.push({ role: transcriptAgentRole, text: msg.text ?? "", tMs: startedAtMs ? Date.now() - startedAtMs : 0 });
         break;
       case "reply.audio":
         if (streamSid && twilioWs.readyState === twilioWs.OPEN) {
           twilioWs.send(JSON.stringify({ event: "media", streamSid, media: { payload: msg.data } }));
         }
+        onReplyAudio?.(msg.data);
         break;
       case "session.ended":
         finish("session.ended");
@@ -198,6 +247,16 @@ export function createBridgeSession({
         }
       }
       finish("manual_stop");
+    },
+    // Feeds a base64 audio/pcmu chunk into THIS session's AssemblyAI agent
+    // as if it arrived over the phone - the cross-wiring half of
+    // onReplyAudio, called by server/qualeval/callBridgeBroker.js with the
+    // OTHER leg's synthesized speech. Silently dropped before session.ready,
+    // same gating as real Twilio media (see the "media" case above).
+    injectAudio: (audio) => {
+      if (aaiReady && aaiWs.readyState === aaiWs.OPEN) {
+        aaiWs.send(JSON.stringify({ type: "input.audio", audio }));
+      }
     },
   };
 }

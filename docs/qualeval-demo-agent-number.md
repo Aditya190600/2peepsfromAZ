@@ -30,22 +30,13 @@ looking exactly like a regression from an unrelated PR.
 
 ## The fix
 
-`server/qualeval/demoAgentVoice.js` serves a static `<Say>`+`<Pause>` TwiML
-response (a generic "you've reached an agent" greeting) at
-`POST /v1/qualeval/demo-agent-voice`. `server/qualeval/demoAgentProvision.js`'s
-`ensureDemoAgentNumberConfigured()` runs once on every server boot
-(`server/index.js`) and idempotently points `QUALEVAL_AGENT_NUMBER`'s
-`VoiceUrl` at that route (built from Railway's auto-injected
-`RAILWAY_PUBLIC_DOMAIN`), so the Console configuration can never drift out of
-sync with what's deployed - it self-heals on every restart instead of relying
-on a one-time manual step.
+`server/qualeval/demoAgentProvision.js`'s `ensureDemoAgentNumberConfigured()`
+runs once on every server boot (`server/index.js`) and idempotently points
+`QUALEVAL_AGENT_NUMBER`'s `VoiceUrl` at `POST /v1/qualeval/demo-agent-voice`
+(built from Railway's auto-injected `RAILWAY_PUBLIC_DOMAIN`), so the Console
+configuration can never drift out of sync with what's deployed - it self-heals
+on every restart instead of relying on a one-time manual step.
 
-This is a scripted stand-in, not a real target agent: it always says the same
-line and never responds dynamically, so scenario transcripts against it will
-generally fail-verdict on any criterion the scripted line doesn't happen to
-satisfy. That's expected and fine for exercising the real call
-placement -> real answer -> real Media Streams bridge -> real AssemblyAI
-transcript -> real LLM-Gateway verdict pipeline end to end; it is not a
-substitute for testing against an actual customer voice agent once one is
-wired up (see AGENTS.md's "remain out of scope/unbuilt" note for the true
-inbound direction).
+`demoAgentVoice.js` no longer serves a static scripted greeting: it now
+bridges the call to a real AssemblyAI target agent - see
+`docs/qualeval-demo-target-agent.md` for that side.
