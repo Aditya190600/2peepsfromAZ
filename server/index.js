@@ -494,13 +494,6 @@ ensureDemoAgentNumberConfigured().catch((err) => {
   console.error(`QualEval: demo-agent number provisioning failed: ${err.message}`);
 });
 
-// Idempotently creates the two AssemblyAI stored agents (compliant/flawed)
-// behind QUALEVAL_AGENT_NUMBER's variants the first time each is missing an
-// agent_id - see server/qualeval/demoAgentAgentsProvision.js.
-ensureDemoAgentsProvisioned().catch((err) => {
-  console.error(`QualEval: demo-agent AssemblyAI agent provisioning failed: ${err.message}`);
-});
-
 if (dbConfigured()) {
   try {
     await runMigrations();
@@ -513,6 +506,15 @@ if (dbConfigured()) {
     console.error(`Northstar cache: Postgres hydrate failed (${err.message}).`);
   }
 }
+
+// Idempotently creates the two AssemblyAI stored agents (compliant/flawed)
+// behind QUALEVAL_AGENT_NUMBER's variants the first time each is missing an
+// agent_id - see server/qualeval/demoAgentAgentsProvision.js. Must run after
+// runMigrations() above, since it depends on migration 005's agent_id
+// column existing.
+ensureDemoAgentsProvisioned().catch((err) => {
+  console.error(`QualEval: demo-agent AssemblyAI agent provisioning failed: ${err.message}`);
+});
 
 // Boot-time warming is intentionally pinned to the default AssemblyAI model
 // path (it calls analyzeSession without an llmGateway override, same as
