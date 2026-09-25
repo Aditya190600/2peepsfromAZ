@@ -1,5 +1,6 @@
 import * as twilioClient from "./twilioClient.js";
 import * as store from "./store.js";
+import { armStreamWatchdog } from "./streamWatchdog.js";
 
 export { twilioConfigured } from "./twilioClient.js";
 
@@ -25,6 +26,7 @@ export async function placeCall(
     place = twilioClient.placeOutboundCall,
     markRunInProgress = store.markRunInProgress,
     markRunError = store.markRunError,
+    watchdog = armStreamWatchdog,
   } = {},
 ) {
   try {
@@ -44,7 +46,12 @@ export async function placeCall(
       },
       env,
     );
-    return await markRunInProgress(run.id, sid);
+    const updated = await markRunInProgress(run.id, sid);
+    // Guards against the run hanging in 'in_progress' forever if the Media
+    // Stream WebSocket upgrade never reaches the app - see
+    // server/qualeval/streamWatchdog.js's header comment.
+    watchdog(run.id);
+    return updated;
   } catch (err) {
     console.error(`QualEval call bridge: placeCall failed for run ${run.id}: ${err.message}`);
     return await markRunError(run.id, err.message).catch(() => null);
