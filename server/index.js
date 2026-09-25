@@ -20,6 +20,8 @@ import { handleAssemblyAiWebhook } from "./webhooks/assemblyaiWebhook.js";
 import { recordingsRouter } from "./recordingsStore.js";
 import { qualevalRouter } from "./qualeval/router.js";
 import { twilioVoiceRoute } from "./qualeval/twilioVoice.js";
+import { demoAgentVoiceRoute } from "./qualeval/demoAgentVoice.js";
+import { ensureDemoAgentNumberConfigured } from "./qualeval/demoAgentProvision.js";
 import { attachTwilioStreamServer } from "./qualeval/twilioStream.js";
 import {
   NORTHSTAR_SESSIONS,
@@ -259,6 +261,15 @@ app.post(
   (req, res) => twilioVoiceRoute(req, res),
 );
 
+// POST /v1/qualeval/demo-agent-voice - same Twilio-webhook posture as the
+// route above, answered by QUALEVAL_AGENT_NUMBER (server/qualeval/demoAgentVoice.js,
+// server/qualeval/demoAgentProvision.js).
+app.post(
+  "/v1/qualeval/demo-agent-voice",
+  express.urlencoded({ extended: false }),
+  (req, res) => demoAgentVoiceRoute(req, res),
+);
+
 app.use("/v1/qualeval", requireVisitor, qualevalRouter({ visitorId }));
 
 const telephony = telephonyRouter();
@@ -468,6 +479,13 @@ const httpServer = await new Promise((resolve) => {
 // WebSocket upgrade on the same http.Server Express is listening on -
 // Express itself has no WebSocket support.
 attachTwilioStreamServer(httpServer);
+
+// Keeps QUALEVAL_AGENT_NUMBER's Voice Configuration pointed at our own
+// demo-agent-voice TwiML on every boot - see demoAgentProvision.js's header
+// comment for why an unconfigured number silently fails every call to it.
+ensureDemoAgentNumberConfigured().catch((err) => {
+  console.error(`QualEval: demo-agent number provisioning failed: ${err.message}`);
+});
 
 if (dbConfigured()) {
   try {
