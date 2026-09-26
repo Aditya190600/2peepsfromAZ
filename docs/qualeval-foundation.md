@@ -68,6 +68,11 @@ call-bridge task would call once a real transcript exists - that follow-up
 has since landed (outbound bridge, see AGENTS.md); the `pending` stub path
 still runs when Twilio env vars are unset.
 
+**Production calls to the agent number** (landed after this slice): a real
+caller who dials `QUALEVAL_AGENT_NUMBER` is stored, recorded, and scored
+against the evaluation whose target phone matches. See
+`docs/qualeval-production-calls.md`. That is not the reverse direction below.
+
 **Still out of scope** (follow-up): the bidirectional (target-calls-QualEval)
 inbound direction, the follow-up-scenario path, two-demo-target-agent tabs,
 phone-number-pool rotation, persona avatars, failure-driven regeneration.
@@ -76,5 +81,6 @@ phone-number-pool rotation, persona avatars, failure-driven regeneration.
 
 - Backend module: `server/qualeval/` (`store.js`, `generator.js`,
   `evaluator.js`, `router.js`, and their `*.test.js` files).
-- Migration: `server/migrations/003_qualeval.sql`.
+- Migration: `server/migrations/003_qualeval.sql`. Production-call rows are
+  `server/migrations/007_production_calls.sql` (`docs/qualeval-production-calls.md`).
 - Frontend: `client/src/QualEval.jsx`, `client/src/qualevalClient.js`.

@@ -125,3 +125,15 @@ the same AssemblyAI event names:
   target agent) maps straight to `"agent"` - also no swap.
 
 See `bridgeSession.js`'s header comment before changing either mapping.
+
+## Real callers are stored and scored
+
+A caller who is not a QualEval scenario run still gets this bridge. When the
+voice webhook answers, `demoAgentVoice.js` writes From/To/CallerName/CallSid
+to `production_calls`. When the bridge ends, `targetAgentStream.js` attaches
+the transcript, uploads a mixed WAV when the recordings bucket is configured,
+and `evaluateInboundCall` judges that transcript against the evaluation whose
+phone number matches `To`. A leg that `waitForClaimableRun` claims is marked
+`skipped_run` instead, so the scenario run is not scored twice. Operator
+view, status values, and the cases that never show up on the evaluation page
+are in `docs/qualeval-production-calls.md`.

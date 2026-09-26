@@ -1,10 +1,11 @@
 # QualEval demo-agent number
 
-`QUALEVAL_AGENT_NUMBER` is a Twilio number on this account reserved for the
-future inbound direction (target-agent-calls-QualEval), per AGENTS.md. Until
-that's built, it doubles as the only available call target for MVP
-verification of the outbound call bridge (`server/qualeval/callBridge.js`),
-since there is no real customer voice agent to dial yet.
+`QUALEVAL_AGENT_NUMBER` is a Twilio number on this account. It is the callee
+for outbound QualEval runs (there is no separate customer agent to dial yet)
+and it answers real callers. Those inbound calls are stored, recorded, and
+scored against the matching evaluation. See
+`docs/qualeval-production-calls.md`. The reverse direction
+(a target agent calling QualEval) is still unbuilt.
 
 ## The bug this fixes
 
