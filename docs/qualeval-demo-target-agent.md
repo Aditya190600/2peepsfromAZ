@@ -27,11 +27,12 @@ just maps our two variant keys to their `agent_id`:
   an AI, and answers account questions as soon as a name or account number is
   stated, with no identity verification at all.
 
-Both variants share two fallback behaviors so a call never stalls on
-something the agent can't actually do: asked for real account data (balance,
-transactions), they say they don't have access to that specific information;
-asked for a human, they say they can't transfer to a human right now. Neither
-agent has real account access or a transfer tool.
+Fallback behaviors so a call never stalls on something the agent can't
+actually do: both variants, asked for a human, say they can't transfer to a
+human right now (neither has a transfer tool). Only `compliant`, asked for
+real account data (balance, transactions), says it doesn't have access to
+that specific information - `flawed` keeps sharing account info unverified,
+since that is its seeded gap.
 
 `server/qualeval/demoAgentDefaults.js` holds the two agents' default bodies
 (prompt/greeting/voice, with `input`/`output.format` fixed to `audio/pcmu`
