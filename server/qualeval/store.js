@@ -83,6 +83,42 @@ export async function listEvaluations(clerkUserId = "anon", env = process.env, p
   return rows.map(evaluationRow);
 }
 
+// Edits the evaluation's own fields (name, target phone, description,
+// requirements) - not a scenario or run. Scoped by clerkUserId same as every
+// other evaluation route.
+export async function updateEvaluation(id, clerkUserId, fields, env = process.env, pool = getPool(env)) {
+  requirePool(pool);
+  if (fields.name !== undefined && !fields.name.trim()) throw new Error("name is required");
+  const columns = {
+    name: fields.name !== undefined ? fields.name.trim() : undefined,
+    agent_phone_number: fields.agentPhoneNumber !== undefined ? fields.agentPhoneNumber || null : undefined,
+    description: fields.description !== undefined ? fields.description || null : undefined,
+    requirements: fields.requirements !== undefined ? fields.requirements || null : undefined,
+  };
+  const setKeys = Object.keys(columns).filter((k) => columns[k] !== undefined);
+  if (setKeys.length === 0) throw new Error("no fields to update");
+  const setClause = setKeys.map((k, i) => `${k} = $${i + 3}`).join(", ");
+  const { rows } = await pool.query(
+    `update qualeval_evaluations set ${setClause}
+     where id = $1 and clerk_user_id = $2
+     returning id, name, agent_phone_number, description, requirements, clerk_user_id, created_at`,
+    [id, clerkUserId, ...setKeys.map((k) => columns[k])],
+  );
+  if (rows.length === 0) throw new Error("Evaluation not found");
+  return evaluationRow(rows[0]);
+}
+
+// Deletes an evaluation and (via on-delete-cascade, see
+// server/migrations/003_qualeval.sql) every scenario and run under it.
+export async function deleteEvaluation(id, clerkUserId, env = process.env, pool = getPool(env)) {
+  requirePool(pool);
+  const { rows } = await pool.query(
+    `delete from qualeval_evaluations where id = $1 and clerk_user_id = $2 returning id`,
+    [id, clerkUserId],
+  );
+  if (rows.length === 0) throw new Error("Evaluation not found");
+}
+
 export async function getEvaluation(id, clerkUserId = "anon", env = process.env, pool = getPool(env)) {
   requirePool(pool);
   const { rows } = await pool.query(
@@ -189,6 +225,20 @@ export async function updateScenario(id, clerkUserId, fields, env = process.env,
   );
   if (rows.length === 0) throw new Error("Scenario not found");
   return scenarioRow(rows[0]);
+}
+
+// Deletes a single scenario (and, via on-delete-cascade, its runs) regardless
+// of status - the Generated/Accepted/Rejected tabs all offer delete. Scoped
+// by clerkUserId same as updateScenario.
+export async function deleteScenario(id, clerkUserId, env = process.env, pool = getPool(env)) {
+  requirePool(pool);
+  const { rows } = await pool.query(
+    `delete from qualeval_scenarios
+     where id = $1 and evaluation_id in (select id from qualeval_evaluations where clerk_user_id = $2)
+     returning id`,
+    [id, clerkUserId],
+  );
+  if (rows.length === 0) throw new Error("Scenario not found");
 }
 
 // Creates the initial "pending" Run row for an approved scenario. The

@@ -4,10 +4,13 @@ import {
   createEvaluation,
   listEvaluations,
   getEvaluation,
+  updateEvaluation,
+  deleteEvaluation,
   insertScenarios,
   listScenarios,
   getScenario,
   updateScenario,
+  deleteScenario,
   deleteUnapprovedScenarios,
   createRun,
   getRun,
@@ -119,10 +122,35 @@ function fakePool() {
       const [scenarioId] = params;
       return { rows: rows.filter((r) => r.scenario_id === scenarioId) };
     }
+    if (sql.startsWith("delete from qualeval_scenarios") && sql.includes("where id = $1")) {
+      const [id, clerkUserId] = params;
+      const row = rows.find((r) => r.id === id);
+      if (!row || !evaluationOwns(row.evaluation_id, clerkUserId)) return { rows: [] };
+      tables.qualeval_scenarios = rows.filter((r) => r.id !== id);
+      return { rows: [row] };
+    }
     if (sql.startsWith("delete from qualeval_scenarios")) {
       const [evaluationId] = params;
       tables.qualeval_scenarios = rows.filter((r) => !(r.evaluation_id === evaluationId && r.status !== "approved"));
       return { rows: [] };
+    }
+    if (sql.startsWith("delete from qualeval_evaluations")) {
+      const [id, clerkUserId] = params;
+      const row = rows.find((r) => r.id === id && r.clerk_user_id === clerkUserId);
+      if (!row) return { rows: [] };
+      tables.qualeval_evaluations = rows.filter((r) => r.id !== id);
+      return { rows: [row] };
+    }
+    if (sql.startsWith("update qualeval_evaluations")) {
+      const [id, clerkUserId] = params;
+      const row = rows.find((r) => r.id === id && r.clerk_user_id === clerkUserId);
+      if (!row) return { rows: [] };
+      const setClause = text.match(/set ([\s\S]+?)\s+where id = \$1/i)[1];
+      const cols = setClause.split(",").map((c) => c.trim().split("=")[0].trim());
+      cols.forEach((col, i) => {
+        row[col] = params[i + 2];
+      });
+      return { rows: [row] };
     }
     if (sql.startsWith("update qualeval_scenarios")) {
       const [id, clerkUserId] = params;
@@ -208,6 +236,38 @@ test("createEvaluation requires a name", async () => {
   await assert.rejects(() => createEvaluation({ clerkUserId: "user_1", name: "  " }, {}, pool));
 });
 
+test("updateEvaluation edits the evaluation's own fields, scoped by clerkUserId", async () => {
+  const pool = fakePool();
+  const evaluation = await createEvaluation({ clerkUserId: "user_1", name: "Order desk agent" }, {}, pool);
+
+  const updated = await updateEvaluation(
+    evaluation.id,
+    "user_1",
+    { name: "Renamed eval", agentPhoneNumber: "+15555550100" },
+    {},
+    pool,
+  );
+  assert.equal(updated.name, "Renamed eval");
+  assert.equal(updated.agentPhoneNumber, "+15555550100");
+
+  await assert.rejects(() => updateEvaluation(evaluation.id, "user_2", { name: "Hijacked" }, {}, pool));
+});
+
+test("updateEvaluation rejects a blank name", async () => {
+  const pool = fakePool();
+  const evaluation = await createEvaluation({ clerkUserId: "user_1", name: "Eval" }, {}, pool);
+  await assert.rejects(() => updateEvaluation(evaluation.id, "user_1", { name: "  " }, {}, pool));
+});
+
+test("deleteEvaluation removes the evaluation, scoped by clerkUserId", async () => {
+  const pool = fakePool();
+  const evaluation = await createEvaluation({ clerkUserId: "user_1", name: "Eval" }, {}, pool);
+
+  await assert.rejects(() => deleteEvaluation(evaluation.id, "user_2", {}, pool));
+  await deleteEvaluation(evaluation.id, "user_1", {}, pool);
+  assert.equal(await getEvaluation(evaluation.id, "user_1", {}, pool), null);
+});
+
 test("insertScenarios then listScenarios and getScenario round-trip", async () => {
   const pool = fakePool();
   const evaluation = await createEvaluation({ clerkUserId: "user_1", name: "Eval" }, {}, pool);
@@ -263,6 +323,16 @@ test("updateScenario refuses to mutate another account's scenario", async () => 
   const [scenario] = await insertScenarios(evaluation.id, [{ name: "S1", evaluationCriteria: [] }], {}, pool);
 
   await assert.rejects(() => updateScenario(scenario.id, "user_2", { status: "approved" }, {}, pool));
+});
+
+test("deleteScenario removes a single scenario regardless of status, scoped by clerkUserId", async () => {
+  const pool = fakePool();
+  const evaluation = await createEvaluation({ clerkUserId: "user_1", name: "Eval" }, {}, pool);
+  const [scenario] = await insertScenarios(evaluation.id, [{ name: "S1", evaluationCriteria: [] }], {}, pool);
+
+  await assert.rejects(() => deleteScenario(scenario.id, "user_2", {}, pool));
+  await deleteScenario(scenario.id, "user_1", {}, pool);
+  assert.equal(await getScenario(scenario.id, "user_1", {}, pool), null);
 });
 
 test("deleteUnapprovedScenarios keeps approved scenarios and drops the rest", async () => {
