@@ -73,6 +73,17 @@ export async function deleteScenario(id) {
   }
 }
 
+export async function deleteScenariosByStatus(evaluationId, status) {
+  const resp = await fetch(
+    `/v1/qualeval/evaluations/${encodeURIComponent(evaluationId)}/scenarios?status=${encodeURIComponent(status)}`,
+    { method: "DELETE" },
+  );
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({}));
+    throw new Error(body.error ?? "Could not delete these scenarios.");
+  }
+}
+
 export async function createRun(scenarioId) {
   return json(
     await fetch(`/v1/qualeval/scenarios/${encodeURIComponent(scenarioId)}/runs`, { method: "POST" }),
