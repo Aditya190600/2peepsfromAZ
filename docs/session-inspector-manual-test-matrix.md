@@ -6,9 +6,15 @@ cases by hand before merging any change that touches it:
 
 1. **Sample session with audio** - open a history entry backed by
    `SAMPLE_AUDIO_URLS` (or a resolvable `audioKey`). Call tab shows the
-   `AudioPlayer`; clicking a transcript turn's timestamp seeks the player to
-   that `tMs`. Evaluation tab shows the original findings with severity and
+   `AudioPlayer` with a decoded waveform and turn/flagged-finding markers on
+   it; clicking a transcript turn's timestamp, or a marker on the waveform,
+   seeks the player to that `tMs` (a flagged finding's marker renders in the
+   flag color). Evaluation tab shows the original findings with severity and
    citations.
+6. **Waveform survives resize** - with the Call tab's player visible, resize
+   the window (or toggle anything that reflows the container). The waveform
+   must redraw, not blank out, since the canvas is DPR-scaled off the
+   container's current size.
 2. **Live call without audio** - open a history entry with
    `source === "live"` and no resolvable audio. Call tab shows transcript
    only, with copy stating audio is stored only when "Record this call" is

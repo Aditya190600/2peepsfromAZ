@@ -303,7 +303,13 @@ function RunResult({ run }) {
       <VerdictPill run={run} />
       {run?.audioRef && (
         <div className="qe-run-audio">
-          <AudioPlayer src={run.audioRef} audioRef={audioRef} />
+          <AudioPlayer
+            src={run.audioRef}
+            audioRef={audioRef}
+            markers={turns
+              .filter((t) => t.tMs != null)
+              .map((t) => ({ tMs: t.tMs, kind: "turn", label: `${t.role}: ${(t.text ?? "").slice(0, 60)}` }))}
+          />
         </div>
       )}
       <div className="qe-run-layout">

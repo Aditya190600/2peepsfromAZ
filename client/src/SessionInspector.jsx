@@ -11,7 +11,7 @@ import { resolveAudioUrl } from "./audioResolve";
 import { seekAudio } from "./seek";
 import { Report, Timestamp, formatTMs } from "./Dashboard";
 import AudioPlayer from "./AudioPlayer";
-import { VERDICT_CLASS, headlineVerdict } from "./compliance";
+import { CHECK_LABEL, VERDICT_CLASS, headlineVerdict } from "./compliance";
 import "./App.css";
 
 function formatWhen(iso) {
@@ -23,12 +23,36 @@ function formatWhen(iso) {
   }
 }
 
+function callMarkers(entry) {
+  const markers = (entry.turns ?? [])
+    .filter((t) => t.tMs != null)
+    .map((t) => ({ tMs: t.tMs, kind: "turn", label: `${t.role}: ${(t.text ?? "").slice(0, 60)}` }));
+  for (const f of entry.report?.findings ?? []) {
+    if (f.tMs != null && f.status === "flag") {
+      markers.push({ tMs: f.tMs, kind: "flag", label: CHECK_LABEL[f.check] ?? f.check });
+    }
+    if (f.check === "pii_scan") {
+      for (const item of f.items ?? []) {
+        if (item.tMs != null) {
+          markers.push({ tMs: item.tMs, kind: "flag", label: `${item.label} [${item.packId}]` });
+        }
+      }
+    }
+  }
+  return markers;
+}
+
 function CallTab({ entry, audioUrl, audioRef, onSeek }) {
   return (
     <div className="section-block">
       {audioUrl ? (
         <div className="report-audio">
-          <AudioPlayer src={audioUrl} audioRef={audioRef} />
+          <AudioPlayer
+            src={audioUrl}
+            audioRef={audioRef}
+            offsetMs={entry.recordingOffsetMs ?? 0}
+            markers={callMarkers(entry)}
+          />
         </div>
       ) : entry.source === "live" ? (
         <p className="hint">
