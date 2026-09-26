@@ -34,7 +34,12 @@ function wrap(fn) {
 // placeCall's own try/catch takes over - is unit-testable without a real DB:
 // this must ALWAYS resolve to markRunError on failure, never a silent
 // console.error-only path, or the run is stranded at 'pending'/'in_progress'
-// forever with no Twilio call ever placed.
+// forever with no Twilio call ever placed. Confirmed via Twilio call logs as
+// the root cause of run 4ab2abc3-09c8-4933-ad75-d1cc55acd29c getting stuck in
+// 'Call in progress...'; the shared QUALEVAL_AGENT_NUMBER (+18038245760)
+// overlap with the separate inbound target-agent answer-latency issue is
+// coincidental, not a shared root cause (see
+// server/migrations/006_qualeval_stranded_runs_sweep.sql).
 export function dispatchCallPlacement(
   run,
   scenario,

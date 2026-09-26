@@ -8,17 +8,30 @@
 -- reaches placeCall as a thrown TypeError) already called markRunError correctly,
 -- so only the "never reached placeCall" class needed reconciling.
 --
--- This uses a fixed cutoff timestamp, not a relative interval, so it only ever
--- affects runs created before this fix shipped - it has zero effect on every
--- future boot (idempotent, matching every other file in this directory) and never
--- touches a run created after the code fix landed, since that class can no longer
--- occur. twilio_call_sid is null in every case: store.markRunInProgress always
--- writes verdict='in_progress' and twilio_call_sid together, so a null
--- twilio_call_sid with a stale verdict of 'pending' or 'in_progress' means the
--- Twilio call-placement API was never actually reached.
+-- Cross-reference: firstmate confirmed via Twilio's own call logs that no Twilio
+-- call exists for run 4ab2abc3-09c8-4933-ad75-d1cc55acd29c's timeframe, matching
+-- this exact "never reached placeCall" class. The target number +18038245760
+-- (QUALEVAL_AGENT_NUMBER) also appears in a separate, unrelated inbound
+-- answer-latency investigation on the target-agent leg, already fixed
+-- separately - that overlap is coincidental (same shared demo number, different
+-- bug paths: this is the outbound run-dispatch path) and is not a shared root
+-- cause with this fix.
+--
+-- Uses a relative age cutoff rather than a fixed timestamp so it reliably sweeps
+-- runs stranded by this bug regardless of exact creation time, while never
+-- touching a run still within its normal in-flight dispatch window. Idempotent
+-- (matching every other file in this directory): once a stranded run is marked
+-- 'error' here, it no longer matches this where clause on a later boot, and any
+-- future run past 10 minutes with a real placeCall in flight would only be swept
+-- if it also has a null twilio_call_sid, which the fixed dispatch code above no
+-- longer allows to persist silently. twilio_call_sid is null in every case:
+-- store.markRunInProgress always writes verdict='in_progress' and
+-- twilio_call_sid together, so a null twilio_call_sid with a stale verdict of
+-- 'pending' or 'in_progress' means the Twilio call-placement API was never
+-- actually reached.
 update qualeval_runs
 set verdict = 'error',
     error = 'Call was never placed - dispatch failed silently before this fix (see server/migrations/006_qualeval_stranded_runs_sweep.sql).'
 where verdict in ('pending', 'in_progress')
   and twilio_call_sid is null
-  and created_at < '2026-09-25T12:00:00Z';
+  and created_at < now() - interval '10 minutes';
