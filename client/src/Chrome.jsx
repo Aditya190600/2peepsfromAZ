@@ -155,9 +155,9 @@ function AppTenantIdentity() {
   return CLERK_ENABLED ? <ClerkTenantIdentity /> : <TenantIdentity />;
 }
 
-export function AppShell({ path, navigate, title, actions, rail, children }) {
+export function AppShell({ path, navigate, title, actions, children }) {
   return (
-    <div className={`app-shell ${rail ? "has-rail" : ""}`}>
+    <div className="app-shell">
       <header className="app-topbar">
         <a className="app-brand" href="/" onClick={(e) => go(navigate, "/", e)}>
           <span className="brand-mark" aria-hidden="true" />
@@ -194,7 +194,6 @@ export function AppShell({ path, navigate, title, actions, rail, children }) {
           <div className="app-content">{children}</div>
           <Footer />
         </div>
-        {rail}
       </div>
     </div>
   );
