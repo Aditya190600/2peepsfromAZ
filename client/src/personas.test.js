@@ -39,9 +39,9 @@ test("every non-neutral persona has a scope and a violation toggle tied to a rea
   }
 });
 
-test("school nurse persona auto-selects both HIPAA and FERPA packs", () => {
+test("school nurse persona auto-selects HIPAA, FERPA, and COPPA packs", () => {
   const nurse = findPersona("nurse");
-  assert.deepEqual(nurse.packIds, ["hipaa", "ferpa"]);
+  assert.deepEqual(nurse.packIds, ["hipaa", "ferpa", "coppa"]);
 });
 
 test("findPersona falls back to the first persona for an unknown id", () => {
