@@ -36,18 +36,23 @@ architecture, which supersedes the "Stubbed, honestly" section below.
   (with nested scenarios+runs), generate/regenerate scenarios (typed feedback
   folds into the next prompt; regeneration replaces pending/rejected
   scenarios but keeps approved ones), approve/reject/edit/delete a scenario,
-  create a run for an approved scenario, list runs, get one run. `GET
-  /v1/qualeval/config` exposes the deployment's `QUALEVAL_AGENT_NUMBER` so
-  the client can prefill the target-agent phone number field instead of
-  hardcoding it into the bundle.
+  bulk-delete every scenario in one evaluation by status (`DELETE
+  /v1/qualeval/evaluations/:id/scenarios?status=pending|approved|rejected`,
+  `server/qualeval/store.js`'s `deleteScenariosByStatus`), create a run for
+  an approved scenario, list runs, get one run. `GET /v1/qualeval/config`
+  exposes the deployment's `QUALEVAL_AGENT_NUMBER` so the client can prefill
+  the target-agent phone number field instead of hardcoding it into the
+  bundle.
 - Frontend: `/qualeval` route (`client/src/routes.js`, `client/src/QualEval.jsx`),
   new left-rail nav link (`client/src/chromeNav.js`), evaluation creation
   form (editable after creation), and a combined generation-review page
-  (scenario cards split into Generated/Accepted/Rejected tabs, each
-  deletable, plus a persistent typed-feedback regenerate panel - not a
-  per-item wizard). Every generated scenario carries an LLM-authored name;
-  `generator.js`'s `fallbackScenarioName` only covers the rare case where the
-  model omits one.
+  (scenario cards split into Generated/Accepted/Rejected tabs, each card
+  individually editable - persona/situation/objectives/expected
+  behavior/evaluation criteria - and deletable, each tab with its own
+  "delete all in this tab" bulk action, plus a persistent typed-feedback
+  regenerate panel - not a per-item wizard). Every generated scenario
+  carries an LLM-authored name; `generator.js`'s `fallbackScenarioName` only
+  covers the rare case where the model omits one.
 
 **Stubbed at the time this slice landed (now superseded, see above):**
 `POST /v1/qualeval/scenarios/:id/runs` created a Run recorded as
