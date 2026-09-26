@@ -16,7 +16,7 @@ What the user actually does in ComplyLine today, and why they'd bother. One prod
 
 ## 3. Upload a recorded audio file for analysis
 
-**What they do:** Drag an audio file (or click to choose one) into the "Demo: try your own audio" dropzone. It's transcribed via AssemblyAI's pre-recorded STT, then run through the same compliance pipeline, with the report's timestamped findings clickable to seek the audio player.
+**What they do:** Drag an audio file (or click to choose one) into the "Demo: try your own audio" dropzone. It's transcribed via AssemblyAI's pre-recorded STT, then run through the same compliance pipeline, with the report's timestamped findings clickable to seek the audio player. This dropzone is currently hidden from the Compliance Lab page (`SHOW_AUDIO_UPLOAD_DEMO` in `client/src/Dashboard.jsx`) to keep that page's flow to just the live call; the code path still works if re-enabled.
 
 **Value prop:** Bridges the tool to whatever call recordings a real business already has sitting around (from a different voice stack, or archived calls), without requiring they re-architect around the live Voice Agent API just to get a report.
 

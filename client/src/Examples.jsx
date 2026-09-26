@@ -199,7 +199,7 @@ export default function Examples({ navigate, path }) {
             >
               Try
             </a>{" "}
-            for a live call, webhook sandbox, or pasted transcript.
+            for a live call.
           </p>
 
           <div className="section-block">
