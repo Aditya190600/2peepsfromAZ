@@ -1110,9 +1110,26 @@ export default function QualEval({ navigate, path, evaluationId }) {
     <AppShell path={path} navigate={navigate} title="QualEval">
       <div className="qualeval-page">
         <p className="app-lede">
-          Black-box qualitative acceptance testing for AI voice agents - test one like a real caller would,
-          with no access to its internals.
+          QualEval tests your AI voice agent the way a real customer would: by calling it and checking what
+          it actually says, not by reading its code. Describe how your agent should behave, and QualEval
+          takes care of the rest - like hiring someone to secretly call your own business and report back.
         </p>
+        <ul className="qe-lede-list">
+          <li>
+            A <strong>scenario</strong> is one realistic test call: a caller with a specific situation and
+            goal, plus the rules your agent needs to follow during that call.
+          </li>
+          <li>
+            QualEval automatically writes a batch of scenarios for you, each with a different{" "}
+            <strong>persona</strong> - the type of caller it plays, such as a confused first-time customer
+            or someone pushing to get information they shouldn't have.
+          </li>
+          <li>
+            For every scenario you approve, QualEval places a real phone call to your agent, listens to
+            the conversation, and returns an <strong>evaluation</strong>: a pass or fail verdict backed by
+            the exact moment in the call that proves it.
+          </li>
+        </ul>
 
         <NewEvaluationForm onCreated={(created) => navigate(`/qualeval/${encodeURIComponent(created.id)}`)} />
 
