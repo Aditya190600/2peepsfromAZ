@@ -5,6 +5,9 @@ import { generateScenarios } from "./generator.js";
 import { evaluateTranscript } from "./evaluator.js";
 import * as providers from "../providers/registry.js";
 import { placeCall, twilioConfigured } from "./callBridge.js";
+import { endCall } from "./twilioClient.js";
+import { getObjectByKey, sendRecording } from "../recordingsStore.js";
+import { qualevalCallAudioKey } from "./callRecorder.js";
 
 function wrap(fn) {
   return async (req, res) => {
@@ -219,6 +222,41 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
       const run = await store.getRun(req.params.id, visitorId(req));
       if (!run) return res.status(404).json({ error: "Run not found" });
       res.json(run);
+    }),
+  );
+
+  // Gracefully ends a live Twilio call for an in-progress run - the exact
+  // same hangup (POST Status=completed) that a normally-ended call would
+  // trigger via Twilio's own completion, so this run finishes through the
+  // real stream `stop` -> onFinished -> transcript/verdict path rather than
+  // being marked errored or given a fabricated verdict here.
+  router.post(
+    "/runs/:id/end",
+    wrap(async (req, res) => {
+      const run = await store.getRun(req.params.id, visitorId(req));
+      if (!run) return res.status(404).json({ error: "Run not found" });
+      if (run.verdict !== "in_progress" || !run.twilioCallSid) {
+        return res.status(400).json({ error: "Run has no live call to end." });
+      }
+      await endCall(run.twilioCallSid);
+      res.status(202).json({ ok: true });
+    }),
+  );
+
+  // Streams a run's recorded call (server/qualeval/twilioStream.js uploads
+  // it once the call ends - see server/qualeval/callRecorder.js), the same
+  // Range-aware proxy shape as server/recordingsStore.js's `/v1/recordings/
+  // :sessionId` for the Try page, but scoped by ownership through
+  // store.getRun's clerk_user_id join instead of an owner-prefixed S3 key.
+  router.get(
+    "/runs/:id/audio",
+    wrap(async (req, res) => {
+      const run = await store.getRun(req.params.id, visitorId(req));
+      if (!run) return res.status(404).json({ error: "Run not found" });
+      if (!run.audioRef) return res.status(404).json({ error: "No recording for this run" });
+      const recording = await getObjectByKey(qualevalCallAudioKey(run.id), req.headers.range);
+      if (!recording) return res.status(404).json({ error: "Recording not found" });
+      sendRecording(res, recording);
     }),
   );
 
