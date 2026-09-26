@@ -2240,16 +2240,9 @@ button.site-nav-link {
 /* --- QualEval visual redesign ---
    Scoped to .qualeval-page so the Space Grotesk heading swap and the
    violet/glow accents stay QualEval-only; the rest of the app keeps its
-   Source Serif headings and existing --serif/--radius tokens untouched. */
-:root {
-  --qe-heading: "Space Grotesk", "Inter", sans-serif;
-  --accent-2: #7c5cff;
-  --accent-2-soft: #efe9ff;
-  --qe-glow: 0 10px 30px -14px rgba(20, 22, 28, 0.18);
-  --qe-radius: 14px;
-  --qe-radius-sm: 9px;
-}
-
+   Source Serif headings and existing --serif/--radius tokens untouched.
+   QualEval tokens live in the top :root / [data-theme="dark"] blocks so
+   dark overrides are not clobbered by a later :root assignment. */
 .qualeval-page h2,
 .qualeval-page h3,
 .qualeval-page h4,
