@@ -886,6 +886,19 @@ export default function Dashboard({ navigate, path }) {
             packs you want layered on top of the generic scan before generating a report.
           </p>
 
+          <div className="section-block">
+            <label className={`check-row ${!canStart ? "disabled" : ""}`} ref={consentRowRef}>
+              <input
+                type="checkbox"
+                checked={consent}
+                onChange={(e) => setConsent(e.target.checked)}
+                disabled={!canStart}
+              />
+              I consent to this session being analyzed, whether a live call, an upload, or a pasted
+              transcript.
+            </label>
+          </div>
+
           <div className="section-block" ref={personaSectionRef}>
             <h2>Persona</h2>
             <p className="pack-note">
@@ -958,16 +971,6 @@ export default function Dashboard({ navigate, path }) {
               </p>
             )}
             <PackEvals selectedPacks={selectedPacks} catalog={industryPacks} />
-            <label className={`check-row ${!canStart ? "disabled" : ""}`} ref={consentRowRef}>
-              <input
-                type="checkbox"
-                checked={consent}
-                onChange={(e) => setConsent(e.target.checked)}
-                disabled={!canStart}
-              />
-              I consent to this session being analyzed, whether a live call, an upload, or a pasted
-              transcript.
-            </label>
           </div>
 
           <ProviderSettings />
