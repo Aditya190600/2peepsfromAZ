@@ -241,6 +241,25 @@ export async function deleteScenario(id, clerkUserId, env = process.env, pool = 
   if (rows.length === 0) throw new Error("Scenario not found");
 }
 
+// Deletes every scenario in one evaluation that currently has the given
+// status - backs the per-tab "delete all" button (Generated/Accepted/
+// Rejected). Scoped to both the evaluation and the status so it never
+// touches scenarios in another tab or another evaluation. Scoped by
+// clerkUserId same as deleteScenario; a 0-row match (wrong owner, or no
+// scenarios in that status) is a silent no-op, same as deleteUnapprovedScenarios.
+export async function deleteScenariosByStatus(evaluationId, clerkUserId, status, env = process.env, pool = getPool(env)) {
+  requirePool(pool);
+  if (!VALID_SCENARIO_STATUSES.has(status)) {
+    throw new Error(`status must be one of ${[...VALID_SCENARIO_STATUSES].join(", ")}`);
+  }
+  await pool.query(
+    `delete from qualeval_scenarios
+     where evaluation_id = $1 and status = $2
+       and evaluation_id in (select id from qualeval_evaluations where clerk_user_id = $3)`,
+    [evaluationId, status, clerkUserId],
+  );
+}
+
 // Creates the initial "pending" Run row for an approved scenario. The
 // caller (server/qualeval/router.js's createRun handler) advances it to
 // "in_progress" via callBridge.js's placeCall when Twilio is configured;
