@@ -93,3 +93,7 @@ export async function createRun(scenarioId) {
 export async function getRun(id) {
   return json(await fetch(`/v1/qualeval/runs/${encodeURIComponent(id)}`));
 }
+
+export async function endRun(id) {
+  return json(await fetch(`/v1/qualeval/runs/${encodeURIComponent(id)}/end`, { method: "POST" }));
+}

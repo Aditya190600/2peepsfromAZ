@@ -5,6 +5,7 @@ import { generateScenarios } from "./generator.js";
 import { evaluateTranscript } from "./evaluator.js";
 import * as providers from "../providers/registry.js";
 import { placeCall, twilioConfigured } from "./callBridge.js";
+import { endCall } from "./twilioClient.js";
 import { getObjectByKey, sendRecording } from "../recordingsStore.js";
 import { qualevalCallAudioKey } from "./callRecorder.js";
 
@@ -221,6 +222,24 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
       const run = await store.getRun(req.params.id, visitorId(req));
       if (!run) return res.status(404).json({ error: "Run not found" });
       res.json(run);
+    }),
+  );
+
+  // Gracefully ends a live Twilio call for an in-progress run - the exact
+  // same hangup (POST Status=completed) that a normally-ended call would
+  // trigger via Twilio's own completion, so this run finishes through the
+  // real stream `stop` -> onFinished -> transcript/verdict path rather than
+  // being marked errored or given a fabricated verdict here.
+  router.post(
+    "/runs/:id/end",
+    wrap(async (req, res) => {
+      const run = await store.getRun(req.params.id, visitorId(req));
+      if (!run) return res.status(404).json({ error: "Run not found" });
+      if (run.verdict !== "in_progress" || !run.twilioCallSid) {
+        return res.status(400).json({ error: "Run has no live call to end." });
+      }
+      await endCall(run.twilioCallSid);
+      res.status(202).json({ ok: true });
     }),
   );
 
