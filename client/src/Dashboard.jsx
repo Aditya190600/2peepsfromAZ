@@ -923,6 +923,8 @@ export default function Dashboard({ navigate, path }) {
     <AppShell path={path} navigate={navigate} title="Try">
       <main className="layout">
         <section className="panel session-panel">
+          <IntroSteps navigate={navigate} />
+
           <p className="app-lede">
             Try is the analysis lab: run a live mic call against the AssemblyAI Voice Agent, send a
             call through the webhook sandbox, or paste a transcript - then check the industry pattern
@@ -1302,7 +1304,6 @@ export default function Dashboard({ navigate, path }) {
             <>
               <h2 className="report-heading">Compliance report</h2>
               <Report report={null} />
-              <IntroSteps navigate={navigate} />
             </>
           )}
         </section>
