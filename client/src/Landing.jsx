@@ -6,7 +6,7 @@ const SAMPLE = SAMPLE_SESSIONS["tcpa-violation"];
 
 export default function Landing({ onGetStarted, navigate, path }) {
   return (
-    <div className="page">
+    <div className="page styled-page">
       <Nav path={path} navigate={navigate} />
       <header className="masthead">
         <p className="tagline">Know what your AI voice agent actually does.</p>
