@@ -103,6 +103,18 @@ export function createBridgeSession({
   const turns = [];
   let maxDurationTimer = null;
   let stopGraceTimer = null;
+  // AssemblyAI's session.ready/reply.audio and Twilio's Media Streams "start"
+  // event arrive over two independent sockets with no ordering guarantee -
+  // confirmed live 2026-09-26 against a real inbound call (Twilio Voice
+  // Insights showed clean audio/zero packet loss on the wire but
+  // "Silence Detected: true", while our own server logs for the same call
+  // showed real transcript.agent content generated) - the greeting's
+  // reply.audio chunks landed before Twilio's "start" set streamSid and were
+  // silently dropped by the `if (streamSid && ...)` guard below. Buffer any
+  // reply.audio payload that arrives before streamSid is known and flush it
+  // once "start" sets it, mirroring the early-message buffering
+  // server/qualeval/twilioStream.js already does for its own async lookups.
+  const pendingReplyAudio = [];
 
   const aaiWs = new WebSocketImpl(wsUrl);
 
@@ -190,8 +202,12 @@ export function createBridgeSession({
         turns.push({ role: transcriptAgentRole, text: msg.text ?? "", tMs: startedAtMs ? Date.now() - startedAtMs : 0 });
         break;
       case "reply.audio":
-        if (streamSid && twilioWs.readyState === twilioWs.OPEN) {
-          twilioWs.send(JSON.stringify({ event: "media", streamSid, media: { payload: msg.data } }));
+        if (streamSid) {
+          if (twilioWs.readyState === twilioWs.OPEN) {
+            twilioWs.send(JSON.stringify({ event: "media", streamSid, media: { payload: msg.data } }));
+          }
+        } else {
+          pendingReplyAudio.push(msg.data);
         }
         onReplyAudio?.(msg.data);
         onOutgoingAudio?.(msg.data, startedAtMs ? Date.now() - startedAtMs : 0);
@@ -229,6 +245,12 @@ export function createBridgeSession({
         streamSid = msg.start?.streamSid ?? msg.streamSid;
         callSid = msg.start?.callSid ?? null;
         startedAtMs = Date.now();
+        if (streamSid && twilioWs.readyState === twilioWs.OPEN) {
+          for (const payload of pendingReplyAudio) {
+            twilioWs.send(JSON.stringify({ event: "media", streamSid, media: { payload } }));
+          }
+        }
+        pendingReplyAudio.length = 0;
         break;
       case "media":
         // Bidirectional streams only forward the "inbound" track (the far
