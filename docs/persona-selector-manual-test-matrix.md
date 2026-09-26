@@ -52,7 +52,7 @@ setup.
    recording stays a local blob only.
 9. **Record, analyze** - same as above, click "Analyze this recording"
    instead. It should reuse the existing `/v1/transcribe-upload` pipeline
-   (same network call as "Diarize upload" on a sample) and produce a report
+   (same network call as "Auto-split speakers" on a sample) and produce a report
    with a working inline audio player.
 10. **Mic-silent banner still works with a persona selected** - mute the
     input device at the OS level, start a call with any persona. The
