@@ -15,6 +15,7 @@ import {
   deleteScenariosByStatus,
   createRun,
   getRun,
+  endRun,
   getQualevalConfig,
 } from "./qualevalClient";
 import "./App.css";
@@ -453,9 +454,10 @@ function EditScenarioForm({ scenario, onSaved, onCancel, busy }) {
   );
 }
 
-function ScenarioCard({ scenario, onApprove, onReject, onRun, onDelete, onEdit, busy }) {
+function ScenarioCard({ scenario, onApprove, onReject, onRun, onDelete, onEdit, onEndCall, busy }) {
   const latestRun = scenario.runs?.[0] ?? null;
   const status = runStatus(latestRun);
+  const inProgress = latestRun?.verdict === "in_progress";
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [editing, setEditing] = useState(false);
 
@@ -531,21 +533,36 @@ function ScenarioCard({ scenario, onApprove, onReject, onRun, onDelete, onEdit, 
 
       <div className="qe-scenario-actions">
         {scenario.status !== "approved" && (
-          <button type="button" className="btn-sm primary" onClick={() => onApprove(scenario)} disabled={busy}>
+          <button
+            type="button"
+            className="btn-sm primary"
+            onClick={() => onApprove(scenario)}
+            disabled={busy || inProgress}
+          >
             Approve
           </button>
         )}
         {scenario.status !== "rejected" && (
-          <button type="button" className="btn-sm ghost" onClick={() => onReject(scenario)} disabled={busy}>
+          <button
+            type="button"
+            className="btn-sm ghost"
+            onClick={() => onReject(scenario)}
+            disabled={busy || inProgress}
+          >
             Reject
           </button>
         )}
         {scenario.status === "approved" && (
-          <button type="button" className="btn-sm primary" onClick={() => onRun(scenario)} disabled={busy}>
+          <button
+            type="button"
+            className="btn-sm primary"
+            onClick={() => onRun(scenario)}
+            disabled={busy || inProgress}
+          >
             ▶ Run
           </button>
         )}
-        <button type="button" className="btn-sm ghost" onClick={() => setEditing(true)} disabled={busy}>
+        <button type="button" className="btn-sm ghost" onClick={() => setEditing(true)} disabled={busy || inProgress}>
           Edit
         </button>
         {confirmingDelete ? (
@@ -555,17 +572,32 @@ function ScenarioCard({ scenario, onApprove, onReject, onRun, onDelete, onEdit, 
               type="button"
               className="btn-sm danger"
               onClick={() => onDelete(scenario)}
-              disabled={busy}
+              disabled={busy || inProgress}
             >
               Confirm delete
             </button>
-            <button type="button" className="btn-sm ghost" onClick={() => setConfirmingDelete(false)} disabled={busy}>
+            <button
+              type="button"
+              className="btn-sm ghost"
+              onClick={() => setConfirmingDelete(false)}
+              disabled={busy || inProgress}
+            >
               Cancel
             </button>
           </>
         ) : (
-          <button type="button" className="btn-sm ghost" onClick={() => setConfirmingDelete(true)} disabled={busy}>
+          <button
+            type="button"
+            className="btn-sm ghost"
+            onClick={() => setConfirmingDelete(true)}
+            disabled={busy || inProgress}
+          >
             Delete
+          </button>
+        )}
+        {inProgress && (
+          <button type="button" className="btn-sm danger" onClick={() => onEndCall(latestRun)} disabled={busy}>
+            ■ End call
           </button>
         )}
       </div>
@@ -779,6 +811,19 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
     }
   };
 
+  const onEndCall = async (run) => {
+    setActionError(null);
+    setBusyScenarioId(run.scenarioId);
+    try {
+      await endRun(run.id);
+      await load();
+    } catch (err) {
+      setActionError(err.message ?? "Could not end the call.");
+    } finally {
+      setBusyScenarioId(null);
+    }
+  };
+
   const onEditScenario = async (scenario, fields) => {
     setBusyScenarioId(scenario.id);
     try {
@@ -858,6 +903,7 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
   }
 
   const scenarios = evaluation.scenarios ?? [];
+  const anyCallInProgress = scenarios.some((s) => s.runs?.[0]?.verdict === "in_progress");
   const tabCounts = Object.fromEntries(STATUS_TABS.map((t) => [t.key, scenarios.filter((s) => s.status === t.key).length]));
   const visibleScenarios = scenarios.filter((s) => s.status === activeTab);
 
@@ -1005,6 +1051,7 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
                 onRun={onRun}
                 onDelete={onDeleteScenario}
                 onEdit={onEditScenario}
+                onEndCall={onEndCall}
                 busy={busyScenarioId === scenario.id}
               />
             ))}
@@ -1025,7 +1072,7 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
             />
             <ScenarioCountStepper count={scenarioCount} onChange={setScenarioCount} />
             {genError && <p className="error-banner">{genError}</p>}
-            <button type="button" className="qe-btn-regen" onClick={onGenerate} disabled={generating}>
+            <button type="button" className="qe-btn-regen" onClick={onGenerate} disabled={generating || anyCallInProgress}>
               {generating ? "Generating…" : scenarios.length === 0 ? "Generate scenarios" : "Regenerate scenarios"}
             </button>
           </div>
