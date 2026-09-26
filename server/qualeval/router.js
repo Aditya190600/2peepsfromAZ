@@ -27,6 +27,28 @@ function wrap(fn) {
 // real transcript), but ready for the follow-up call-bridge task to invoke
 // once a run's transcript is attached via server/qualeval/store.js's
 // attachTranscript.
+// Dispatches call placement for a freshly-created run, off the fast-ack
+// response path (see the POST /scenarios/:id/runs handler below). Extracted
+// into its own injectable function so the failure path - what happens when
+// getEvaluation() itself rejects, or anything else here throws before
+// placeCall's own try/catch takes over - is unit-testable without a real DB:
+// this must ALWAYS resolve to markRunError on failure, never a silent
+// console.error-only path, or the run is stranded at 'pending'/'in_progress'
+// forever with no Twilio call ever placed.
+export function dispatchCallPlacement(
+  run,
+  scenario,
+  visitorId,
+  { baseUrl, getEvaluation = store.getEvaluation, placeCall: place = placeCall, markRunError = store.markRunError } = {},
+) {
+  return getEvaluation(scenario.evaluationId, visitorId)
+    .then((evaluation) => place(run, scenario, evaluation, { baseUrl }))
+    .catch((err) => {
+      console.error(`QualEval run ${run.id}: call placement dispatch failed: ${err.message}`);
+      return markRunError(run.id, err.message).catch(() => {});
+    });
+}
+
 export async function dispatchEvaluation(runId, { llmGateway = providers.getModel().complete } = {}) {
   const run = await store.getRun(runId, null);
   if (!run) throw new Error("Run not found");
@@ -196,12 +218,7 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
 
       if (twilioConfigured()) {
         const baseUrl = `${req.protocol}://${req.get("host")}`;
-        store
-          .getEvaluation(scenario.evaluationId, visitorId(req))
-          .then((evaluation) => placeCall(run, scenario, evaluation, { baseUrl }))
-          .catch((err) => {
-            console.error(`QualEval run ${run.id}: call placement dispatch failed: ${err.message}`);
-          });
+        dispatchCallPlacement(run, scenario, visitorId(req), { baseUrl });
       }
     }),
   );
