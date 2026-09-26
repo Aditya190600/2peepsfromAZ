@@ -169,6 +169,62 @@ body {
   max-width: 62ch;
 }
 
+.home-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin: 0 0 32px;
+}
+
+.home-overview-card {
+  display: block;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.home-overview-card:hover {
+  border-color: var(--line-strong);
+}
+
+.home-overview-shot {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+}
+
+.home-overview-card h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.home-overview-what {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.home-overview-click {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.home-section-title {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 600;
+  font-family: var(--serif);
+}
+
 .app-rail {
   background: var(--paper);
   border-left: 1px solid var(--line);
