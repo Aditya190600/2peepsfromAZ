@@ -330,15 +330,19 @@ app.post("/v1/analyze-session", requireVisitorUnlessCannedSample, async (req, re
       llmGateway,
       onCheckComplete: stream
         ? (finding, checksDone, checksTotal) => {
+            // The full finding (summary, evidence, tMs, citation, etc.) is
+            // included here, not just check/status - otherwise the client
+            // can only move a counter as checks finish and has to sit on
+            // every completed finding's detail until the "done" event,
+            // which waits on the slowest remaining check (usually an LLM
+            // Gateway call). Sending the finding as soon as it resolves lets
+            // the client render each detail card the moment it's ready.
             res.write(
               `${JSON.stringify({
                 type: "progress",
-                check: finding.check,
-                status: finding.status,
+                finding,
                 checksDone,
                 checksTotal,
-                usage: finding.llmUsage ?? null,
-                costUsd: finding.llmCostUsd ?? null,
               })}\n`,
             );
           }

@@ -27,9 +27,13 @@ export async function fetchBootStatus() {
 
 // onProgress(event), if given, requests the streamed (newline-delimited
 // JSON) response instead of a single JSON body, and is called once per
-// check as it completes with { check, status, checksDone, checksTotal,
-// usage, costUsd } - see server/index.js's stream=true branch of
-// /v1/analyze-session. Resolves to the same report shape either way.
+// check as it completes with { finding, checksDone, checksTotal } - finding
+// is the actual, full finding object (same shape as one entry of the final
+// report's findings array), not just a status flag, so a caller can render
+// each check's detail as soon as it lands instead of waiting for every
+// check (including the slowest one) to finish - see server/index.js's
+// stream=true branch of /v1/analyze-session. Resolves to the same report
+// shape either way.
 export async function analyze(session, patternPackIds, onProgress) {
   const resp = await fetch("/v1/analyze-session", {
     method: "POST",

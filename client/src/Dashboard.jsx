@@ -34,16 +34,23 @@ import "./App.css";
 
 // Folds one streamed check-progress event (see analyzeClient.js's
 // analyze(..., onProgress)) into the running totals shown in the
-// "Analyzing…" state - see compliance.js's formatAnalyzingMessage.
+// "Analyzing…" state - see compliance.js's formatAnalyzingMessage - and
+// into the list of findings rendered so far. Each event now carries the
+// full finding as soon as its check resolves, so `findings` fills in one
+// card at a time instead of the whole list appearing at once when the
+// slowest remaining check (usually an LLM Gateway call) finally finishes.
 export function accumulateProgress(prev, event) {
-  const base = prev ?? { checksDone: 0, checksTotal: 0, tokensUsed: 0, costUsd: 0, costKnown: false, violationCount: 0 };
+  const base =
+    prev ?? { checksDone: 0, checksTotal: 0, tokensUsed: 0, costUsd: 0, costKnown: false, violationCount: 0, findings: [] };
+  const finding = event.finding;
   return {
     checksDone: base.checksDone + 1,
     checksTotal: event.checksTotal ?? base.checksTotal,
-    tokensUsed: base.tokensUsed + (event.usage?.totalTokens ?? 0),
-    costUsd: base.costUsd + (typeof event.costUsd === "number" ? event.costUsd : 0),
-    costKnown: base.costKnown || typeof event.costUsd === "number",
-    violationCount: base.violationCount + (event.status === "flag" ? 1 : 0),
+    tokensUsed: base.tokensUsed + (finding?.llmUsage?.totalTokens ?? 0),
+    costUsd: base.costUsd + (typeof finding?.llmCostUsd === "number" ? finding.llmCostUsd : 0),
+    costKnown: base.costKnown || typeof finding?.llmCostUsd === "number",
+    violationCount: base.violationCount + (finding?.status === "flag" ? 1 : 0),
+    findings: finding ? [...base.findings, finding] : base.findings,
   };
 }
 
@@ -365,10 +372,18 @@ export function Report({
 
   const view = reportView({ report, loading, error, progress });
   if (view.kind !== "ready") {
+    // While loading, each streamed check's finding is already sitting in
+    // progress.findings the moment its check resolves - render those cards
+    // immediately instead of leaving the screen on just the counter text
+    // until every check (including the slowest one) finishes.
+    const partialFindings = view.kind === "loading" ? sortFindingsBySeverity(progress?.findings ?? []) : [];
     return (
       <div className={`report-state ${view.className}`}>
         <span className={`report-verdict finding-status ${view.className}`}>{view.label}</span>
         <p>{view.kind === "idle" && idleMessage ? idleMessage : view.message}</p>
+        {partialFindings.map((f) => (
+          <Finding key={f.check} finding={f} onSeek={audioUrl ? onSeek : null} />
+        ))}
       </div>
     );
   }
