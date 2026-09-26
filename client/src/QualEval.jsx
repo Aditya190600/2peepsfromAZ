@@ -129,6 +129,7 @@ function NewEvaluationForm({ onCreated }) {
     setActiveTemplate(key);
     setDescription(template.description);
     setRequirements(template.requirements);
+    setName((current) => (current.trim() ? current : `${template.label} evaluation`));
   };
 
   const onSubmit = async (e) => {
@@ -685,6 +686,7 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
   const [activeTab, setActiveTab] = useState("pending");
   const [confirmingDeleteAllTab, setConfirmingDeleteAllTab] = useState(false);
   const [deletingAllTab, setDeletingAllTab] = useState(false);
+  const [approvingAllTab, setApprovingAllTab] = useState(false);
 
   const load = async () => {
     try {
@@ -775,6 +777,22 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
       setActionError(err.message ?? "Could not delete the scenario.");
     } finally {
       setBusyScenarioId(null);
+    }
+  };
+
+  const onApproveAllInTab = async () => {
+    setActionError(null);
+    setApprovingAllTab(true);
+    try {
+      const pending = (evaluation.scenarios ?? []).filter((s) => s.status === "pending");
+      for (const scenario of pending) {
+        await updateScenario(scenario.id, { status: "approved" });
+      }
+      await load();
+    } catch (err) {
+      setActionError(err.message ?? "Could not approve all scenarios.");
+    } finally {
+      setApprovingAllTab(false);
     }
   };
 
@@ -908,6 +926,16 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
             </div>
             {tabCounts[activeTab] > 0 && (
               <div className="qe-tab-actions">
+                {activeTab === "pending" && !confirmingDeleteAllTab && (
+                  <button
+                    type="button"
+                    className="btn-sm primary"
+                    onClick={onApproveAllInTab}
+                    disabled={approvingAllTab}
+                  >
+                    {approvingAllTab ? "Approving…" : "Approve all"}
+                  </button>
+                )}
                 {confirmingDeleteAllTab ? (
                   <>
                     <span className="qe-delete-confirm-text">
