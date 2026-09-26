@@ -1,5 +1,10 @@
 import WS from "ws";
 
+// Shared with server/qualeval/twilioStream.js so its call recorder
+// (server/qualeval/callRecorder.js) preallocates to the same cap this bridge
+// enforces via maxDurationTimer below.
+export const DEFAULT_MAX_DURATION_MS = 5 * 60 * 1000;
+
 // Bridges one Twilio Media Streams WebSocket connection (already accepted -
 // see server/qualeval/twilioStream.js) with a new server-side AssemblyAI
 // Voice Agent session configured as the scenario's simulated caller.
@@ -76,7 +81,15 @@ export function createBridgeSession({
   // agent speaks, in addition to the existing relay to this session's own
   // Twilio leg - see the header comment above.
   onReplyAudio,
-  maxDurationMs = 5 * 60 * 1000,
+  // Called with each raw base64 audio/pcmu chunk this bridge relays, plus
+  // its tMs offset since call start (same clock as the transcript turns
+  // above) - server/qualeval/twilioStream.js feeds both into a
+  // server/qualeval/callRecorder.js instance to build the run's playable
+  // call recording, since audio capture has to happen server-side here
+  // (unlike the Try page's browser MediaRecorder).
+  onIncomingAudio,
+  onOutgoingAudio,
+  maxDurationMs = DEFAULT_MAX_DURATION_MS,
   // Bounded grace window given to AssemblyAI to flush a final transcript/
   // session.ended after we've sent it session.end - see the "stop" case
   // below for why this exists at all.
@@ -181,6 +194,7 @@ export function createBridgeSession({
           twilioWs.send(JSON.stringify({ event: "media", streamSid, media: { payload: msg.data } }));
         }
         onReplyAudio?.(msg.data);
+        onOutgoingAudio?.(msg.data, startedAtMs ? Date.now() - startedAtMs : 0);
         break;
       case "session.ended":
         finish("session.ended");
@@ -222,6 +236,7 @@ export function createBridgeSession({
         if (aaiReady && aaiWs.readyState === aaiWs.OPEN) {
           aaiWs.send(JSON.stringify({ type: "input.audio", audio: msg.media?.payload }));
         }
+        onIncomingAudio?.(msg.media?.payload, startedAtMs ? Date.now() - startedAtMs : 0);
         break;
       case "stop":
         if (aaiWs.readyState === aaiWs.OPEN) {

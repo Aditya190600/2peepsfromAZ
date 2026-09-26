@@ -2842,6 +2842,10 @@ button.site-nav-link {
   background: var(--accent-2-soft);
 }
 
+.qe-run-audio {
+  margin-bottom: 14px;
+}
+
 .qe-turn-time {
   font-family: var(--mono);
   font-size: 9.5px;
