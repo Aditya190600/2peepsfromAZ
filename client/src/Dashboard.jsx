@@ -348,10 +348,31 @@ function downloadReportJson(report, verdict) {
   URL.revokeObjectURL(url);
 }
 
+// Flattens a report's findings into AudioPlayer markers: one per finding with
+// a tMs (kind "flag" when the finding itself is flagged), plus one per
+// pii_scan item (which carries its own tMs distinct from the finding's).
+function findingsToMarkers(findings) {
+  const markers = [];
+  for (const f of findings ?? []) {
+    if (f.tMs != null) {
+      markers.push({ tMs: f.tMs, kind: f.status === "flag" ? "flag" : "turn", label: CHECK_LABEL[f.check] ?? f.check });
+    }
+    if (f.check === "pii_scan") {
+      for (const item of f.items ?? []) {
+        if (item.tMs != null) {
+          markers.push({ tMs: item.tMs, kind: "flag", label: `${item.label} [${item.packId}]` });
+        }
+      }
+    }
+  }
+  return markers;
+}
+
 export function Report({
   report,
   audioUrl,
   audioRef,
+  audioOffsetMs = 0,
   onSeek,
   loading = false,
   error = null,
@@ -375,6 +396,7 @@ export function Report({
   const sortedFindings = sortFindingsBySeverity(report.findings);
   const verdict = headlineVerdict(report.findings);
   const rateLimitedFinding = findRateLimitedFinding(report);
+  const audioMarkers = findingsToMarkers(report.findings);
   return (
     <div>
       {rateLimitedFinding && !rateLimitDismissed && (
@@ -423,9 +445,15 @@ export function Report({
       )}
       {audioUrl && (
         <div className="report-audio">
-          <AudioPlayer src={audioUrl} audioRef={audioRef} />
+          <AudioPlayer
+            src={audioUrl}
+            audioRef={audioRef}
+            offsetMs={audioOffsetMs}
+            markers={audioMarkers}
+          />
           <p className="hint">
-            Findings with a ▶ timestamp are clickable — click one to jump the player there.
+            Findings with a ▶ timestamp are clickable - click one to jump the player there, or
+            click a marker on the waveform (red marks a flagged finding).
           </p>
         </div>
       )}
@@ -1249,6 +1277,7 @@ export default function Dashboard({ navigate, path }) {
                 progress={analysisProgress}
                 audioUrl={activeAudioUrl}
                 audioRef={audioRef}
+                audioOffsetMs={activeAudioOffsetMs}
                 onSeek={onSeek}
                 showStorageNote={Boolean(report) && !reportLoading && !reportError}
                 navigate={navigate}
