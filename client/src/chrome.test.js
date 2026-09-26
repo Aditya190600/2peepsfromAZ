@@ -3,16 +3,16 @@ import assert from "node:assert/strict";
 import { PRODUCT_NAV, PRODUCT_NAV_ALL } from "./chromeNav.js";
 
 describe("PRODUCT_NAV", () => {
-  it("is Home, Try Compliance, Compliance Examples, Qualitative Evals", () => {
+  it("is Home, Try Compliance, Qualitative Evals", () => {
     assert.deepEqual(
       PRODUCT_NAV.map((item) => item.label),
-      ["Home", "Try Compliance", "Compliance Examples", "Qualitative Evals"]
+      ["Home", "Try Compliance", "Qualitative Evals"]
     );
   });
 
-  it("keeps Sessions, Numbers, API Keys, Evals present but hidden", () => {
+  it("keeps Compliance Examples, Sessions, Numbers, API Keys, Evals present but hidden", () => {
     const hiddenLabels = PRODUCT_NAV_ALL.filter((item) => item.hidden).map((item) => item.label);
-    assert.deepEqual(hiddenLabels, ["Sessions", "Numbers", "API Keys", "Evals"]);
+    assert.deepEqual(hiddenLabels, ["Compliance Examples", "Sessions", "Numbers", "API Keys", "Evals"]);
   });
 
   it("marks Sessions active on a session report URL", () => {
