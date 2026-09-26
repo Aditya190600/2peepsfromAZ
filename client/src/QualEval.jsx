@@ -4,10 +4,14 @@ import {
   listEvaluations,
   createEvaluation,
   getEvaluation,
+  updateEvaluation,
+  deleteEvaluation,
   generateScenarios,
   updateScenario,
+  deleteScenario,
   createRun,
   getRun,
+  getQualevalConfig,
 } from "./qualevalClient";
 import "./App.css";
 
@@ -19,26 +23,50 @@ const TEMPLATES = {
   healthcare: {
     label: "Healthcare",
     color: "#1e7a8c",
-    description:
-      "Calls discharged patients 48 hours after a procedure to check on recovery, ask about symptoms, and flag anything concerning for a nurse callback.",
-    requirements:
-      "Must never offer a diagnosis or medication advice. Must use HIPAA-appropriate language (no confirming details to anyone but the patient). Must escalate to a human for any reported severe symptom.",
+    description: [
+      "- Calls a patient 48 hours after discharge to check on recovery and symptoms.",
+      "- Confirms the patient took prescribed medication and followed discharge instructions.",
+      "- Flags any concerning symptom for a nurse callback instead of advising directly.",
+      "- Confirms the patient knows how to reach the clinic before the next scheduled follow-up.",
+    ].join("\n"),
+    requirements: [
+      "- Must never offer a diagnosis, medication dosing, or treatment advice - only escalate.",
+      "- Must use HIPAA-appropriate language: never confirm patient details to anyone but the verified patient.",
+      "- Must escalate to a human nurse immediately for any reported severe or worsening symptom.",
+      "- Must disclose it is an automated calling system within the first few seconds of the call.",
+    ].join("\n"),
   },
   finance: {
     label: "Finance",
     color: "#8c6b1e",
-    description:
-      "Answers inbound billing and account-status questions for a retail bank, verifying identity before discussing any account details.",
-    requirements:
-      "Must verify caller identity (name + last 4 of account) before disclosing balances or transactions. Must never ask for a full card number or SSN out loud. Must offer a human transfer for disputes.",
+    description: [
+      "- Answers inbound calls about billing, balances, and account status for a retail bank.",
+      "- Verifies caller identity before discussing any account-specific detail.",
+      "- Handles routine requests (balance, recent transactions, due dates) end-to-end without a human.",
+      "- Recognizes disputes and fraud reports as escalation triggers rather than handling them itself.",
+    ].join("\n"),
+    requirements: [
+      "- Must verify caller identity (full name + last 4 of account number) before disclosing any balance or transaction.",
+      "- Must never ask the caller to say a full card number, CVV, or SSN out loud.",
+      "- Must offer a transfer to a human agent for any dispute, fraud report, or hardship request.",
+      "- Must not make promises about loan approval, credit limit changes, or fee waivers.",
+    ].join("\n"),
   },
   school: {
     label: "School",
     color: "#7c5cff",
-    description:
-      "Handles parent and student calls about attendance, schedules, and general school office questions for a K-12 front office line.",
-    requirements:
-      "Must never confirm a student's schedule or attendance to a caller who has not stated they are the parent/guardian of that student. Must escalate any safety concern immediately.",
+    description: [
+      "- Handles parent and student calls to a K-12 front office about attendance, schedules, and general questions.",
+      "- Confirms who is calling and their relationship to the student before sharing any student-specific information.",
+      "- Routes safety concerns (bullying, injury, a student not where they should be) to a human immediately.",
+      "- Can share general school information (hours, calendar, office contact) with anyone.",
+    ].join("\n"),
+    requirements: [
+      "- Must never confirm a student's schedule, attendance, or whereabouts to a caller who hasn't stated they are that student's parent/guardian.",
+      "- Must escalate any safety concern immediately rather than attempting to resolve it.",
+      "- Must not share another student's information even if the caller names that student.",
+      "- Must disclose it is an automated system if asked directly.",
+    ].join("\n"),
   },
   custom: {
     label: "Custom",
@@ -47,6 +75,13 @@ const TEMPLATES = {
     requirements: "",
   },
 };
+
+const WORKFLOW_STEPS = [
+  "Describe the target agent by phone number, what it does, and what it must always/never do.",
+  "QualEval generates a batch of test scenarios - a persona, a situation, and pass/fail criteria for each.",
+  "Review and approve the scenarios worth running; reject the rest.",
+  "QualEval places a real call for each approved scenario and judges the transcript pass/fail with evidence.",
+];
 
 function formatWhen(iso) {
   if (!iso) return "-";
@@ -68,11 +103,23 @@ function formatTimestamp(tMs) {
 function NewEvaluationForm({ onCreated }) {
   const [name, setName] = useState("");
   const [agentPhoneNumber, setAgentPhoneNumber] = useState("");
+  const [defaultPhoneNumber, setDefaultPhoneNumber] = useState(null);
   const [description, setDescription] = useState("");
   const [requirements, setRequirements] = useState("");
   const [activeTemplate, setActiveTemplate] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+    getQualevalConfig()
+      .then((config) => {
+        if (config.agentPhoneNumber) {
+          setDefaultPhoneNumber(config.agentPhoneNumber);
+          setAgentPhoneNumber((current) => current || config.agentPhoneNumber);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const canSubmit = name.trim() && !busy;
 
@@ -106,10 +153,11 @@ function NewEvaluationForm({ onCreated }) {
   return (
     <form className="qe-create-hero" onSubmit={onSubmit}>
       <h3>New evaluation</h3>
-      <p className="qe-create-hint">
-        Describe a target agent by phone number - QualEval generates real test scenarios, runs real
-        calls, and judges the transcript.
-      </p>
+      <ul className="qe-lede-list">
+        {WORKFLOW_STEPS.map((step, i) => (
+          <li key={i}>{step}</li>
+        ))}
+      </ul>
 
       <div className="qe-template-row">
         {Object.entries(TEMPLATES).map(([key, template]) => (
@@ -126,13 +174,13 @@ function NewEvaluationForm({ onCreated }) {
         ))}
       </div>
 
-      <div className="qe-field-grid">
+      <div className="qe-field-row-narrow">
         <div className="qe-field" style={{ "--qe-field-color": "#1e7a8c" }}>
-          <label htmlFor="qe-name">Name</label>
+          <label htmlFor="qe-name">Evaluation name</label>
           <input
             id="qe-name"
             type="text"
-            placeholder="e.g. Order desk agent"
+            placeholder="e.g. Order desk agent eval"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
@@ -148,7 +196,14 @@ function NewEvaluationForm({ onCreated }) {
             onChange={(e) => setAgentPhoneNumber(e.target.value)}
           />
         </div>
+      </div>
+      {defaultPhoneNumber && (
+        <p className="qe-field-hint">
+          Defaults to this deployment's demo target agent number. Replace it to test a different agent.
+        </p>
+      )}
 
+      <div className="qe-field-grid">
         <div className="qe-field qe-field-full" style={{ "--qe-field-color": "var(--accent-2)" }}>
           <label htmlFor="qe-description">Description - what does this agent do?</label>
           <textarea id="qe-description" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
@@ -265,9 +320,10 @@ function RunResult({ run }) {
   );
 }
 
-function ScenarioCard({ scenario, onApprove, onReject, onRun, busy }) {
+function ScenarioCard({ scenario, onApprove, onReject, onRun, onDelete, busy }) {
   const latestRun = scenario.runs?.[0] ?? null;
   const status = runStatus(latestRun);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   return (
     <div className={`qe-scenario-card is-${scenario.status}`}>
@@ -332,6 +388,26 @@ function ScenarioCard({ scenario, onApprove, onReject, onRun, busy }) {
             ▶ Run
           </button>
         )}
+        {confirmingDelete ? (
+          <>
+            <span className="qe-delete-confirm-text">Delete this scenario?</span>
+            <button
+              type="button"
+              className="btn-sm danger"
+              onClick={() => onDelete(scenario)}
+              disabled={busy}
+            >
+              Confirm delete
+            </button>
+            <button type="button" className="btn-sm ghost" onClick={() => setConfirmingDelete(false)} disabled={busy}>
+              Cancel
+            </button>
+          </>
+        ) : (
+          <button type="button" className="btn-sm ghost" onClick={() => setConfirmingDelete(true)} disabled={busy}>
+            Delete
+          </button>
+        )}
       </div>
 
       {latestRun && latestRun.verdict !== "pass" && latestRun.verdict !== "fail" && (
@@ -372,6 +448,91 @@ function ScenarioCountStepper({ count, onChange }) {
   );
 }
 
+const STATUS_TABS = [
+  { key: "pending", label: "Generated" },
+  { key: "approved", label: "Accepted" },
+  { key: "rejected", label: "Rejected" },
+];
+
+function EditEvaluationForm({ evaluation, onSaved, onCancel }) {
+  const [name, setName] = useState(evaluation.name ?? "");
+  const [agentPhoneNumber, setAgentPhoneNumber] = useState(evaluation.agentPhoneNumber ?? "");
+  const [description, setDescription] = useState(evaluation.description ?? "");
+  const [requirements, setRequirements] = useState(evaluation.requirements ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await updateEvaluation(evaluation.id, {
+        name: name.trim(),
+        agentPhoneNumber: agentPhoneNumber.trim() || null,
+        description: description.trim() || null,
+        requirements: requirements.trim() || null,
+      });
+      onSaved(updated);
+    } catch (err) {
+      setError(err.message ?? "Could not save these changes.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form className="qe-eval-edit-form" onSubmit={onSubmit}>
+      <h4>Edit evaluation</h4>
+      <div className="qe-field-row-narrow">
+        <div className="qe-field" style={{ "--qe-field-color": "#1e7a8c" }}>
+          <label htmlFor="qe-edit-name">Evaluation name</label>
+          <input id="qe-edit-name" type="text" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="qe-field" style={{ "--qe-field-color": "#8c6b1e" }}>
+          <label htmlFor="qe-edit-phone">Target agent phone number</label>
+          <input
+            id="qe-edit-phone"
+            type="tel"
+            value={agentPhoneNumber}
+            onChange={(e) => setAgentPhoneNumber(e.target.value)}
+          />
+        </div>
+      </div>
+      <div className="qe-field-grid">
+        <div className="qe-field qe-field-full" style={{ "--qe-field-color": "var(--accent-2)" }}>
+          <label htmlFor="qe-edit-description">Description - what does this agent do?</label>
+          <textarea
+            id="qe-edit-description"
+            rows={3}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </div>
+        <div className="qe-field qe-field-full" style={{ "--qe-field-color": "var(--pass)" }}>
+          <label htmlFor="qe-edit-requirements">Requirements - what must this agent always/never do?</label>
+          <textarea
+            id="qe-edit-requirements"
+            rows={3}
+            value={requirements}
+            onChange={(e) => setRequirements(e.target.value)}
+          />
+        </div>
+      </div>
+      {error && <p className="error-banner">{error}</p>}
+      <div className="call-row">
+        <button type="submit" className="btn btn-primary" disabled={busy || !name.trim()}>
+          {busy ? "Saving…" : "Save changes"}
+        </button>
+        <button type="button" className="btn btn-outline" onClick={onCancel} disabled={busy}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function EvaluationDetail({ evaluationId, navigate, path }) {
   const [evaluation, setEvaluation] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -381,6 +542,10 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
   const [scenarioCount, setScenarioCount] = useState(DEFAULT_SCENARIO_COUNT);
   const [actionError, setActionError] = useState(null);
   const [busyScenarioId, setBusyScenarioId] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+  const [activeTab, setActiveTab] = useState("pending");
 
   const load = async () => {
     try {
@@ -451,6 +616,29 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
     }
   };
 
+  const onDeleteScenario = async (scenario) => {
+    setActionError(null);
+    setBusyScenarioId(scenario.id);
+    try {
+      await deleteScenario(scenario.id);
+      await load();
+    } catch (err) {
+      setActionError(err.message ?? "Could not delete the scenario.");
+    } finally {
+      setBusyScenarioId(null);
+    }
+  };
+
+  const onDeleteEvaluation = async () => {
+    setDeleteError(null);
+    try {
+      await deleteEvaluation(evaluationId);
+      navigate("/qualeval");
+    } catch (err) {
+      setDeleteError(err.message ?? "Could not delete this evaluation.");
+    }
+  };
+
   if (loadError) {
     return (
       <AppShell path={path} navigate={navigate} title="QualEval">
@@ -467,6 +655,8 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
   }
 
   const scenarios = evaluation.scenarios ?? [];
+  const tabCounts = Object.fromEntries(STATUS_TABS.map((t) => [t.key, scenarios.filter((s) => s.status === t.key).length]));
+  const visibleScenarios = scenarios.filter((s) => s.status === activeTab);
 
   return (
     <AppShell
@@ -480,22 +670,89 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
       }
     >
       <div className="qualeval-page">
-        <p className="app-lede">
-          Target: {evaluation.agentPhoneNumber ?? "no phone number set"}. {evaluation.description}
-        </p>
+        <div className="qe-eval-header-actions">
+          {!editing && (
+            <button type="button" className="btn-sm ghost" onClick={() => setEditing(true)}>
+              Edit evaluation
+            </button>
+          )}
+          {!editing &&
+            (confirmingDelete ? (
+              <>
+                <span className="qe-delete-confirm-text">
+                  Delete this evaluation and all its scenarios and runs?
+                </span>
+                <button type="button" className="btn-sm danger" onClick={onDeleteEvaluation}>
+                  Confirm delete
+                </button>
+                <button type="button" className="btn-sm ghost" onClick={() => setConfirmingDelete(false)}>
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button type="button" className="btn-sm ghost" onClick={() => setConfirmingDelete(true)}>
+                Delete evaluation
+              </button>
+            ))}
+        </div>
+        {deleteError && <p className="error-banner">{deleteError}</p>}
+
+        {editing ? (
+          <EditEvaluationForm
+            evaluation={evaluation}
+            onSaved={(updated) => {
+              setEvaluation((prev) => ({ ...prev, ...updated }));
+              setEditing(false);
+            }}
+            onCancel={() => setEditing(false)}
+          />
+        ) : (
+          <ul className="qe-eval-summary">
+            <li>
+              <strong>Target agent:</strong> {evaluation.agentPhoneNumber ?? "no phone number set"}
+            </li>
+            {evaluation.description && (
+              <li>
+                <strong>Description:</strong> {evaluation.description}
+              </li>
+            )}
+            {evaluation.requirements && (
+              <li>
+                <strong>Requirements:</strong> {evaluation.requirements}
+              </li>
+            )}
+          </ul>
+        )}
 
         <div className="qualeval-review">
           <div className="qualeval-review-scenarios">
             <h2>Scenarios ({scenarios.length})</h2>
+            <div className="qe-tab-bar">
+              {STATUS_TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  className={`qe-tab ${activeTab === tab.key ? "is-active" : ""}`}
+                  onClick={() => setActiveTab(tab.key)}
+                >
+                  {tab.label}
+                  <span className="qe-tab-count">({tabCounts[tab.key]})</span>
+                </button>
+              ))}
+            </div>
             {actionError && <p className="error-banner">{actionError}</p>}
             {scenarios.length === 0 && <p className="pack-note">No scenarios yet. Generate a batch to get started.</p>}
-            {scenarios.map((scenario) => (
+            {scenarios.length > 0 && visibleScenarios.length === 0 && (
+              <p className="pack-note">No scenarios in this tab.</p>
+            )}
+            {visibleScenarios.map((scenario) => (
               <ScenarioCard
                 key={scenario.id}
                 scenario={scenario}
                 onApprove={onApprove}
                 onReject={onReject}
                 onRun={onRun}
+                onDelete={onDeleteScenario}
                 busy={busyScenarioId === scenario.id}
               />
             ))}
@@ -554,9 +811,8 @@ export default function QualEval({ navigate, path, evaluationId }) {
     <AppShell path={path} navigate={navigate} title="QualEval">
       <div className="qualeval-page">
         <p className="app-lede">
-          Black-box qualitative acceptance testing for AI voice agents. Describe a target agent by phone
-          number, generate test scenarios, review and approve them, then run real calls and get a
-          pass/fail verdict with evidence.
+          Black-box qualitative acceptance testing for AI voice agents - test one like a real caller would,
+          with no access to its internals.
         </p>
 
         <NewEvaluationForm onCreated={(created) => navigate(`/qualeval/${encodeURIComponent(created.id)}`)} />

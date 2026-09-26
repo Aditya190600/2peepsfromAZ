@@ -5,7 +5,7 @@ import { callLlmGateway, parseJsonResponse } from "../checks/llmGateway.js";
 // for a SIMULATED caller to run against the target agent (reached only by
 // phone number) - never assumes access to the target's internals.
 function systemPrompt(count) {
-  return `You design black-box qualitative acceptance-test scenarios for an AI voice agent that will be reached only by phone. Given a description of what the agent does and its requirements, produce exactly ${count} distinct test scenarios. Each scenario is a simulated caller persona and situation that will place a real phone call to the target agent, plus how to judge the resulting transcript. Respond with ONLY a JSON object, no other text: {"scenarios": [{"name": string, "persona": string, "situation": string, "callerObjectives": string, "expectedBehavior": string, "evaluationCriteria": [string, ...], "category": string}]}. "persona" describes who the simulated caller is (tone, background, constraints). "situation" is the scenario context the caller opens the call with. "callerObjectives" is what the simulated caller is trying to get out of the call. "expectedBehavior" is what the target agent should do to pass. "evaluationCriteria" is a short list of specific, checkable criteria an evaluator can look for in the transcript. "category" is a short tag (e.g. "happy-path", "edge-case", "policy-adherence", "escalation").`;
+  return `You design black-box qualitative acceptance-test scenarios for an AI voice agent that will be reached only by phone. Given a description of what the agent does and its requirements, produce exactly ${count} distinct test scenarios. Each scenario is a simulated caller persona and situation that will place a real phone call to the target agent, plus how to judge the resulting transcript. Respond with ONLY a JSON object, no other text: {"scenarios": [{"name": string, "persona": string, "situation": string, "callerObjectives": string, "expectedBehavior": string, "evaluationCriteria": [string, ...], "category": string}]}. "name" is REQUIRED for every scenario - a short, descriptive title (4-8 words) that captures the persona and situation at a glance (e.g. "Frustrated caller disputes a duplicate charge"), never generic filler like "Scenario 1" or "Test case". "persona" describes who the simulated caller is (tone, background, constraints). "situation" is the scenario context the caller opens the call with. "callerObjectives" is what the simulated caller is trying to get out of the call. "expectedBehavior" is what the target agent should do to pass. "evaluationCriteria" is a short list of specific, checkable criteria an evaluator can look for in the transcript. "category" is a short tag (e.g. "happy-path", "edge-case", "policy-adherence", "escalation").`;
 }
 
 const DEFAULT_COUNT = 5;
@@ -35,6 +35,14 @@ function feedbackUserMessage({ name, description, requirements, feedback }) {
   return parts.join("\n");
 }
 
+// The prompt requires the LLM to name every scenario; this only covers the
+// rare case where it doesn't, so the operator is never left inventing one.
+function fallbackScenarioName(s, index) {
+  if (s.category && s.persona) return `${s.category}: ${s.persona}`.slice(0, 80);
+  if (s.situation) return String(s.situation).slice(0, 60);
+  return `Scenario ${index + 1}`;
+}
+
 export async function generateScenarios(evaluation, { feedback, count, llmGateway = callLlmGateway } = {}) {
   const targetCount = clampCount(count);
   const content = await llmGateway(
@@ -50,8 +58,8 @@ export async function generateScenarios(evaluation, { feedback, count, llmGatewa
   if (!Array.isArray(scenarios) || scenarios.length === 0) {
     throw new Error("LLM Gateway did not return a usable scenarios array.");
   }
-  return scenarios.map((s) => ({
-    name: String(s.name ?? "Untitled scenario"),
+  return scenarios.map((s, i) => ({
+    name: s.name ? String(s.name) : fallbackScenarioName(s, i),
     persona: s.persona ? String(s.persona) : null,
     situation: s.situation ? String(s.situation) : null,
     callerObjectives: s.callerObjectives ? String(s.callerObjectives) : null,
