@@ -32,6 +32,12 @@ export function demoAgentVoiceRoute(req, res, { env = process.env, validate = tw
   }
 
   const response = new twilio.twiml.VoiceResponse();
+  // The Twilio Media Streams WebSocket to our server takes ~5-6s to connect
+  // (observed live, not our own request handling - see AGENTS.md's inbound
+  // answer latency note) before any AssemblyAI audio can play. Without this,
+  // a real caller hears dead silence right after the call is answered and
+  // reasonably hangs up thinking the call went unanswered.
+  response.say("One moment please.");
   response.connect().stream({ url: `${wsBaseUrl(req)}/v1/qualeval/target-agent-stream` });
   res.type("text/xml").send(response.toString());
 }
