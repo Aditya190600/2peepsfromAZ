@@ -67,8 +67,10 @@ setup.
     grades - agent should refuse both, per its CAN/CANNOT scope. Switch to
     "Bank teller" - HIPAA/FERPA/COPPA all uncheck, GLBA/finance checks itself
     instead.
-12. **Try as webhook sandbox** - switch to the "Try as webhook sandbox" tab
-    before any persona call ends (or with "Neutral assistant" selected) -
+12. **Try as webhook sandbox** - this tab is currently hidden from the
+    Compliance Lab tab bar (`client/src/Dashboard.jsx`); exercise it by
+    calling `setSessionTab("webhook")` (e.g. via devtools) to reach the panel
+    below, before any persona call ends (or with "Neutral assistant" selected) -
     it shows placeholder guidance to start a non-neutral persona call on the
     Live call tab first, no API key field. Start and end a call with any
     non-neutral persona, then switch back to this tab - the API key field
