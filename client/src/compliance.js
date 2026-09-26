@@ -119,7 +119,7 @@ export function reportView({ report, loading = false, error = null, progress = n
   if (!report) {
     return {
       kind: "idle",
-      label: "Idle",
+      label: "No report yet",
       className: "is-idle",
       message:
         "No report yet. Run a live call, upload audio, or pick a sample to generate one.",
