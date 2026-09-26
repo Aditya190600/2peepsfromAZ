@@ -30,6 +30,7 @@ import { listIndustryPacks } from "./evalsClient";
 import PackEvals from "./PackEvals";
 import { parseSessionPaste } from "./sessionPaste";
 import { PERSONAS, findPersona } from "./personas";
+import { ExamplesPanels } from "./Examples";
 import "./App.css";
 
 // Folds one streamed check-progress event (see analyzeClient.js's
@@ -162,7 +163,7 @@ function Finding({ finding, onSeek }) {
   );
 }
 
-function IntroSteps({ navigate }) {
+function IntroSteps({ onShowExamples }) {
   return (
     <div className="intro-steps">
       <h2>How this works</h2>
@@ -203,21 +204,15 @@ function IntroSteps({ navigate }) {
         </li>
       </ol>
       <p className="intro-alt">
-        Prefer not to use your mic right now? Skip straight to the{" "}
-        {navigate ? (
-          <a
-            href="/examples"
-            onClick={(e) => {
-              e.preventDefault();
-              navigate("/examples");
-            }}
-          >
-            Examples
-          </a>
+        Prefer not to use your mic right now? Switch to the{" "}
+        {onShowExamples ? (
+          <button type="button" className="table-link" onClick={onShowExamples}>
+            Voice Compliance
+          </button>
         ) : (
-          "Examples"
+          "Voice Compliance"
         )}{" "}
-        page - same reports, no sign-in or live call needed.
+        tab - same reports, no live call needed.
       </p>
     </div>
   );
@@ -923,9 +918,45 @@ export default function Dashboard({ navigate, path }) {
     });
   }, [reportLoading, report]);
 
+  // Shared top-level tab bar: "Live call" covers the live/webhook/paste
+  // sub-flows (webhook and paste stay hidden sub-tabs, same pattern as
+  // before), "Voice Compliance" is the embedded Examples.jsx content
+  // (ExamplesPanels) - folded in from its own nav-rail page.
+  const topTabBar = (
+    <div className="tab-bar-row">
+      <div className="tab-bar">
+        <button
+          type="button"
+          className={`tab-btn ${
+            sessionTab === "live" || sessionTab === "webhook" || sessionTab === "paste" ? "is-active" : ""
+          }`}
+          onClick={() => setSessionTab("live")}
+        >
+          Live call
+        </button>
+        <button
+          type="button"
+          className={`tab-btn ${sessionTab === "examples" ? "is-active" : ""}`}
+          onClick={() => setSessionTab("examples")}
+        >
+          Voice Compliance
+        </button>
+      </div>
+      {sessionTab !== "examples" && (
+        <button type="button" className="btn btn-outline tour-start-btn" onClick={startTour}>
+          Take a tour
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <AppShell path={path} navigate={navigate} title="Compliance Lab">
       <main className="layout">
+        {sessionTab === "examples" ? (
+          <ExamplesPanels navigate={navigate} topTabBar={topTabBar} />
+        ) : (
+          <>
         <section className="panel session-panel">
           <p className="app-lede">
             Run a live mic call against the AssemblyAI Voice Agent, then check the industry pattern
@@ -1023,25 +1054,12 @@ export default function Dashboard({ navigate, path }) {
         </section>
 
         <section className="panel report-panel">
+          {topTabBar}
           <div className="try-actions">
-            <div className="tab-bar-row">
-              <div className="tab-bar">
-                <button
-                  type="button"
-                  className={`tab-btn ${sessionTab === "live" ? "is-active" : ""}`}
-                  onClick={() => setSessionTab("live")}
-                >
-                  Live call
-                </button>
-                {/* Webhook sandbox and paste-transcript tabs are hidden from the tab bar
-                    (not deleted - same hidden-but-reachable pattern as PRODUCT_NAV_ALL in
-                    chromeNav.js) so the page's main flow is just the live-call experience.
-                    setSessionTab("webhook" | "paste") still renders their panels below. */}
-              </div>
-              <button type="button" className="btn btn-outline tour-start-btn" onClick={startTour}>
-                Take a tour
-              </button>
-            </div>
+            {/* Webhook sandbox and paste-transcript tabs are hidden sub-tabs of
+                "Live call" (not deleted - same hidden-but-reachable pattern as
+                PRODUCT_NAV_ALL in chromeNav.js); setSessionTab("webhook" | "paste")
+                still renders their panels below. */}
 
             {sessionTab === "live" && (
               <div className="section-block tab-panel">
@@ -1295,12 +1313,14 @@ export default function Dashboard({ navigate, path }) {
             </>
           ) : (
             <>
-              <IntroSteps navigate={navigate} />
+              <IntroSteps onShowExamples={() => setSessionTab("examples")} />
               <h2 className="report-heading">Compliance report</h2>
               <Report report={null} />
             </>
           )}
         </section>
+          </>
+        )}
       </main>
     </AppShell>
   );
