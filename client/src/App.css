@@ -1967,8 +1967,8 @@ button.site-nav-link {
 
 .audio-player {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 8px;
   padding: 8px 10px;
   background: var(--paper);
   border: 1px solid var(--line);
@@ -1977,6 +1977,12 @@ button.site-nav-link {
 
 .audio-player-compact {
   padding: 4px 8px;
+}
+
+.audio-player-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .audio-player-toggle {
@@ -2008,6 +2014,46 @@ button.site-nav-link {
   font-size: 11px;
   color: var(--muted);
   flex-shrink: 0;
+}
+
+.audio-player-waveform-wrap {
+  position: relative;
+  height: 48px;
+}
+
+.audio-player-waveform {
+  display: block;
+  width: 100%;
+  height: 48px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.audio-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  margin-left: -1px;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  background: var(--na);
+  opacity: 0.75;
+}
+
+.audio-marker:hover {
+  opacity: 1;
+}
+
+.audio-marker.is-flag {
+  background: var(--flag);
+  opacity: 0.9;
+}
+
+.audio-marker.is-turn {
+  background: var(--na);
 }
 
 .history-panel {
