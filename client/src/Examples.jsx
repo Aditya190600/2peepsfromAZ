@@ -17,15 +17,18 @@ import { analyze, diarizeSample, mapWithConcurrency } from "./analyzeClient";
 import { listIndustryPacks } from "./evalsClient";
 import "./App.css";
 
-const PLAYABLE_KEYS = Object.keys(PLAYABLE_SAMPLE_LABEL);
-
-// Playable samples and scripted violation demos - relocated here from the
-// Try page's tabs (PR #125) so a fresh visitor can see a full compliance
-// report with zero setup, no sign-in or API key needed (see App.jsx: this
-// route is deliberately not wrapped in RequireVisitor). Samples are canned
-// fixtures, not live user data, so unlike Try's live/upload/paste actions
-// none of the actions below gate on a consent checkbox.
-export default function Examples({ navigate, path }) {
+// Playable samples and scripted violation demos. Originally its own nav
+// page (PR #125); now also embedded as the "Voice Compliance" tab inside
+// Dashboard.jsx's Try/Compliance Lab page (ExamplesPanels below), while the
+// standalone /examples route (Examples, further down) keeps working
+// unchanged - including staying outside RequireVisitor, so a fresh visitor
+// can still reach a full compliance report with zero setup via a direct
+// link, even though the embedded tab sits behind whatever gate the Try page
+// itself has. Samples are canned fixtures, not live user data, so unlike
+// Try's live/upload/paste actions none of the actions below gate on a
+// consent checkbox.
+export function ExamplesPanels({ navigate, topTabBar = null }) {
+  const PLAYABLE_KEYS = Object.keys(PLAYABLE_SAMPLE_LABEL);
   const [selectedPacks, setSelectedPacks] = useState([]);
   const [industryPacks, setIndustryPacks] = useState(INDUSTRY_PACKS);
   const [packCatalogStale, setPackCatalogStale] = useState(false);
@@ -184,22 +187,27 @@ export default function Examples({ navigate, path }) {
   const fleetReady = Array.isArray(fleetResults) && fleetResults.length > 0;
 
   return (
-    <AppShell path={path} navigate={navigate} title="Examples">
-      <main className="layout">
+    <>
         <section className="panel session-panel">
           <p className="app-lede">
             Playable samples and scripted violation demos - no sign-in, API key, or live call needed.
-            Pick one below to see a full compliance report instantly, or head to{" "}
-            <a
-              href="/try"
-              onClick={(e) => {
-                e.preventDefault();
-                navigate("/try");
-              }}
-            >
-              Try
-            </a>{" "}
-            for a live call.
+            Pick one below to see a full compliance report instantly
+            {navigate && (
+              <>
+                , or head to{" "}
+                <a
+                  href="/try"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    navigate("/try");
+                  }}
+                >
+                  Try
+                </a>{" "}
+                for a live call
+              </>
+            )}
+            .
           </p>
 
           <div className="section-block">
@@ -227,6 +235,7 @@ export default function Examples({ navigate, path }) {
         </section>
 
         <section className="panel report-panel">
+          {topTabBar}
           <div className="try-actions">
             <div className="tab-bar">
               <button
@@ -359,6 +368,18 @@ export default function Examples({ navigate, path }) {
             </>
           )}
         </section>
+    </>
+  );
+}
+
+// Standalone /examples route - zero-setup by design (see App.jsx: not
+// wrapped in RequireVisitor), unchanged from before ExamplesPanels was
+// extracted for embedding in Dashboard.jsx.
+export default function Examples({ navigate, path }) {
+  return (
+    <AppShell path={path} navigate={navigate} title="Examples">
+      <main className="layout">
+        <ExamplesPanels navigate={navigate} />
       </main>
     </AppShell>
   );
