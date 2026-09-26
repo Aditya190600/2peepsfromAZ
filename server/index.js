@@ -419,7 +419,7 @@ app.post(
 );
 
 // Zero-setup counterpart to /v1/transcribe-upload + /v1/analyze-session for
-// the Examples page's "Diarize upload" demo: unlike those routes, this never
+// the Examples page's "Auto-split speakers" demo: unlike those routes, this never
 // accepts client-uploaded content and never analyzes a client-supplied
 // session body - it only transcribes one of the fixed playable sample mp3s
 // (client/public/samples), read server-side by key, and analyzes the result
