@@ -27,12 +27,23 @@ just maps our two variant keys to their `agent_id`:
   an AI, and answers account questions as soon as a name or account number is
   stated, with no identity verification at all.
 
+Fallback behaviors so a call never stalls on something the agent can't
+actually do: both variants, asked for a human, say they can't transfer to a
+human right now (neither has a transfer tool). Only `compliant`, asked for
+real account data (balance, transactions), says it doesn't have access to
+that specific information - `flawed` keeps sharing account info unverified,
+since that is its seeded gap.
+
 `server/qualeval/demoAgentDefaults.js` holds the two agents' default bodies
 (prompt/greeting/voice, with `input`/`output.format` fixed to `audio/pcmu`
 since that has to live on the stored agent - it can't be set inline once
 `agent_id` is used). `server/qualeval/demoAgentAgentsProvision.js` creates
 each agent once on boot, the first time its variant row has no `agent_id`
 yet, and persists the id - it never recreates an already-provisioned agent.
+So changing a default in code does not reach an already-provisioned agent -
+push the new text to the live record with `PATCH
+/v1/qualeval/demo-agent/variants/:key` (or `PUT /v1/agents/{agent_id}`
+directly) too.
 
 `qualeval_demo_agent_state` is a single-row runtime toggle (`active_variant`)
 read by `server/qualeval/targetAgentStream.js` at connect time - there's only
