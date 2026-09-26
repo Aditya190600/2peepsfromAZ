@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { summarizeFleet, monitorTiles, flaggedTaskItems } from "./fleetStats.js";
+import { summarizeFleet, monitorTiles } from "./fleetStats.js";
 
 function finding(check, status) {
   return { check, status };
@@ -45,10 +45,5 @@ describe("summarizeFleet", () => {
     assert.equal(tiles[0].flag, 1);
     assert.equal(tiles[1].flag, 1);
     assert.notEqual(tiles[0].flag, 2);
-    const tasks = flaggedTaskItems(results, (key) => key);
-    assert.deepEqual(
-      tasks.map((item) => item.sessionId),
-      ["sess_tcpa_04", "sess_late_01"]
-    );
   });
 });

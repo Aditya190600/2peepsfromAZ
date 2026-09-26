@@ -1,4 +1,4 @@
-import { CHECK_LABEL, headlineVerdict } from "./compliance.js";
+import { CHECK_LABEL } from "./compliance.js";
 
 export const MONITOR_CHECKS = ["consent", "ai_disclosure", "pii_scan", "opt_out"];
 
@@ -39,13 +39,4 @@ export function monitorTiles(perCheck) {
       total: denom,
     };
   });
-}
-
-export function flaggedTaskItems(results, labelForKey) {
-  return summarizeFleet(results).flaggedRows.map(({ key, report }) => ({
-    key,
-    sessionId: report.sessionId,
-    label: labelForKey?.(key) ?? report.sessionId,
-    verdict: headlineVerdict(report.findings),
-  }));
 }
