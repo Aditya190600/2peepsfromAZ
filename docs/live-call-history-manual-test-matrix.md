@@ -20,9 +20,9 @@ save happens. Verify these by hand before merging any change that touches
 `Dashboard.jsx`'s live-call flow or `useVoiceAgent.js`'s `lastSession`
 handoff:
 
-1. **Auto-generate on call end** - check consent, start a call, say a few
-   things, click "End call." Without clicking anything else, a report should
-   appear within a couple seconds (no manual "Generate report" click
+1. **Auto-generate on call end** - start a call, say a few things,
+   click "End call." Without clicking anything else, a report should appear
+   within a couple seconds (no manual "Generate report" click
    needed).
 2. **Saved to history immediately** - right after step 1's report appears,
    open `/sessions` (history) in the same tab. The live call should already
