@@ -153,10 +153,10 @@ export default function Examples({ navigate, path }) {
               prev
                 ? {
                     ...prev,
-                    tokensUsed: prev.tokensUsed + (event.usage?.totalTokens ?? 0),
-                    costUsd: prev.costUsd + (typeof event.costUsd === "number" ? event.costUsd : 0),
-                    costKnown: prev.costKnown || typeof event.costUsd === "number",
-                    violationCount: prev.violationCount + (event.status === "flag" ? 1 : 0),
+                    tokensUsed: prev.tokensUsed + (event.finding?.llmUsage?.totalTokens ?? 0),
+                    costUsd: prev.costUsd + (typeof event.finding?.llmCostUsd === "number" ? event.finding.llmCostUsd : 0),
+                    costKnown: prev.costKnown || typeof event.finding?.llmCostUsd === "number",
+                    violationCount: prev.violationCount + (event.finding?.status === "flag" ? 1 : 0),
                   }
                 : prev
             )
