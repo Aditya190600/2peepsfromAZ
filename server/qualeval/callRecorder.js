@@ -8,6 +8,12 @@ export function qualevalCallAudioKey(runId) {
   return `qualeval-calls/${encodeURIComponent(runId)}.wav`;
 }
 
+// Inbound calls to QUALEVAL_AGENT_NUMBER have no QualEval run id. Key them
+// by the Twilio Call SID, which is what production_calls is unique on.
+export function productionCallAudioKey(callSid) {
+  return `production-calls/${encodeURIComponent(callSid)}.wav`;
+}
+
 function buildMuLawDecodeTable() {
   const table = new Int16Array(256);
   for (let i = 0; i < 256; i++) {

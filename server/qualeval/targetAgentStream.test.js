@@ -225,3 +225,85 @@ test("does not open an AssemblyAI session when the caller hangs up during setup"
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(created, false);
 });
+
+test("writes the transcript onto the production call when the inbound bridge ends", async () => {
+  const twilioWs = new FakeSocket();
+  const httpServer = new EventEmitter();
+  let sessionArgs;
+  let finished;
+  const wss = attachTargetAgentStreamServer(httpServer, {
+    getActiveVariant: async () => ({ key: "compliant", agentId: "agent_1" }),
+    mintToken: async () => "tok",
+    createSession: (args) => {
+      sessionArgs = args;
+      return { injectAudio: () => {} };
+    },
+    waitForClaimableRun: async () => null,
+    finishCall: async (fields) => {
+      finished = fields;
+      return { toNumber: "+18038245760" };
+    },
+    evaluateCall: async () => {},
+  });
+  connect(wss, twilioWs);
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  await sessionArgs.onFinished({
+    turns: [{ speaker: "user", text: "This is Rastopopulous" }],
+    callSid: "CA999",
+    reason: "session.ended",
+  });
+
+  assert.equal(finished.audioRef, null);
+  assert.equal(finished.twilioCallSid, "CA999");
+  assert.deepEqual(finished.transcript, [{ speaker: "user", text: "This is Rastopopulous" }]);
+});
+
+test("uploads a mixed WAV for an inbound call and stores its audio path", async () => {
+  const twilioWs = new FakeSocket();
+  const httpServer = new EventEmitter();
+  let sessionArgs;
+  let uploaded;
+  let finished;
+  const wav = Buffer.from("RIFFwav");
+  const wss = attachTargetAgentStreamServer(httpServer, {
+    getActiveVariant: async () => ({ key: "compliant", agentId: "agent_1" }),
+    mintToken: async () => "tok",
+    createSession: (args) => {
+      sessionArgs = args;
+      return { injectAudio: () => {} };
+    },
+    waitForClaimableRun: async () => null,
+    createRecorder: () => ({
+      addFrame() {},
+      hasAudio: () => true,
+      toWavBuffer: () => wav,
+    }),
+    recordingsReady: () => true,
+    uploadRecording: async (key, body, contentType) => {
+      uploaded = { key, body, contentType };
+    },
+    finishCall: async (fields) => {
+      finished = fields;
+      return { toNumber: "+18038245760" };
+    },
+    evaluateCall: async () => {},
+  });
+  connect(wss, twilioWs);
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  sessionArgs.onIncomingAudio("AAAA", 0);
+  sessionArgs.onOutgoingAudio("BBBB", 20);
+  await sessionArgs.onFinished({
+    turns: [{ speaker: "agent", text: "hello" }],
+    callSid: "CA111",
+    reason: "session.ended",
+  });
+
+  assert.equal(uploaded.key, "production-calls/CA111.wav");
+  assert.equal(uploaded.contentType, "audio/wav");
+  assert.equal(uploaded.body, wav);
+  assert.equal(finished.audioRef, "/v1/qualeval/production-calls/CA111/audio");
+});

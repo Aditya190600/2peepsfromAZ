@@ -1,6 +1,7 @@
 import * as twilioClient from "./twilioClient.js";
 import * as store from "./store.js";
 import { armStreamWatchdog } from "./streamWatchdog.js";
+import { recordProductionCall } from "./productionCalls.js";
 
 export { twilioConfigured } from "./twilioClient.js";
 
@@ -27,6 +28,7 @@ export async function placeCall(
     markRunInProgress = store.markRunInProgress,
     markRunError = store.markRunError,
     watchdog = armStreamWatchdog,
+    recordCall = recordProductionCall,
   } = {},
 ) {
   try {
@@ -46,6 +48,18 @@ export async function placeCall(
       },
       env,
     );
+    await recordCall(
+      {
+        twilioCallSid: sid,
+        direction: "outbound",
+        fromNumber: from,
+        toNumber: to,
+        qualevalRunId: run.id,
+      },
+      env,
+    ).catch((err) => {
+      console.error(`QualEval call bridge: failed to record production call ${sid}: ${err.message}`);
+    });
     const updated = await markRunInProgress(run.id, sid);
     // Guards against the run hanging in 'in_progress' forever if the Media
     // Stream WebSocket upgrade never reaches the app - see
