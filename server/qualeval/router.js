@@ -8,7 +8,7 @@ import { placeCall, twilioConfigured } from "./callBridge.js";
 import { endCall } from "./twilioClient.js";
 import { getObjectByKey, sendRecording } from "../recordingsStore.js";
 import { qualevalCallAudioKey, productionCallAudioKey } from "./callRecorder.js";
-import { getProductionCallBySid } from "./productionCalls.js";
+import { getProductionCallBySid, listProductionCallsForEvaluation } from "./productionCalls.js";
 
 const TWILIO_CALL_SID = /^CA[0-9a-f]{32}$/i;
 
@@ -105,6 +105,16 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
     "/config",
     wrap(async (req, res) => {
       res.json({ agentPhoneNumber: process.env.QUALEVAL_AGENT_NUMBER || null });
+    }),
+  );
+
+  router.get(
+    "/evaluations/:id/inbound-calls",
+    wrap(async (req, res) => {
+      const evaluation = await store.getEvaluation(req.params.id, visitorId(req));
+      if (!evaluation) return res.status(404).json({ error: "Evaluation not found" });
+      const calls = await listProductionCallsForEvaluation(evaluation.id);
+      res.json({ calls });
     }),
   );
 

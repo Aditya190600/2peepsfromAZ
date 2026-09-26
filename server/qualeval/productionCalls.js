@@ -45,12 +45,19 @@ function callRow(row) {
     agentId: row.agent_id,
     audioRef: row.audio_ref,
     qualevalRunId: row.qualeval_run_id,
+    evaluationId: row.evaluation_id,
+    evaluationStatus: row.evaluation_status,
+    verdict: row.verdict,
+    assessment: row.assessment,
+    criterionResults: row.criterion_results ?? [],
+    evidenceQuotes: row.evidence_quotes ?? [],
+    evaluationError: row.evaluation_error,
     createdAt: row.created_at,
   };
 }
 
 const RETURNING =
-  "id, twilio_call_sid, direction, from_number, to_number, caller_name, started_at, ended_at, end_reason, transcript, variant_key, agent_id, audio_ref, qualeval_run_id, created_at";
+  "id, twilio_call_sid, direction, from_number, to_number, caller_name, started_at, ended_at, end_reason, transcript, variant_key, agent_id, audio_ref, qualeval_run_id, evaluation_id, evaluation_status, verdict, assessment, criterion_results, evidence_quotes, evaluation_error, created_at";
 
 export async function recordProductionCall(fields, env = process.env, pool = getPool(env)) {
   if (!pool || !fields?.twilioCallSid) return null;
@@ -111,4 +118,83 @@ export async function getProductionCallBySid(twilioCallSid, env = process.env, p
     [twilioCallSid],
   );
   return callRow(rows[0]);
+}
+
+export async function recordProductionCallEvaluation(fields, env = process.env, pool = getPool(env)) {
+  if (!pool || !fields?.twilioCallSid) return null;
+  const { rows } = await pool.query(
+    `update production_calls set
+       evaluation_id = $2,
+       evaluation_status = $3,
+       verdict = $4,
+       assessment = $5,
+       criterion_results = $6::jsonb,
+       evidence_quotes = $7::jsonb,
+       evaluation_error = $8,
+       qualeval_run_id = coalesce($9, qualeval_run_id)
+     where twilio_call_sid = $1
+     returning ${RETURNING}`,
+    [
+      fields.twilioCallSid,
+      fields.evaluationId ?? null,
+      fields.evaluationStatus ?? null,
+      fields.verdict ?? null,
+      fields.assessment ?? null,
+      JSON.stringify(fields.criterionResults ?? []),
+      JSON.stringify(fields.evidenceQuotes ?? []),
+      fields.evaluationError ?? null,
+      fields.qualevalRunId ?? null,
+    ],
+  );
+  return callRow(rows[0]);
+}
+
+function transcriptForClient(value) {
+  if (Array.isArray(value)) return { turns: value };
+  if (value && Array.isArray(value.turns)) return value;
+  return value ?? null;
+}
+
+export async function listProductionCallsForEvaluation(evaluationId, env = process.env, pool = getPool(env)) {
+  if (!pool || !evaluationId) return [];
+  const { rows } = await pool.query(
+    `select ${RETURNING} from production_calls
+     where evaluation_id = $1
+     order by started_at desc
+     limit 50`,
+    [evaluationId],
+  );
+  return rows.map((row) => {
+    const call = callRow(row);
+    call.transcript = transcriptForClient(call.transcript);
+    return call;
+  });
+}
+
+// Last 10 digits so +1 (312) 800-3792 matches +13128003792.
+export function phoneDigits(value) {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  if (digits.length < 10) return "";
+  return digits.slice(-10);
+}
+
+export async function findEvaluationByPhone(toNumber, env = process.env, pool = getPool(env)) {
+  if (!pool || !phoneDigits(toNumber)) return null;
+  const want = phoneDigits(toNumber);
+  const { rows } = await pool.query(
+    `select id, name, agent_phone_number, description, requirements, created_at
+     from qualeval_evaluations
+     where agent_phone_number is not null
+     order by created_at desc`,
+  );
+  const match = rows.find((row) => phoneDigits(row.agent_phone_number) === want);
+  if (!match) return null;
+  return {
+    id: match.id,
+    name: match.name,
+    agentPhoneNumber: match.agent_phone_number,
+    description: match.description,
+    requirements: match.requirements,
+    createdAt: match.created_at,
+  };
 }

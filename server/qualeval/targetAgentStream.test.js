@@ -241,7 +241,9 @@ test("writes the transcript onto the production call when the inbound bridge end
     waitForClaimableRun: async () => null,
     finishCall: async (fields) => {
       finished = fields;
+      return { toNumber: "+18038245760" };
     },
+    evaluateCall: async () => {},
   });
   connect(wss, twilioWs);
   await new Promise((resolve) => setImmediate(resolve));
@@ -284,7 +286,9 @@ test("uploads a mixed WAV for an inbound call and stores its audio path", async 
     },
     finishCall: async (fields) => {
       finished = fields;
+      return { toNumber: "+18038245760" };
     },
+    evaluateCall: async () => {},
   });
   connect(wss, twilioWs);
   await new Promise((resolve) => setImmediate(resolve));
