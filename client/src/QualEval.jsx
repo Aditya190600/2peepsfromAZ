@@ -863,6 +863,7 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
   }
 
   const scenarios = evaluation.scenarios ?? [];
+  const anyCallInProgress = scenarios.some((s) => s.runs?.[0]?.verdict === "in_progress");
   const tabCounts = Object.fromEntries(STATUS_TABS.map((t) => [t.key, scenarios.filter((s) => s.status === t.key).length]));
   const visibleScenarios = scenarios.filter((s) => s.status === activeTab);
 
@@ -1021,7 +1022,7 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
             />
             <ScenarioCountStepper count={scenarioCount} onChange={setScenarioCount} />
             {genError && <p className="error-banner">{genError}</p>}
-            <button type="button" className="qe-btn-regen" onClick={onGenerate} disabled={generating}>
+            <button type="button" className="qe-btn-regen" onClick={onGenerate} disabled={generating || anyCallInProgress}>
               {generating ? "Generating…" : scenarios.length === 0 ? "Generate scenarios" : "Regenerate scenarios"}
             </button>
           </div>
