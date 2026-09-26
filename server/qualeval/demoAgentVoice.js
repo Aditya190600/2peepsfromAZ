@@ -1,5 +1,6 @@
 import twilio from "twilio";
 import { twilioConfigured } from "./twilioClient.js";
+import { productionCallFromTwilioBody, recordProductionCall } from "./productionCalls.js";
 
 // POST /v1/qualeval/demo-agent-voice - the TwiML answered by
 // QUALEVAL_AGENT_NUMBER (see AGENTS.md's demo target-agent section, and
@@ -22,13 +23,27 @@ import { twilioConfigured } from "./twilioClient.js";
 // targetAgentStream.js, not something this call needs to know - so it needs
 // no run lookup, only the same Twilio-signature verification posture as
 // every other Twilio-originated webhook in this repo.
-export function demoAgentVoiceRoute(req, res, { env = process.env, validate = twilio.validateRequest } = {}) {
+export async function demoAgentVoiceRoute(
+  req,
+  res,
+  { env = process.env, validate = twilio.validateRequest, recordCall = recordProductionCall } = {},
+) {
   if (!twilioConfigured(env)) return res.status(503).send("Twilio is not configured.");
 
   const fullUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
   const signature = req.get("X-Twilio-Signature");
   if (!validate(env.TWILIO_AUTH_TOKEN, signature, fullUrl, req.body ?? {})) {
     return res.status(403).send("Invalid Twilio signature.");
+  }
+
+  // Write the caller before TwiML is returned. The Media Stream "start"
+  // event is a later, lossy path (see targetAgentStream.js); CallSid/From/
+  // CallerName are already on this webhook. A database failure must not
+  // stop the call from being answered.
+  try {
+    await recordCall(productionCallFromTwilioBody(req.body ?? {}), env);
+  } catch (err) {
+    console.error(`QualEval demo agent: failed to record production call: ${err.message}`);
   }
 
   const response = new twilio.twiml.VoiceResponse();

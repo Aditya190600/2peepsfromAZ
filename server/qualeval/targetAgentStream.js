@@ -3,6 +3,7 @@ import { createBridgeSession } from "./bridgeSession.js";
 import { mintAssemblyAiToken } from "./assemblyaiToken.js";
 import * as demoAgentConfig from "./demoAgentConfig.js";
 import * as broker from "./callBridgeBroker.js";
+import { finishProductionCall } from "./productionCalls.js";
 
 const STREAM_PATH = "/v1/qualeval/target-agent-stream";
 
@@ -52,6 +53,7 @@ export function attachTargetAgentStreamServer(
     registerTargetLeg = broker.registerTargetLeg,
     releaseRun = broker.releaseRun,
     forwardToPersona = broker.forwardToPersona,
+    finishCall = finishProductionCall,
   } = {},
 ) {
   const wss = new WebSocketServer({ noServer: true });
@@ -59,6 +61,7 @@ export function attachTargetAgentStreamServer(
   wss.on("connection", async (twilioWs) => {
     let claimedRunId = null;
     let sessionFinished = false;
+    let activeVariant = null;
 
     const buffered = [];
     function bufferMessage(raw) {
@@ -71,6 +74,16 @@ export function attachTargetAgentStreamServer(
       console.log(
         `QualEval target-agent bridge [${callSid ?? "no-call-sid"}]: call ended (${reason}) with ${turns.length} transcript turns`,
       );
+      finishCall({
+        twilioCallSid: callSid,
+        direction: "inbound",
+        transcript: turns,
+        endReason: reason,
+        variantKey: activeVariant?.key ?? null,
+        agentId: activeVariant?.agentId ?? null,
+      }).catch((err) => {
+        console.error(`QualEval target-agent bridge: failed to finish production call: ${err.message}`);
+      });
       if (claimedRunId) releaseRun(claimedRunId);
     }
     function onError(message) {
@@ -81,6 +94,7 @@ export function attachTargetAgentStreamServer(
 
     try {
       const [variant, token] = await Promise.all([getActiveVariant(), mintToken()]);
+      activeVariant = variant;
       if (twilioWs.readyState !== twilioWs.OPEN) {
         // Caller hung up during setup - don't open an AssemblyAI session
         // nothing will ever close.

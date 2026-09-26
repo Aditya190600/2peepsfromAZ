@@ -225,3 +225,40 @@ test("does not open an AssemblyAI session when the caller hangs up during setup"
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(created, false);
 });
+
+test("writes the transcript onto the production call when the inbound bridge ends", async () => {
+  const twilioWs = new FakeSocket();
+  const httpServer = new EventEmitter();
+  let sessionArgs;
+  let finished;
+  const wss = attachTargetAgentStreamServer(httpServer, {
+    getActiveVariant: async () => ({ key: "compliant", agentId: "agent_1" }),
+    mintToken: async () => "tok",
+    createSession: (args) => {
+      sessionArgs = args;
+      return { injectAudio: () => {} };
+    },
+    waitForClaimableRun: async () => null,
+    finishCall: async (fields) => {
+      finished = fields;
+    },
+  });
+  connect(wss, twilioWs);
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  sessionArgs.onFinished({
+    turns: [{ speaker: "user", text: "This is Rastopopulous" }],
+    callSid: "CA999",
+    reason: "session.ended",
+  });
+
+  assert.deepEqual(finished, {
+    twilioCallSid: "CA999",
+    direction: "inbound",
+    transcript: [{ speaker: "user", text: "This is Rastopopulous" }],
+    endReason: "session.ended",
+    variantKey: "compliant",
+    agentId: "agent_1",
+  });
+});
