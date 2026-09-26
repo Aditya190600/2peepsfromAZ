@@ -193,6 +193,7 @@ body {
 .home-overview-shot {
   display: block;
   width: 100%;
+  max-width: 200px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   margin-bottom: 12px;
@@ -216,13 +217,6 @@ body {
   font-size: 12.5px;
   line-height: 1.5;
   color: var(--muted);
-}
-
-.home-section-title {
-  margin: 0 0 8px;
-  font-size: 17px;
-  font-weight: 600;
-  font-family: var(--serif);
 }
 
 .app-rail {
@@ -3007,11 +3001,6 @@ button.site-nav-link {
 
 .styled-page .home-overview-shot {
   border-radius: var(--qe-radius-sm);
-}
-
-.styled-page .home-section-title {
-  font-family: var(--qe-heading);
-  font-weight: 700;
 }
 
 .styled-page .hero-headline,

@@ -199,31 +199,3 @@ export function AppShell({ path, navigate, title, actions, rail, children }) {
     </div>
   );
 }
-
-export function OpenTasksRail({ items, onHide, onOpen }) {
-  return (
-    <aside className="app-rail" aria-label="Open tasks">
-      <div className="app-rail-head">
-        <h2>Open Tasks</h2>
-        <button type="button" className="app-rail-close" onClick={onHide} aria-label="Hide tasks">
-          ×
-        </button>
-      </div>
-      <p className="app-rail-meta">Flagged sessions</p>
-      {items.length === 0 ? (
-        <p className="app-rail-empty">No flagged sessions in this program.</p>
-      ) : (
-        <ul className="app-rail-list">
-          {items.map((item) => (
-            <li key={item.sessionId ?? item.key}>
-              <button type="button" onClick={() => onOpen(item.sessionId)}>
-                <span className="app-rail-label">{item.label}</span>
-                <span className="app-rail-id">{item.sessionId}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </aside>
-  );
-}
