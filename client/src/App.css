@@ -27,6 +27,12 @@
   --serif: "Source Serif 4", Georgia, serif;
   --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --qe-heading: "Space Grotesk", "Inter", sans-serif;
+  --accent-2: #7c5cff;
+  --accent-2-soft: #efe9ff;
+  --qe-glow: 0 10px 30px -14px rgba(20, 22, 28, 0.18);
+  --qe-radius: 14px;
+  --qe-radius-sm: 9px;
   color-scheme: light;
 }
 
