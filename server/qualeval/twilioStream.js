@@ -6,6 +6,7 @@ import { mintAssemblyAiToken } from "./assemblyaiToken.js";
 import * as store from "./store.js";
 import { dispatchEvaluation } from "./router.js";
 import * as broker from "./callBridgeBroker.js";
+import { finishProductionCall } from "./productionCalls.js";
 import { recordingsConfigured, uploadObject } from "../recordingsStore.js";
 
 const STREAM_PATH = "/v1/qualeval/twilio-stream";
@@ -25,6 +26,7 @@ export function attachTwilioStreamServer(
     markRunError = store.markRunError,
     dispatch = dispatchEvaluation,
     createSession = createBridgeSession,
+    finishCall = finishProductionCall,
   } = {},
 ) {
   const wss = new WebSocketServer({ noServer: true });
@@ -93,8 +95,16 @@ export function attachTwilioStreamServer(
       }
     }
 
-    async function onFinished({ turns, reason }) {
+    async function onFinished({ turns, callSid, reason }) {
       broker.releaseRun(runId);
+      await finishCall({
+        twilioCallSid: callSid,
+        direction: "outbound",
+        transcript: turns,
+        endReason: reason,
+      }).catch((err) => {
+        console.error(`QualEval call bridge: failed to finish production call: ${err.message}`);
+      });
       if (turns.length === 0) {
         console.error(`QualEval call bridge: run ${runId} ended (${reason}) with no transcript turns`);
         await markRunError(runId, `Call ended (${reason}) before any speech was captured.`).catch(() => {});

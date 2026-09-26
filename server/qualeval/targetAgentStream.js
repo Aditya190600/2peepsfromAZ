@@ -1,8 +1,12 @@
 import { WebSocketServer } from "ws";
-import { createBridgeSession } from "./bridgeSession.js";
+import { createBridgeSession, DEFAULT_MAX_DURATION_MS } from "./bridgeSession.js";
+import { createCallRecorder, productionCallAudioKey } from "./callRecorder.js";
 import { mintAssemblyAiToken } from "./assemblyaiToken.js";
 import * as demoAgentConfig from "./demoAgentConfig.js";
 import * as broker from "./callBridgeBroker.js";
+import { finishProductionCall } from "./productionCalls.js";
+import { evaluateInboundCall } from "./inboundEvaluation.js";
+import { recordingsConfigured, uploadObject } from "../recordingsStore.js";
 
 const STREAM_PATH = "/v1/qualeval/target-agent-stream";
 
@@ -52,6 +56,11 @@ export function attachTargetAgentStreamServer(
     registerTargetLeg = broker.registerTargetLeg,
     releaseRun = broker.releaseRun,
     forwardToPersona = broker.forwardToPersona,
+    finishCall = finishProductionCall,
+    evaluateCall = evaluateInboundCall,
+    createRecorder = () => createCallRecorder(DEFAULT_MAX_DURATION_MS),
+    recordingsReady = recordingsConfigured,
+    uploadRecording = uploadObject,
   } = {},
 ) {
   const wss = new WebSocketServer({ noServer: true });
@@ -59,6 +68,8 @@ export function attachTargetAgentStreamServer(
   wss.on("connection", async (twilioWs) => {
     let claimedRunId = null;
     let sessionFinished = false;
+    let activeVariant = null;
+    const recorder = createRecorder();
 
     const buffered = [];
     function bufferMessage(raw) {
@@ -71,7 +82,39 @@ export function attachTargetAgentStreamServer(
       console.log(
         `QualEval target-agent bridge [${callSid ?? "no-call-sid"}]: call ended (${reason}) with ${turns.length} transcript turns`,
       );
+      const pending = saveInboundRecording({ turns, callSid, reason }).catch((err) => {
+        console.error(`QualEval target-agent bridge: failed to finish production call: ${err.message}`);
+      });
       if (claimedRunId) releaseRun(claimedRunId);
+      return pending;
+    }
+
+    async function saveInboundRecording({ turns, callSid, reason }) {
+      let audioRef = null;
+      if (callSid && recordingsReady() && recorder.hasAudio()) {
+        try {
+          await uploadRecording(productionCallAudioKey(callSid), recorder.toWavBuffer(), "audio/wav");
+          audioRef = `/v1/qualeval/production-calls/${encodeURIComponent(callSid)}/audio`;
+        } catch (err) {
+          console.error(`QualEval target-agent bridge: inbound recording upload failed for ${callSid}: ${err.message}`);
+        }
+      }
+      const saved = await finishCall({
+        twilioCallSid: callSid,
+        direction: "inbound",
+        transcript: turns,
+        endReason: reason,
+        variantKey: activeVariant?.key ?? null,
+        agentId: activeVariant?.agentId ?? null,
+        audioRef,
+        qualevalRunId: claimedRunId,
+      });
+      await evaluateCall({
+        twilioCallSid: callSid,
+        toNumber: saved?.toNumber ?? null,
+        transcript: turns,
+        qualevalRunId: claimedRunId,
+      });
     }
     function onError(message) {
       sessionFinished = true;
@@ -81,6 +124,7 @@ export function attachTargetAgentStreamServer(
 
     try {
       const [variant, token] = await Promise.all([getActiveVariant(), mintToken()]);
+      activeVariant = variant;
       if (twilioWs.readyState !== twilioWs.OPEN) {
         // Caller hung up during setup - don't open an AssemblyAI session
         // nothing will ever close.
@@ -101,6 +145,8 @@ export function attachTargetAgentStreamServer(
         onReplyAudio: (audio) => {
           if (claimedRunId) forwardToPersona(claimedRunId, audio);
         },
+        onIncomingAudio: (audio, tMs) => recorder.addFrame(audio, tMs),
+        onOutgoingAudio: (audio, tMs) => recorder.addFrame(audio, tMs),
         onFinished,
         onError,
       });

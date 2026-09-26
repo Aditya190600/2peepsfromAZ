@@ -7,7 +7,10 @@ import * as providers from "../providers/registry.js";
 import { placeCall, twilioConfigured } from "./callBridge.js";
 import { endCall } from "./twilioClient.js";
 import { getObjectByKey, sendRecording } from "../recordingsStore.js";
-import { qualevalCallAudioKey } from "./callRecorder.js";
+import { qualevalCallAudioKey, productionCallAudioKey } from "./callRecorder.js";
+import { getProductionCallBySid, listProductionCallsForEvaluation } from "./productionCalls.js";
+
+const TWILIO_CALL_SID = /^CA[0-9a-f]{32}$/i;
 
 function wrap(fn) {
   return async (req, res) => {
@@ -102,6 +105,16 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
     "/config",
     wrap(async (req, res) => {
       res.json({ agentPhoneNumber: process.env.QUALEVAL_AGENT_NUMBER || null });
+    }),
+  );
+
+  router.get(
+    "/evaluations/:id/inbound-calls",
+    wrap(async (req, res) => {
+      const evaluation = await store.getEvaluation(req.params.id, visitorId(req));
+      if (!evaluation) return res.status(404).json({ error: "Evaluation not found" });
+      const calls = await listProductionCallsForEvaluation(evaluation.id);
+      res.json({ calls });
     }),
   );
 
@@ -277,6 +290,23 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
       if (!run) return res.status(404).json({ error: "Run not found" });
       if (!run.audioRef) return res.status(404).json({ error: "No recording for this run" });
       const recording = await getObjectByKey(qualevalCallAudioKey(run.id), req.headers.range);
+      if (!recording) return res.status(404).json({ error: "Recording not found" });
+      sendRecording(res, recording);
+    }),
+  );
+
+  // Inbound call to QUALEVAL_AGENT_NUMBER. There is no per-visitor owner:
+  // the number is shared. The Call SID is unguessable, and this route sits
+  // behind the same requireVisitor gate as the rest of /v1/qualeval.
+  router.get(
+    "/production-calls/:callSid/audio",
+    wrap(async (req, res) => {
+      if (!TWILIO_CALL_SID.test(req.params.callSid)) {
+        return res.status(400).json({ error: "invalid call sid" });
+      }
+      const call = await getProductionCallBySid(req.params.callSid);
+      if (!call?.audioRef) return res.status(404).json({ error: "No recording for this call" });
+      const recording = await getObjectByKey(productionCallAudioKey(req.params.callSid), req.headers.range);
       if (!recording) return res.status(404).json({ error: "Recording not found" });
       sendRecording(res, recording);
     }),

@@ -23,6 +23,12 @@ export async function getEvaluation(id) {
   return json(await fetch(`/v1/qualeval/evaluations/${encodeURIComponent(id)}`));
 }
 
+export async function listInboundCalls(evaluationId) {
+  return json(
+    await fetch(`/v1/qualeval/evaluations/${encodeURIComponent(evaluationId)}/inbound-calls`),
+  ).then((body) => body.calls);
+}
+
 export async function updateEvaluation(id, fields) {
   return json(
     await fetch(`/v1/qualeval/evaluations/${encodeURIComponent(id)}`, {
