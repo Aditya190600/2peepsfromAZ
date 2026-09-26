@@ -65,6 +65,16 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
     }),
   );
 
+  // Read-only surface for the client to prefill the target-agent phone
+  // number field with the deployment's demo agent number, instead of the
+  // client bundle hardcoding QUALEVAL_AGENT_NUMBER's value.
+  router.get(
+    "/config",
+    wrap(async (req, res) => {
+      res.json({ agentPhoneNumber: process.env.QUALEVAL_AGENT_NUMBER || null });
+    }),
+  );
+
   router.get(
     "/evaluations/:id",
     wrap(async (req, res) => {
@@ -75,6 +85,26 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
         scenarios.map(async (scenario) => ({ ...scenario, runs: await store.listRuns(scenario.id) })),
       );
       res.json({ ...evaluation, scenarios: scenariosWithRuns });
+    }),
+  );
+
+  // Edits the evaluation's own fields (name, target phone, description,
+  // requirements) after creation - not a scenario or run.
+  router.patch(
+    "/evaluations/:id",
+    wrap(async (req, res) => {
+      const updated = await store.updateEvaluation(req.params.id, visitorId(req), req.body ?? {});
+      res.json(updated);
+    }),
+  );
+
+  // Deletes the evaluation and, via on-delete-cascade, every scenario/run
+  // under it.
+  router.delete(
+    "/evaluations/:id",
+    wrap(async (req, res) => {
+      await store.deleteEvaluation(req.params.id, visitorId(req));
+      res.status(204).end();
     }),
   );
 
@@ -111,6 +141,16 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
     wrap(async (req, res) => {
       const updated = await store.updateScenario(req.params.id, visitorId(req), req.body ?? {});
       res.json(updated);
+    }),
+  );
+
+  // Deletes a single scenario from any tab (generated/accepted/rejected),
+  // regardless of status.
+  router.delete(
+    "/scenarios/:id",
+    wrap(async (req, res) => {
+      await store.deleteScenario(req.params.id, visitorId(req));
+      res.status(204).end();
     }),
   );
 
