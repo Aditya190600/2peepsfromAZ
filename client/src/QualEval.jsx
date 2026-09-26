@@ -83,9 +83,9 @@ const TEMPLATES = {
 
 const WORKFLOW_STEPS = [
   "Describe the target agent by phone number, what it does, and what it must always/never do.",
-  "QualEval generates a batch of test scenarios - a persona, a situation, and pass/fail criteria for each.",
+  "Qualitative Evals generates a batch of test scenarios - a persona, a situation, and pass/fail criteria for each.",
   "Review and approve the scenarios worth running; reject the rest.",
-  "QualEval places a real call for each approved scenario and judges the transcript pass/fail with evidence.",
+  "Qualitative Evals places a real call for each approved scenario and judges the transcript pass/fail with evidence.",
 ];
 
 function formatWhen(iso) {
@@ -889,14 +889,14 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
 
   if (loadError) {
     return (
-      <AppShell path={path} navigate={navigate} title="QualEval">
+      <AppShell path={path} navigate={navigate} title="Qualitative Evals">
         <p className="error-banner">{loadError}</p>
       </AppShell>
     );
   }
   if (!evaluation) {
     return (
-      <AppShell path={path} navigate={navigate} title="QualEval">
+      <AppShell path={path} navigate={navigate} title="Qualitative Evals">
         <p className="pack-note">Loading…</p>
       </AppShell>
     );
@@ -1107,7 +1107,7 @@ export default function QualEval({ navigate, path, evaluationId }) {
   }
 
   return (
-    <AppShell path={path} navigate={navigate} title="QualEval">
+    <AppShell path={path} navigate={navigate} title="Qualitative Evals">
       <div className="qualeval-page">
         <p className="app-lede">
           Black-box qualitative acceptance testing for AI voice agents - test one like a real caller would,

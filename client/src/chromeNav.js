@@ -1,18 +1,24 @@
-export const PRODUCT_NAV = [
+// Full nav model, including entries hidden from the rail (kept here, not
+// deleted, so their routes/components stay reachable by direct URL).
+export const PRODUCT_NAV_ALL = [
   { href: "/home", label: "Home", match: (path) => path === "/home" },
+  { href: "/try", label: "Try Compliance", match: (path) => path === "/try" },
+  { href: "/examples", label: "Compliance Examples", match: (path) => path === "/examples" },
   {
     href: "/sessions",
     label: "Sessions",
     match: (path) => path === "/sessions" || path.startsWith("/sessions/"),
+    hidden: true,
   },
-  { href: "/try", label: "Try", match: (path) => path === "/try" },
-  { href: "/examples", label: "Examples", match: (path) => path === "/examples" },
-  { href: "/numbers", label: "Numbers", match: (path) => path === "/numbers" },
-  { href: "/api-keys", label: "API Keys", match: (path) => path === "/api-keys" },
-  { href: "/evals", label: "Evals", match: (path) => path === "/evals" },
+  { href: "/numbers", label: "Numbers", match: (path) => path === "/numbers", hidden: true },
+  { href: "/api-keys", label: "API Keys", match: (path) => path === "/api-keys", hidden: true },
+  { href: "/evals", label: "Evals", match: (path) => path === "/evals", hidden: true },
   {
     href: "/qualeval",
-    label: "QualEval",
+    label: "Qualitative Evals",
     match: (path) => path === "/qualeval" || path.startsWith("/qualeval/"),
   },
 ];
+
+// Visible left-rail entries only.
+export const PRODUCT_NAV = PRODUCT_NAV_ALL.filter((item) => !item.hidden);

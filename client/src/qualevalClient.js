@@ -1,7 +1,7 @@
 // Thin client for the server's QualEval routes (server/qualeval/router.js).
 async function json(resp) {
   const body = await resp.json();
-  if (!resp.ok) throw new Error(body.error ?? "QualEval request failed.");
+  if (!resp.ok) throw new Error(body.error ?? "Qualitative Evals request failed.");
   return body;
 }
 
