@@ -3,7 +3,10 @@
 export const PRODUCT_NAV_ALL = [
   { href: "/home", label: "Home", match: (path) => path === "/home" },
   { href: "/try", label: "Try Compliance", match: (path) => path === "/try" },
-  { href: "/examples", label: "Compliance Examples", match: (path) => path === "/examples" },
+  // Folded into the Try page as the "Voice Compliance" tab (Dashboard.jsx's
+  // ExamplesPanels) - hidden, not deleted, since the standalone route still
+  // works (see Examples.jsx's default export).
+  { href: "/examples", label: "Compliance Examples", match: (path) => path === "/examples", hidden: true },
   {
     href: "/sessions",
     label: "Sessions",
