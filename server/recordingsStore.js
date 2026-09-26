@@ -57,10 +57,11 @@ export function isAudioContentType(contentType) {
   return /^audio\/[a-z0-9.+-]+(\s*;.*)?$/i.test(contentType ?? "");
 }
 
-export async function uploadRecording(owner, sessionId, body, contentType, env = process.env, s3 = getClient(env)) {
+// Generic key-addressed upload, shared by the owner-scoped Try-page path
+// below and by callers (e.g. server/qualeval/) that already enforce
+// ownership at their own DB/route layer instead of via the S3 key.
+export async function uploadObject(key, body, contentType, env = process.env, s3 = getClient(env)) {
   if (!s3) throw new Error("Recordings storage is not configured.");
-  if (!isAudioContentType(contentType)) throw new Error("Recording must have an audio content type.");
-  const key = recordingKey(owner, sessionId);
   await s3.send(
     new PutObjectCommand({
       Bucket: env.RECORDINGS_BUCKET,
@@ -70,6 +71,15 @@ export async function uploadRecording(owner, sessionId, body, contentType, env =
     })
   );
   return key;
+}
+
+export async function uploadRecording(owner, sessionId, body, contentType, env = process.env, s3 = getClient(env)) {
+  if (!isAudioContentType(contentType)) throw new Error("Recording must have an audio content type.");
+  return uploadObject(recordingKey(owner, sessionId), body, contentType, env, s3);
+}
+
+export async function getObjectByKey(key, range, env = process.env, s3 = getClient(env)) {
+  return getObject(key, range, env, s3);
 }
 
 async function getObject(key, range, env, s3) {
@@ -133,7 +143,7 @@ export async function getSharedRecording(token, range, env = process.env, s3 = g
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 const SHARE_TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
 
-function sendRecording(res, recording) {
+export function sendRecording(res, recording) {
   res.status(recording.contentRange ? 206 : 200);
   res.setHeader("Content-Type", recording.contentType);
   res.setHeader("X-Content-Type-Options", "nosniff");
