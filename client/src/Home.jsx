@@ -1,8 +1,5 @@
 import { useEffect } from "react";
 import { AppShell } from "./Chrome";
-import tryScreenshot from "./assets/home/try-screenshot.png";
-import examplesScreenshot from "./assets/home/examples-screenshot.png";
-import qualevalScreenshot from "./assets/home/qualeval-screenshot.png";
 import "./App.css";
 
 const NAV_OVERVIEW = [
@@ -18,7 +15,6 @@ const NAV_OVERVIEW = [
     what: "The live analysis lab: run a real mic call against the AssemblyAI Voice Agent, send a call through the webhook sandbox, or paste a transcript.",
     click:
       "Pick a persona, consent to analysis, then start a call or paste/upload a transcript. ComplyLine ends the call, runs every checked compliance check, and shows a severity-ranked report with a regulatory citation on each finding.",
-    screenshot: tryScreenshot,
   },
   {
     href: "/examples",
@@ -26,7 +22,6 @@ const NAV_OVERVIEW = [
     what: "Playable sample calls and scripted violation demos - no sign-in, API key, or live call needed.",
     click:
       "Pick a sample (a clean call, a TCPA violation, a late AI disclosure, etc.) to see a full compliance report instantly, or auto-split an uploaded recording by speaker to see the same pipeline on your own audio.",
-    screenshot: examplesScreenshot,
   },
   {
     href: "/qualeval",
@@ -34,7 +29,6 @@ const NAV_OVERVIEW = [
     what: "A separate testing tool: it phones your AI voice agent like a real customer would, instead of scanning a transcript you already have.",
     click:
       "Describe your agent (phone number, what it does, what it must always/never do). QualEval writes a batch of test-call scenarios, you approve the ones worth running, then it places real calls and judges each transcript pass/fail with the exact moment that proves it.",
-    screenshot: qualevalScreenshot,
   },
 ];
 
@@ -58,9 +52,6 @@ export default function Home({ navigate, path }) {
               e.preventDefault();
               navigate(item.href);
             }}>
-              {item.screenshot ? (
-                <img className="home-overview-shot" src={item.screenshot} alt={`${item.label} page`} />
-              ) : null}
               <h3>{item.label}</h3>
               <p className="home-overview-what">{item.what}</p>
               <p className="home-overview-click">

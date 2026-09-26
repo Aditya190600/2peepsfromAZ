@@ -190,14 +190,6 @@ body {
   border-color: var(--line-strong);
 }
 
-.home-overview-shot {
-  display: block;
-  width: 100%;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  margin-bottom: 12px;
-}
-
 .home-overview-card h3 {
   margin: 0 0 6px;
   font-size: 15px;
@@ -3042,10 +3034,6 @@ button.site-nav-link {
   width: 4px;
   border-radius: var(--qe-radius-sm) 0 0 var(--qe-radius-sm);
   background: var(--accent);
-}
-
-.styled-page .home-overview-shot {
-  border-radius: var(--qe-radius-sm);
 }
 
 .styled-page .hero-headline,
