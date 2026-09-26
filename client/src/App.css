@@ -645,7 +645,6 @@ button.site-nav-link {
   margin: 0;
   font-size: 12.5px;
   color: var(--muted);
-  white-space: nowrap;
 }
 
 .site-footer-links a {
@@ -752,61 +751,31 @@ button.site-nav-link {
   color: var(--muted);
 }
 
-.persona-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 10px;
-}
-
-.persona-card {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--panel);
-  cursor: pointer;
-  position: relative;
-}
-
-.persona-card input {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  accent-color: var(--accent);
-  width: 15px;
-  height: 15px;
-}
-
-.persona-card.selected {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.persona-card.disabled {
-  cursor: default;
-  color: var(--muted);
-}
-
-.persona-card-name {
-  font-weight: 600;
+.persona-select {
+  display: block;
+  width: 100%;
+  font-family: var(--sans);
   font-size: 14px;
   color: var(--ink);
-  padding-right: 24px;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  margin-top: 12px;
+  cursor: pointer;
 }
 
-.persona-card-description {
-  font-size: 12.5px;
+.persona-select:disabled {
   color: var(--muted);
-  line-height: 1.4;
+  cursor: default;
 }
 
-.persona-card-packs {
-  font-size: 11.5px;
-  color: var(--muted);
-  font-style: italic;
-  margin-top: 2px;
+.persona-checks {
+  line-height: 1.5;
+}
+
+.persona-checks + .check-row {
+  margin-top: 12px;
 }
 
 .pack-note {
@@ -976,6 +945,10 @@ button.site-nav-link {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.pack-note + .sample-buttons {
+  margin-top: 12px;
 }
 
 .sample-buttons .btn {
@@ -3012,43 +2985,24 @@ button.site-nav-link {
 
 /* --- Shared visual-consistency pass ---
    Brings QualEval's elevated-card / Space Grotesk look (see the block above)
-   to Home, Try (Compliance Lab, including its Voice Compliance tab), Compliance
+   to Home, Try (Compliance Lab, including its Compliance Examples tab), Compliance
    Examples, and the splash page. Scoped to .styled-page so pages not part of
    this pass (SessionInspector, Evals, ApiKeys, PhoneNumbers, History) are
    untouched - only the shared class names below pick up the new look. */
 .styled-page .panel,
 .styled-page .home-overview-card,
-.styled-page .persona-card,
 .styled-page .trust-strip-item {
   border-radius: var(--qe-radius-sm);
 }
 
-.styled-page .home-overview-card,
-.styled-page .persona-card {
+.styled-page .home-overview-card {
   background: linear-gradient(180deg, #fff, #fcfcfb);
   transition: transform 0.15s, box-shadow 0.15s;
 }
 
-.styled-page .home-overview-card:hover,
-.styled-page .persona-card:hover:not(.disabled) {
+.styled-page .home-overview-card:hover {
   transform: translateY(-2px);
   box-shadow: var(--qe-glow);
-}
-
-.styled-page .persona-card.selected {
-  border-color: transparent;
-  background: var(--accent-soft);
-}
-
-.styled-page .persona-card.selected::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  border-radius: var(--qe-radius-sm) 0 0 var(--qe-radius-sm);
-  background: var(--accent);
 }
 
 .styled-page .home-overview-shot {
@@ -3075,4 +3029,51 @@ button.site-nav-link {
 .styled-page .sample-report-preview .panel,
 .styled-page .report-panel {
   background: linear-gradient(180deg, #fff, #fcfcfb);
+}
+
+/* --- Voice Compliance (/try) page ---
+   Larger body copy than the app-wide defaults (which read too small here),
+   scoped to Dashboard.jsx's .try-page so other pages keep their sizes. */
+.try-page .app-lede,
+.try-page .intro-lede {
+  font-size: 15px;
+}
+
+.try-page .check-row,
+.try-page .persona-select,
+.try-page .intro-list p {
+  font-size: 15px;
+}
+
+.try-page .pack-note,
+.try-page .panel-label,
+.try-page .hint,
+.try-page .intro-alt,
+.try-page .transcript-empty {
+  font-size: 14px;
+}
+
+.try-page .pack-note,
+.try-page .panel-label {
+  line-height: 1.5;
+}
+
+/* .section-block:first-child otherwise zeroes the live-call panel's top
+   margin, butting its first line straight into the tab bar. */
+.try-page .tab-panel {
+  margin-top: 20px;
+}
+
+.try-page .live-call-lede {
+  margin: 0;
+}
+
+.try-page .record-call-row {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.try-page .intro-alt {
+  margin-bottom: 28px;
 }

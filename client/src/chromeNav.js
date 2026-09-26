@@ -2,8 +2,8 @@
 // deleted, so their routes/components stay reachable by direct URL).
 export const PRODUCT_NAV_ALL = [
   { href: "/home", label: "Home", match: (path) => path === "/home" },
-  { href: "/try", label: "Try Compliance", match: (path) => path === "/try" },
-  // Folded into the Try page as the "Voice Compliance" tab (Dashboard.jsx's
+  { href: "/try", label: "Voice Compliance", match: (path) => path === "/try" },
+  // Folded into the Try page as the "Compliance Examples" tab (Dashboard.jsx's
   // ExamplesPanels) - hidden, not deleted, since the standalone route still
   // works (see Examples.jsx's default export).
   { href: "/examples", label: "Compliance Examples", match: (path) => path === "/examples", hidden: true },

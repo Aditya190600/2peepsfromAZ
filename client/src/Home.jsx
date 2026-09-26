@@ -23,10 +23,10 @@ const NAV_OVERVIEW = [
   },
   {
     href: "/try",
-    label: "Try Compliance",
+    label: "Voice Compliance",
     what: "The live analysis lab: run a real mic call against the AssemblyAI Voice Agent, send a call through the webhook sandbox, or paste a transcript.",
     click:
-      "Pick a persona, consent to analysis, then start a call or paste/upload a transcript. ComplyLine ends the call, runs every checked compliance check, and shows a severity-ranked report with a regulatory citation on each finding.",
+      "Pick a persona, then start a call or paste/upload a transcript. ComplyLine ends the call, runs every checked compliance check, and shows a severity-ranked report with a regulatory citation on each finding.",
     screenshot: tryScreenshot,
   },
   {
@@ -176,7 +176,7 @@ export default function Home({ navigate, path }) {
           Click "Run compliance sweep" to analyze the Northstar Voice program's fleet of sample
           sessions. What you can do: watch the fleet queue analyze in real time, open any flagged
           task to jump straight to its session, and hide the task rail when you just want the
-          scoreboard. To analyze your own call, head to Try Compliance.
+          scoreboard. To analyze your own call, head to Voice Compliance.
         </p>
         {bootWarning && fleetResults?.length > 0 && <p className="error-banner">{bootWarning}</p>}
         {fleetError ? (

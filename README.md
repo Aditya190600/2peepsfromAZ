@@ -71,7 +71,7 @@ Sinch recipe (untested against a live Sinch account): same BYO SIP steps, using 
 
 1. **AssemblyAI API key**: copy `.env.example` to `.env` at the repo root and set `ASSEMBLYAI_API_KEY`. Never commit `.env` (gitignored) or send the key to the browser - it's read server-side only, by `server/index.js`'s `/v1/token` route and by `server/checks/llmGateway.js` (used from `disclosureCheck.js` and `piiScan.js`).
 2. **Run the backend**: `cd server && npm install && npm start` (listens on `:8787`, mints Voice Agent tokens and serves `/v1/analyze-session`). No database - pattern packs and checks are plain code modules.
-3. **Run the frontend**: `cd client && npm install && npm run dev` (Vite dev server proxies `/v1/*` to the backend). Open the printed localhost URL. Check the consent box, click Start, allow mic access, talk, then End call - the report generates and saves to history automatically - or open **Examples** (zero setup, no sign-in) to run a synthetic sample session instead.
+3. **Run the frontend**: `cd client && npm install && npm run dev` (Vite dev server proxies `/v1/*` to the backend). Open the printed localhost URL, go to **Voice Compliance**, click Start call, allow mic access, talk, then End call - the report generates and saves to history automatically - or open **Examples** (zero setup, no sign-in) to run a synthetic sample session instead.
 4. **Run the checks' self-tests**: `cd server && npm test`.
 
 ### Regenerating playable sample audio

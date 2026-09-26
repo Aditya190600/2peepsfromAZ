@@ -99,7 +99,7 @@ export function useVoiceAgent() {
   }, []);
 
   const connect = useCallback(
-    async (consentGranted, persona = PERSONAS[0], seedViolation = false, recordCall = false) => {
+    async (persona = PERSONAS[0], seedViolation = false, recordCall = false) => {
       setStatus("connecting");
       setTranscript([]);
       setLastSession(null);
@@ -113,9 +113,9 @@ export function useVoiceAgent() {
         sessionId: null,
         startedAt: new Date(startedAtMs).toISOString(),
         startedAtMs,
-        consentEvent: consentGranted
-          ? { granted: true, timestamp: new Date(startedAtMs - 1000).toISOString() }
-          : null,
+        // The visitor clicking "Start call" is itself the consent to this
+        // user-initiated call, so it's logged just before the call starts.
+        consentEvent: { granted: true, timestamp: new Date(startedAtMs - 1000).toISOString() },
         turns: [],
         persona: { id: persona.id, label: persona.label, scope: persona.scope, seedViolation },
       };

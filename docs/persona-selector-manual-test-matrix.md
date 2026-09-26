@@ -14,8 +14,8 @@ setup.
    no industry pack pre-checked, no violation toggle visible (neutral has no
    seeded violation). Start a call - agent discloses AI status up front,
    voice is `anna`.
-2. **Persona auto-selects its pack** - click "Healthcare receptionist". The
-   HIPAA pack checkbox under "Industry pattern packs" checks itself
+2. **Persona auto-selects its pack** - pick "Healthcare receptionist" in the
+   persona dropdown. The HIPAA pack checkbox under "Industry pattern packs" checks itself
    automatically. Uncheck it by hand - it stays unchecked (opt-out, not
    locked). Switch to "Bank teller" - GLBA/finance checks itself instead,
    HIPAA is no longer checked.
@@ -59,7 +59,7 @@ setup.
     existing `micSilent` banner should still fire after ~15s regardless of
     which persona is active - persona wiring must not have broken the
     existing silence-detection plumbing.
-11. **Multi-pack persona (School nurse)** - click "School nurse". The
+11. **Multi-pack persona (School nurse)** - pick "School nurse" in the dropdown. The
     HIPAA, FERPA, and COPPA pack checkboxes all check themselves automatically
     (not just one). Uncheck HIPAA only - FERPA and COPPA stay checked (opt-out
     is per pack, not all-or-nothing). Start a call, ask about your own child's

@@ -18,16 +18,14 @@ import { listIndustryPacks } from "./evalsClient";
 import "./App.css";
 
 // Playable samples and scripted violation demos. Originally its own nav
-// page (PR #125); now also embedded as the "Voice Compliance" tab inside
+// page (PR #125); now also embedded as the "Compliance Examples" tab inside
 // Dashboard.jsx's Try/Compliance Lab page (ExamplesPanels below), while the
 // standalone /examples route (Examples, further down) keeps working
 // unchanged - including staying outside RequireVisitor, so a fresh visitor
 // can still reach a full compliance report with zero setup via a direct
 // link, even though the embedded tab sits behind whatever gate the Try page
-// itself has. Samples are canned fixtures, not live user data, so unlike
-// Try's live/upload/paste actions none of the actions below gate on a
-// consent checkbox.
-export function ExamplesPanels({ navigate, topTabBar = null }) {
+// itself has.
+export function ExamplesPanels({ navigate, topTabBar = null, onShowLiveCall = null }) {
   const PLAYABLE_KEYS = Object.keys(PLAYABLE_SAMPLE_LABEL);
   const [selectedPacks, setSelectedPacks] = useState([]);
   const [industryPacks, setIndustryPacks] = useState(INDUSTRY_PACKS);
@@ -192,20 +190,30 @@ export function ExamplesPanels({ navigate, topTabBar = null }) {
           <p className="app-lede">
             Playable samples and scripted violation demos - no sign-in, API key, or live call needed.
             Pick one below to see a full compliance report instantly
-            {navigate && (
+            {onShowLiveCall ? (
               <>
-                , or head to{" "}
-                <a
-                  href="/try"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    navigate("/try");
-                  }}
-                >
-                  Try
-                </a>{" "}
-                for a live call
+                , or switch to the{" "}
+                <button type="button" className="table-link" onClick={onShowLiveCall}>
+                  Live call
+                </button>{" "}
+                tab for a live call
               </>
+            ) : (
+              navigate && (
+                <>
+                  , or head to{" "}
+                  <a
+                    href="/try"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      navigate("/try");
+                    }}
+                  >
+                    Voice Compliance
+                  </a>{" "}
+                  for a live call
+                </>
+              )
             )}
             .
           </p>
@@ -363,7 +371,7 @@ export function ExamplesPanels({ navigate, topTabBar = null }) {
                 onSeek={onSeek}
                 showStorageNote={Boolean(report) && !reportLoading && !reportError}
                 navigate={navigate}
-                idleMessage="Pick a sample or scripted demo below to generate a report."
+                idleMessage="Pick a sample or scripted demo above to generate a report."
               />
             </>
           )}
