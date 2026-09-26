@@ -85,6 +85,8 @@ export default function AudioPlayer({ src, audioRef, compact = false, markers = 
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
   const [peaks, setPeaks] = useState(null);
+  const drawStateRef = useRef({ peaks: null, current: 0, duration: 0 });
+  drawStateRef.current = { peaks, current, duration };
 
   useEffect(() => {
     const audio = ref.current;
@@ -147,11 +149,13 @@ export default function AudioPlayer({ src, audioRef, compact = false, markers = 
     const container = containerRef.current;
     const canvas = canvasRef.current;
     if (!container || !canvas) return;
-    const onResize = () => drawWaveform(canvas, peaks, duration ? current / duration : 0);
+    const onResize = () => {
+      const { peaks: p, current: c, duration: d } = drawStateRef.current;
+      drawWaveform(canvas, p, d ? c / d : 0);
+    };
     const observer = new ResizeObserver(onResize);
     observer.observe(container);
     return () => observer.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [compact]);
 
   const togglePlay = () => {
@@ -173,7 +177,7 @@ export default function AudioPlayer({ src, audioRef, compact = false, markers = 
     if (!duration) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const fraction = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-    seekTo(fraction * duration * 1000);
+    seekAudio(ref, fraction * duration * 1000 + offsetMs, offsetMs);
   };
 
   const progress = duration ? (current / duration) * 100 : 0;
