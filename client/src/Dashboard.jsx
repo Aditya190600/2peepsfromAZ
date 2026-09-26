@@ -107,6 +107,10 @@ export function sessionByKey(key) {
   return SAMPLE_SESSIONS[key] ?? NORTHSTAR_SESSIONS[key];
 }
 
+// Hidden, not deleted - same hidden-but-reachable pattern as PRODUCT_NAV_ALL in chromeNav.js.
+// Flip to true to bring the "Demo: try your own audio" upload section back onto the Try page.
+const SHOW_AUDIO_UPLOAD_DEMO = false;
+
 const STATUS_CLASS = { flag: "is-flag", pass: "is-pass", "n/a": "is-na", error: "is-na" };
 const STATUS_TEXT = { flag: "Flag", pass: "Pass", "n/a": "N/A", error: "Unable to run" };
 
@@ -920,12 +924,11 @@ export default function Dashboard({ navigate, path }) {
   }, [reportLoading, report]);
 
   return (
-    <AppShell path={path} navigate={navigate} title="Try">
+    <AppShell path={path} navigate={navigate} title="Compliance Lab">
       <main className="layout">
         <section className="panel session-panel">
           <p className="app-lede">
-            Try is the analysis lab: run a live mic call against the AssemblyAI Voice Agent, send a
-            call through the webhook sandbox, or paste a transcript - then check the industry pattern
+            Run a live mic call against the AssemblyAI Voice Agent, then check the industry pattern
             packs you want layered on top of the generic scan before generating a report.
           </p>
 
@@ -1030,20 +1033,10 @@ export default function Dashboard({ navigate, path }) {
                 >
                   Live call
                 </button>
-                <button
-                  type="button"
-                  className={`tab-btn ${sessionTab === "webhook" ? "is-active" : ""}`}
-                  onClick={() => setSessionTab("webhook")}
-                >
-                  Try as webhook sandbox
-                </button>
-                <button
-                  type="button"
-                  className={`tab-btn ${sessionTab === "paste" ? "is-active" : ""}`}
-                  onClick={() => setSessionTab("paste")}
-                >
-                  Paste session transcript
-                </button>
+                {/* Webhook sandbox and paste-transcript tabs are hidden from the tab bar
+                    (not deleted - same hidden-but-reachable pattern as PRODUCT_NAV_ALL in
+                    chromeNav.js) so the page's main flow is just the live-call experience.
+                    setSessionTab("webhook" | "paste") still renders their panels below. */}
               </div>
               <button type="button" className="btn btn-outline tour-start-btn" onClick={startTour}>
                 Take a tour
@@ -1234,6 +1227,7 @@ export default function Dashboard({ navigate, path }) {
               </div>
             )}
 
+            {SHOW_AUDIO_UPLOAD_DEMO && (
             <div className="section-block">
               <h3>Demo: try your own audio</h3>
               <p className="pack-note upload-note">
@@ -1268,6 +1262,7 @@ export default function Dashboard({ navigate, path }) {
               </label>
               {uploadStatus === "error" && <p className="error-banner">{uploadError}</p>}
             </div>
+            )}
           </div>
 
           {tourStep >= 0 && (
