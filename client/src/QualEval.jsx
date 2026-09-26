@@ -1,5 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppShell } from "./Chrome";
+import AudioPlayer from "./AudioPlayer";
+import { Timestamp } from "./Dashboard";
+import { seekAudio } from "./seek";
 import {
   listEvaluations,
   createEvaluation,
@@ -289,6 +292,7 @@ function VerdictPill({ run }) {
 }
 
 function RunResult({ run }) {
+  const audioRef = useRef(null);
   const turns = run?.transcript?.turns ?? [];
   const criterionResults = run?.criterionResults ?? [];
   if (turns.length === 0 && criterionResults.length === 0) return null;
@@ -296,6 +300,11 @@ function RunResult({ run }) {
   return (
     <div className="qe-run-result">
       <VerdictPill run={run} />
+      {run?.audioRef && (
+        <div className="qe-run-audio">
+          <AudioPlayer src={run.audioRef} audioRef={audioRef} />
+        </div>
+      )}
       <div className="qe-run-layout">
         {turns.length > 0 && (
           <div className="qe-transcript-card">
@@ -305,7 +314,12 @@ function RunResult({ run }) {
                 <span className="qe-turn-avatar">{turn.role === "user" ? "C" : "A"}</span>
                 <span className="qe-turn-bubble">
                   {turn.text}
-                  {formatTimestamp(turn.tMs) && <span className="qe-turn-time">{formatTimestamp(turn.tMs)}</span>}
+                  {formatTimestamp(turn.tMs) &&
+                    (run.audioRef ? (
+                      <Timestamp tMs={turn.tMs} onSeek={(tMs) => seekAudio(audioRef, tMs)} />
+                    ) : (
+                      <span className="qe-turn-time">{formatTimestamp(turn.tMs)}</span>
+                    ))}
                 </span>
               </div>
             ))}

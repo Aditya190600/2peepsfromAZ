@@ -1,10 +1,12 @@
 import { WebSocketServer } from "ws";
-import { createBridgeSession } from "./bridgeSession.js";
+import { createBridgeSession, DEFAULT_MAX_DURATION_MS } from "./bridgeSession.js";
+import { createCallRecorder, qualevalCallAudioKey } from "./callRecorder.js";
 import { buildCallerSystemPrompt } from "./callerPrompt.js";
 import { mintAssemblyAiToken } from "./assemblyaiToken.js";
 import * as store from "./store.js";
 import { dispatchEvaluation } from "./router.js";
 import * as broker from "./callBridgeBroker.js";
+import { recordingsConfigured, uploadObject } from "../recordingsStore.js";
 
 const STREAM_PATH = "/v1/qualeval/twilio-stream";
 
@@ -79,6 +81,18 @@ export function attachTwilioStreamServer(
     const runId = startMsg.start?.customParameters?.runId ?? null;
     console.log(`QualEval call bridge: twilio-stream start event received for run ${runId}`);
 
+    const recorder = createCallRecorder(DEFAULT_MAX_DURATION_MS);
+
+    async function saveRecording() {
+      if (!recordingsConfigured() || !recorder.hasAudio()) return;
+      try {
+        await uploadObject(qualevalCallAudioKey(runId), recorder.toWavBuffer(), "audio/wav");
+        await store.attachAudioRef(runId, `/v1/qualeval/runs/${encodeURIComponent(runId)}/audio`);
+      } catch (err) {
+        console.error(`QualEval call bridge: recording upload failed for run ${runId}: ${err.message}`);
+      }
+    }
+
     async function onFinished({ turns, reason }) {
       broker.releaseRun(runId);
       if (turns.length === 0) {
@@ -88,6 +102,7 @@ export function attachTwilioStreamServer(
       }
       try {
         await markRunAwaitingEvaluation(runId, { turns });
+        await saveRecording();
         await dispatch(runId);
         console.log(`QualEval call bridge: run ${runId} ended (${reason}) with ${turns.length} transcript turns - evaluated`);
       } catch (err) {
@@ -121,6 +136,8 @@ export function attachTwilioStreamServer(
         token,
         systemPrompt: buildCallerSystemPrompt(scenario),
         onReplyAudio: (audio) => broker.forwardToTarget(runId, audio),
+        onIncomingAudio: (audio, tMs) => recorder.addFrame(audio, tMs),
+        onOutgoingAudio: (audio, tMs) => recorder.addFrame(audio, tMs),
         onFinished,
         onError,
       });
