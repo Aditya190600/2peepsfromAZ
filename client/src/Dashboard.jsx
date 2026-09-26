@@ -207,10 +207,10 @@ function IntroSteps({ onShowExamples }) {
         Prefer not to use your mic right now? Switch to the{" "}
         {onShowExamples ? (
           <button type="button" className="table-link" onClick={onShowExamples}>
-            Voice Compliance
+            Compliance Examples
           </button>
         ) : (
-          "Voice Compliance"
+          "Compliance Examples"
         )}{" "}
         tab - same reports, no live call needed.
       </p>
@@ -573,7 +573,6 @@ export default function Dashboard({ navigate, path }) {
     connect,
     disconnect,
   } = useVoiceAgent();
-  const [consent, setConsent] = useState(false);
   const [selectedPacks, setSelectedPacks] = useState([]);
   const [personaId, setPersonaId] = useState("neutral");
   const [seedViolation, setSeedViolation] = useState(false);
@@ -603,7 +602,6 @@ export default function Dashboard({ navigate, path }) {
   const liveHistoryIdRef = useRef(null);
   const liveSessionRef = useRef(null);
   const personaSectionRef = useRef(null);
-  const consentRowRef = useRef(null);
   const startCallRef = useRef(null);
   const callStatusRef = useRef(null);
   // { sessionId, promise<bucketUrl|null> } for the in-flight/completed bucket
@@ -808,7 +806,6 @@ export default function Dashboard({ navigate, path }) {
   // back to the LLM Gateway (server-side, via llmParsePastedSession) to
   // extract a session out of it instead of rejecting the paste outright.
   const runPaste = async () => {
-    if (!consent) return;
     showAudio(null);
     clearLabErrors();
     setPasteLoading(true);
@@ -827,7 +824,7 @@ export default function Dashboard({ navigate, path }) {
   };
 
   const runUpload = async (file, { label = "Uploaded audio", consentEvent } = {}) => {
-    if (!consent || !file) return;
+    if (!file) return;
     setReport(null);
     clearLabErrors();
     setUploadStatus("uploading");
@@ -854,12 +851,11 @@ export default function Dashboard({ navigate, path }) {
   const onDrop = (e) => {
     e.preventDefault();
     setDragActive(false);
-    if (!consent) return;
     runUpload(e.dataTransfer.files?.[0]);
   };
 
   // Take-a-tour: highlights the live-call flow in order. Targets live in two
-  // different panels (persona/consent on the left, call controls + report on
+  // different panels (persona on the left, call controls + report on
   // the right), so starting the tour also forces the Live call tab active.
   const tourSteps = useMemo(
     () => [
@@ -869,23 +865,18 @@ export default function Dashboard({ navigate, path }) {
         body: "Choose who the AI agent plays on this call. Each persona has its own scope and voice - picking one also auto-selects the matching pattern packs below.",
       },
       {
-        ref: consentRowRef,
-        title: "2. Give consent",
-        body: "Check this box to allow the call to be analyzed. Start call stays disabled until it's checked.",
-      },
-      {
         ref: startCallRef,
-        title: "3. Start the call",
+        title: "2. Start the call",
         body: "Click Start call, then allow microphone access when your browser asks for it.",
       },
       {
         ref: callStatusRef,
-        title: "4. Watch the live status",
+        title: "3. Watch the live status",
         body: "This shows the call's connection state - Connecting, then Live once the agent is on the line and your transcript is filling in.",
       },
       {
         ref: reportHeadingRef,
-        title: "5. Get your report",
+        title: "4. Get your report",
         body: "Click End call and a compliance report generates automatically here, ranked by severity with a citation on every finding.",
       },
     ],
@@ -920,7 +911,7 @@ export default function Dashboard({ navigate, path }) {
 
   // Shared top-level tab bar: "Live call" covers the live/webhook/paste
   // sub-flows (webhook and paste stay hidden sub-tabs, same pattern as
-  // before), "Voice Compliance" is the embedded Examples.jsx content
+  // before), "Compliance Examples" is the embedded Examples.jsx content
   // (ExamplesPanels) - folded in from its own nav-rail page.
   const topTabBar = (
     <div className="tab-bar-row">
@@ -939,7 +930,7 @@ export default function Dashboard({ navigate, path }) {
           className={`tab-btn ${sessionTab === "examples" ? "is-active" : ""}`}
           onClick={() => setSessionTab("examples")}
         >
-          Voice Compliance
+          Compliance Examples
         </button>
       </div>
       {sessionTab !== "examples" && (
@@ -952,30 +943,16 @@ export default function Dashboard({ navigate, path }) {
 
   return (
     <AppShell path={path} navigate={navigate} title="Compliance Lab">
-      <main className="layout styled-page">
+      <main className="layout styled-page try-page">
         {sessionTab === "examples" ? (
-          <ExamplesPanels navigate={navigate} topTabBar={topTabBar} />
+          <ExamplesPanels
+            navigate={navigate}
+            topTabBar={topTabBar}
+            onShowLiveCall={() => setSessionTab("live")}
+          />
         ) : (
           <>
         <section className="panel session-panel">
-          <p className="app-lede">
-            Run a live mic call against the AssemblyAI Voice Agent, then check the industry pattern
-            packs you want layered on top of the generic scan before generating a report.
-          </p>
-
-          <div className="section-block">
-            <label className={`check-row ${!canStart ? "disabled" : ""}`} ref={consentRowRef}>
-              <input
-                type="checkbox"
-                checked={consent}
-                onChange={(e) => setConsent(e.target.checked)}
-                disabled={!canStart}
-              />
-              I consent to this session being analyzed, whether a live call, an upload, or a pasted
-              transcript.
-            </label>
-          </div>
-
           <div className="section-block" ref={personaSectionRef}>
             <h2>Persona</h2>
             <p className="pack-note">
@@ -983,35 +960,28 @@ export default function Dashboard({ navigate, path }) {
               scope and its own failure-mode boundary. Picking a persona auto-selects its matching
               pattern pack(s) below (uncheck any you don't want).
             </p>
-            <div className="persona-grid">
-              {PERSONAS.map((persona) => {
-                const packLabels = [
-                  "PII scan",
-                  ...persona.packIds.map(
-                    (id) => industryPacks.find((pack) => pack.id === id)?.name ?? id,
-                  ),
-                ];
-                return (
-                  <label
-                    className={`persona-card ${personaId === persona.id ? "selected" : ""} ${
-                      !canStart ? "disabled" : ""
-                    }`}
-                    key={persona.id}
-                  >
-                    <input
-                      type="radio"
-                      name="persona"
-                      checked={personaId === persona.id}
-                      onChange={() => selectPersona(persona.id)}
-                      disabled={!canStart}
-                    />
-                    <span className="persona-card-name">{persona.label}</span>
-                    <span className="persona-card-description">{persona.description}</span>
-                    <span className="persona-card-packs">Checks: {packLabels.join(", ")}</span>
-                  </label>
-                );
-              })}
-            </div>
+            <select
+              className="persona-select"
+              aria-label="Persona"
+              value={personaId}
+              onChange={(e) => selectPersona(e.target.value)}
+              disabled={!canStart}
+            >
+              {PERSONAS.map((persona) => (
+                <option key={persona.id} value={persona.id}>
+                  {persona.label}
+                </option>
+              ))}
+            </select>
+            <p className="pack-note persona-checks">
+              {selectedPersona.description} Checks:{" "}
+              {[
+                "PII scan",
+                ...selectedPersona.packIds.map(
+                  (id) => industryPacks.find((pack) => pack.id === id)?.name ?? id,
+                ),
+              ].join(", ")}
+            </p>
             {selectedPersona.violation && (
               <label className={`check-row ${!canStart ? "disabled" : ""}`}>
                 <input
@@ -1063,7 +1033,12 @@ export default function Dashboard({ navigate, path }) {
 
             {sessionTab === "live" && (
               <div className="section-block tab-panel">
-                <label className={`check-row ${!canStart ? "disabled" : ""}`}>
+                <p className="app-lede live-call-lede">
+                  Run a live mic call against the AssemblyAI Voice Agent, then check the industry
+                  pattern packs you want layered on top of the generic scan before generating a
+                  report.
+                </p>
+                <label className={`check-row record-call-row ${!canStart ? "disabled" : ""}`}>
                   <input
                     type="checkbox"
                     checked={recordCall}
@@ -1078,8 +1053,7 @@ export default function Dashboard({ navigate, path }) {
                   <button
                     ref={startCallRef}
                     className={`btn ${canStart ? "btn-primary" : "btn-danger"}`}
-                    onClick={canStart ? () => connect(consent, selectedPersona, seedViolation, recordCall) : disconnect}
-                    disabled={canStart && !consent}
+                    onClick={canStart ? () => connect(selectedPersona, seedViolation, recordCall) : disconnect}
                   >
                     {canStart ? "Start call" : "End call"}
                   </button>
@@ -1149,7 +1123,7 @@ export default function Dashboard({ navigate, path }) {
                       </a>
                       <button
                         className="btn btn-outline"
-                        disabled={!consent || uploadStatus === "uploading"}
+                        disabled={uploadStatus === "uploading"}
                         onClick={() =>
                           runUpload(new File([recordedBlob], "recording.webm", { type: recordedBlob.type }), {
                             label: `${selectedPersona.label} — recorded call`,
@@ -1237,7 +1211,7 @@ export default function Dashboard({ navigate, path }) {
                   className="btn btn-outline generate-btn"
                   type="button"
                   onClick={runPaste}
-                  disabled={!consent || pasteLoading}
+                  disabled={pasteLoading}
                 >
                   {pasteLoading ? "Analyzing…" : "Analyze pasted session"}
                 </button>
@@ -1256,10 +1230,9 @@ export default function Dashboard({ navigate, path }) {
                 utterance).
               </p>
               <label
-                className={`dropzone ${dragActive ? "is-active" : ""} ${!consent ? "is-disabled" : ""}`}
+                className={`dropzone ${dragActive ? "is-active" : ""}`}
                 onDragOver={(e) => {
                   e.preventDefault();
-                  if (!consent) return;
                   setDragActive(true);
                 }}
                 onDragLeave={() => setDragActive(false)}
@@ -1269,14 +1242,11 @@ export default function Dashboard({ navigate, path }) {
                   type="file"
                   accept="audio/*"
                   hidden
-                  disabled={!consent}
                   onChange={(e) => runUpload(e.target.files?.[0])}
                 />
                 {uploadStatus === "uploading"
                   ? "Transcribing and analyzing…"
-                  : consent
-                    ? "Drop an audio file here, or click to choose one"
-                    : "Check the analysis consent box to upload recorded audio"}
+                  : "Drop an audio file here, or click to choose one"}
               </label>
               {uploadStatus === "error" && <p className="error-banner">{uploadError}</p>}
             </div>

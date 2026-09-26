@@ -4,7 +4,7 @@ What the user actually does in ComplyLine today, and why they'd bother. One prod
 
 ## 1. Run a live call and get its compliance report
 
-**What they do:** On `/dashboard`, check the consent box, click "Start call," talk to the AssemblyAI voice agent through the mic, click "End call" - the report generates and saves to history automatically.
+**What they do:** On `/try`, click "Start call," talk to the AssemblyAI voice agent through the mic, click "End call" - the report generates and saves to history automatically.
 
 **Value prop:** This is the only workflow that proves the checks work against a *real* AssemblyAI Voice Agent session, not a canned transcript - it's the credibility anchor for the demo video and for anyone deciding whether to trust the tool on their own calls.
 
