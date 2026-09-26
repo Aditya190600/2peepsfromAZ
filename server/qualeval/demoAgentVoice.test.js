@@ -55,9 +55,10 @@ test("returns bidirectional Connect/Stream TwiML pointed at the target-agent str
     },
   });
   assert.equal(ctx.contentType, "text/xml");
+  assert.match(ctx.body, /<Say>One moment please\.<\/Say>/);
   assert.match(
     ctx.body,
-    /<Connect><Stream url="wss:\/\/app\.example\.com\/v1\/qualeval\/target-agent-stream"\/><\/Connect>/,
+    /<Say>.*<\/Say><Connect><Stream url="wss:\/\/app\.example\.com\/v1\/qualeval\/target-agent-stream"\/><\/Connect>/,
   );
   assert.equal(validated[0], ENV.TWILIO_AUTH_TOKEN);
   assert.equal(validated[1], "sig");
