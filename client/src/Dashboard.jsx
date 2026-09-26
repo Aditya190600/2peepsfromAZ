@@ -62,7 +62,7 @@ export function formatTMs(tMs) {
 }
 
 const STATUS_LABEL = {
-  idle: "Idle",
+  idle: "Not on a call",
   connecting: "Connecting…",
   ready: "Live",
   error: "Connection error",
