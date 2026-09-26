@@ -12,6 +12,7 @@ test("placeCall dials evaluation.agentPhoneNumber from QUALEVAL_PERSONA_NUMBER a
   let placed;
   let markedInProgress;
   let watchdogArmedFor;
+  let recorded;
   const run = { id: "run_1" };
   const scenario = { id: "scenario_1" };
   const evaluation = { agentPhoneNumber: "+15551234567" };
@@ -31,6 +32,9 @@ test("placeCall dials evaluation.agentPhoneNumber from QUALEVAL_PERSONA_NUMBER a
     watchdog: (id) => {
       watchdogArmedFor = id;
     },
+    recordCall: async (fields) => {
+      recorded = fields;
+    },
   });
 
   assert.equal(placed.to, "+15551234567");
@@ -40,6 +44,13 @@ test("placeCall dials evaluation.agentPhoneNumber from QUALEVAL_PERSONA_NUMBER a
   assert.equal(markedInProgress.sid, "CA123");
   assert.equal(result.verdict, "in_progress");
   assert.equal(watchdogArmedFor, "run_1");
+  assert.deepEqual(recorded, {
+    twilioCallSid: "CA123",
+    direction: "outbound",
+    fromNumber: "+19125550000",
+    toNumber: "+15551234567",
+    qualevalRunId: "run_1",
+  });
 });
 
 test("placeCall does not arm the watchdog when the call is never placed", async () => {
