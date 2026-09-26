@@ -20,11 +20,21 @@ const STREAM_PATH = "/v1/qualeval/target-agent-stream";
 // via a Custom Parameter, so there's no need to wait for the Media Streams
 // "start" event before creating the bridge session - createBridgeSession
 // itself picks up streamSid/callSid whenever "start" arrives, and buffers
-// any reply.audio that AssemblyAI sends before "start" lands (confirmed
-// live 2026-09-26: AssemblyAI's session.ready/reply.audio and Twilio's
-// "start" arrive over two independent sockets with no ordering guarantee,
-// and the greeting's audio was silently dropped when reply.audio won that
-// race - see bridgeSession.js's pendingReplyAudio comment).
+// any reply.audio that AssemblyAI sends before "start" lands (see
+// bridgeSession.js's pendingReplyAudio comment).
+//
+// Twilio sends "connected" and "start" the instant its socket opens, while
+// this handler is still awaiting the variant lookup and token mint below -
+// before createBridgeSession has attached its own "message" listener. Every
+// message is buffered from the moment the socket connects and replayed once
+// the session exists, same as twilioStream.js. Without this (confirmed from
+// production logs 2026-09-25: every inbound call's bridge log stayed
+// "[no-call-sid]" through hangup and "twilio event start" was never logged),
+// "start" was lost, streamSid was never learned, and every reply.audio chunk
+// sat in pendingReplyAudio forever - real callers heard only silence even
+// though AssemblyAI heard them and replied. QualEval-placed test calls hid
+// this, since their target-agent audio reaches the persona leg through
+// callBridgeBroker.js's onReplyAudio, which never needs streamSid.
 //
 // The bridge session is created immediately regardless of whether this call
 // turns out to be a QualEval-placed run or a real external caller, so a real
@@ -50,6 +60,12 @@ export function attachTargetAgentStreamServer(
     let claimedRunId = null;
     let sessionFinished = false;
 
+    const buffered = [];
+    function bufferMessage(raw) {
+      buffered.push(raw);
+    }
+    twilioWs.on("message", bufferMessage);
+
     function onFinished({ turns, callSid, reason }) {
       sessionFinished = true;
       console.log(
@@ -65,6 +81,14 @@ export function attachTargetAgentStreamServer(
 
     try {
       const [variant, token] = await Promise.all([getActiveVariant(), mintToken()]);
+      if (twilioWs.readyState !== twilioWs.OPEN) {
+        // Caller hung up during setup - don't open an AssemblyAI session
+        // nothing will ever close.
+        twilioWs.off("message", bufferMessage);
+        console.log("QualEval target-agent bridge: Twilio stream closed before setup finished");
+        return;
+      }
+      twilioWs.off("message", bufferMessage);
       console.log(`QualEval target-agent bridge: bridging as variant "${variant.key}" (agent ${variant.agentId})`);
       const session = createSession({
         twilioWs,
@@ -80,6 +104,10 @@ export function attachTargetAgentStreamServer(
         onFinished,
         onError,
       });
+      // Replay "connected"/"start" (so the session learns streamSid/callSid)
+      // plus any caller media that arrived during setup.
+      for (const raw of buffered) twilioWs.emit("message", raw);
+      buffered.length = 0;
 
       const runId = await waitForClaimableRun();
       if (runId && !sessionFinished) {
@@ -92,6 +120,7 @@ export function attachTargetAgentStreamServer(
         releaseRun(runId);
       }
     } catch (err) {
+      twilioWs.off("message", bufferMessage);
       console.error(`QualEval target-agent bridge: setup failed: ${err.message}`);
       try {
         twilioWs.close();
