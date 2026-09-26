@@ -163,13 +163,13 @@ function Finding({ finding, onSeek }) {
   );
 }
 
-function IntroSteps({ onShowExamples }) {
+function IntroSteps() {
   return (
     <div className="intro-steps">
       <h2>How this works</h2>
       <p className="intro-lede">
         ComplyLine reviews one completed AssemblyAI voice call and reports whether it met a set of
-        compliance checks, ranked by severity. Try it two ways:
+        compliance checks, ranked by severity. Try it with a live call:
       </p>
       <ol className="intro-list">
         <li>
@@ -203,17 +203,6 @@ function IntroSteps({ onShowExamples }) {
           </div>
         </li>
       </ol>
-      <p className="intro-alt">
-        Prefer not to use your mic right now? Switch to the{" "}
-        {onShowExamples ? (
-          <button type="button" className="table-link" onClick={onShowExamples}>
-            Compliance Examples
-          </button>
-        ) : (
-          "Compliance Examples"
-        )}{" "}
-        tab - same reports, no live call needed.
-      </p>
     </div>
   );
 }
@@ -1283,7 +1272,7 @@ export default function Dashboard({ navigate, path }) {
             </>
           ) : (
             <>
-              <IntroSteps onShowExamples={() => setSessionTab("examples")} />
+              <IntroSteps />
               <h2 className="report-heading">Compliance report</h2>
               <Report report={null} />
             </>
