@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { SignedIn, SignedOut, SignInButton, useClerk, useUser } from "@clerk/clerk-react";
 import { PRODUCT_NAV } from "./chromeNav.js";
+import ThemeToggle from "./ThemeToggle.jsx";
 
 const CLERK_ENABLED = Boolean(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
 
@@ -112,6 +113,7 @@ export function Nav({ path, navigate }) {
         <h1>ComplyLine</h1>
       </a>
       <div className="site-nav-links">
+        <ThemeToggle />
         <AuthNav path={path} navigate={navigate} splash />
       </div>
     </nav>
@@ -163,11 +165,10 @@ export function AppShell({ path, navigate, title, actions, rail, children }) {
           <span className="brand-mark" aria-hidden="true" />
           <span>ComplyLine</span>
         </a>
-        {CLERK_ENABLED ? (
-          <div className="site-nav-links">
-            <AuthNav path={path} navigate={navigate} />
-          </div>
-        ) : null}
+        <div className="site-nav-links">
+          <ThemeToggle />
+          {CLERK_ENABLED ? <AuthNav path={path} navigate={navigate} /> : null}
+        </div>
       </header>
       <div className="app-body">
         <aside className="app-sidebar">
