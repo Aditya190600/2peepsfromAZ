@@ -62,6 +62,35 @@ test("bridges Twilio media to AssemblyAI input.audio only after session.ready, a
   aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
 });
 
+test("reply.audio arriving before Twilio's 'start' event is buffered and flushed once streamSid is known, not dropped", async () => {
+  const twilioWs = new FakeSocket();
+  const aaiWs = new FakeSocket();
+  createBridgeSession({ twilioWs, token: "tok", WebSocketImpl: fakeWebSocketImpl(aaiWs), systemPrompt: "be a caller" });
+  aaiWs.emit("open");
+
+  // AssemblyAI's session.ready/reply.audio can win the race against Twilio's
+  // own "start" event - the greeting must not be lost.
+  aaiWs.emit("message", JSON.stringify({ type: "session.ready" }));
+  aaiWs.emit("message", JSON.stringify({ type: "reply.audio", data: "earlyGreeting" }));
+
+  // Nothing sent to Twilio yet - streamSid isn't known.
+  assert.equal(twilioWs.sent.length, 0);
+
+  twilioWs.emit("message", JSON.stringify({ event: "start", start: { streamSid: "MZ1", callSid: "CA1" } }));
+
+  const played = twilioWs.sent.at(-1);
+  assert.equal(played.event, "media");
+  assert.equal(played.streamSid, "MZ1");
+  assert.equal(played.media.payload, "earlyGreeting");
+
+  // A later reply.audio, arriving after streamSid is known, still sends immediately.
+  aaiWs.emit("message", JSON.stringify({ type: "reply.audio", data: "laterChunk" }));
+  assert.equal(twilioWs.sent.at(-1).media.payload, "laterChunk");
+  assert.equal(twilioWs.sent.length, 2);
+
+  aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
+});
+
 test("swaps AssemblyAI's user/agent roles into QualEval's caller/target transcript shape", async () => {
   const twilioWs = new FakeSocket();
   const aaiWs = new FakeSocket();
