@@ -15,16 +15,6 @@ export function findRateLimitedFinding(report) {
   return report?.findings?.find((f) => f.rateLimited) ?? null;
 }
 
-export async function fetchBootStatus() {
-  try {
-    const resp = await fetch("/v1/boot-status");
-    if (!resp.ok) return null;
-    return resp.json();
-  } catch {
-    return null;
-  }
-}
-
 // onProgress(event), if given, requests the streamed (newline-delimited
 // JSON) response instead of a single JSON body, and is called once per
 // check as it completes with { finding, checksDone, checksTotal } - finding
