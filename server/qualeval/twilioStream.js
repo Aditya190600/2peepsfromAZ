@@ -89,6 +89,7 @@ export function attachTwilioStreamServer(
       try {
         await markRunAwaitingEvaluation(runId, { turns });
         await dispatch(runId);
+        console.log(`QualEval call bridge: run ${runId} ended (${reason}) with ${turns.length} transcript turns - evaluated`);
       } catch (err) {
         console.error(`QualEval call bridge: post-call processing failed for run ${runId}: ${err.message}`);
       }
