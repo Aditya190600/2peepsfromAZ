@@ -10,7 +10,8 @@ const ThemeContext = createContext(null);
 
 export function ThemeProvider({ children }) {
   const [preference, setPreferenceState] = useState(getStoredThemePreference);
-  const resolved = useMemo(() => resolveTheme(preference), [preference]);
+  const [systemResolved, setSystemResolved] = useState(() => resolveTheme("system"));
+  const resolved = preference === "system" ? systemResolved : preference;
 
   useEffect(() => {
     applyResolvedTheme(resolved);
@@ -18,12 +19,12 @@ export function ThemeProvider({ children }) {
   }, [preference, resolved]);
 
   useEffect(() => {
-    if (preference !== "system") return undefined;
     const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => applyResolvedTheme(resolveTheme("system"));
-    media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
-  }, [preference]);
+    const syncSystemTheme = () => setSystemResolved(resolveTheme("system"));
+    syncSystemTheme();
+    media.addEventListener("change", syncSystemTheme);
+    return () => media.removeEventListener("change", syncSystemTheme);
+  }, []);
 
   const value = useMemo(
     () => ({
