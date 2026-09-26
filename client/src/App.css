@@ -1397,16 +1397,6 @@ button.site-nav-link {
   color: var(--muted);
 }
 
-.intro-alt {
-  margin: 24px 0 0;
-  padding-top: 20px;
-  border-top: 1px solid var(--line);
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--muted);
-  max-width: 52ch;
-}
-
 .fleet-summary {
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -3048,7 +3038,6 @@ button.site-nav-link {
 .try-page .pack-note,
 .try-page .panel-label,
 .try-page .hint,
-.try-page .intro-alt,
 .try-page .transcript-empty {
   font-size: 14px;
 }
@@ -3074,6 +3063,6 @@ button.site-nav-link {
   border-top: 1px solid var(--line);
 }
 
-.try-page .intro-alt {
+.try-page .intro-steps {
   margin-bottom: 28px;
 }
