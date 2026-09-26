@@ -1295,9 +1295,9 @@ export default function Dashboard({ navigate, path }) {
             </>
           ) : (
             <>
+              <IntroSteps navigate={navigate} />
               <h2 className="report-heading">Compliance report</h2>
               <Report report={null} />
-              <IntroSteps navigate={navigate} />
             </>
           )}
         </section>
