@@ -3037,6 +3037,7 @@ button.site-nav-link {
 
 .styled-page .persona-card.selected {
   border-color: transparent;
+  background: var(--accent-soft);
 }
 
 .styled-page .persona-card.selected::before {
