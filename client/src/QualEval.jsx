@@ -9,6 +9,7 @@ import {
   generateScenarios,
   updateScenario,
   deleteScenario,
+  deleteScenariosByStatus,
   createRun,
   getRun,
   getQualevalConfig,
@@ -320,10 +321,143 @@ function RunResult({ run }) {
   );
 }
 
-function ScenarioCard({ scenario, onApprove, onReject, onRun, onDelete, busy }) {
+function EditScenarioForm({ scenario, onSaved, onCancel, busy }) {
+  const [name, setName] = useState(scenario.name ?? "");
+  const [category, setCategory] = useState(scenario.category ?? "");
+  const [persona, setPersona] = useState(scenario.persona ?? "");
+  const [situation, setSituation] = useState(scenario.situation ?? "");
+  const [callerObjectives, setCallerObjectives] = useState(scenario.callerObjectives ?? "");
+  const [expectedBehavior, setExpectedBehavior] = useState(scenario.expectedBehavior ?? "");
+  const [evaluationCriteria, setEvaluationCriteria] = useState((scenario.evaluationCriteria ?? []).join("\n"));
+  const [error, setError] = useState(null);
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setError(null);
+    try {
+      await onSaved({
+        name: name.trim(),
+        category: category.trim() || null,
+        persona: persona.trim() || null,
+        situation: situation.trim() || null,
+        callerObjectives: callerObjectives.trim() || null,
+        expectedBehavior: expectedBehavior.trim() || null,
+        evaluationCriteria: evaluationCriteria
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean),
+      });
+    } catch (err) {
+      setError(err.message ?? "Could not save these changes.");
+    }
+  };
+
+  return (
+    <form className="qe-scenario-edit-form" onSubmit={onSubmit}>
+      <div className="qe-field-row-narrow">
+        <div className="qe-field" style={{ "--qe-field-color": "#1e7a8c" }}>
+          <label htmlFor={`qe-sc-name-${scenario.id}`}>Name</label>
+          <input id={`qe-sc-name-${scenario.id}`} type="text" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="qe-field" style={{ "--qe-field-color": "#8c6b1e" }}>
+          <label htmlFor={`qe-sc-category-${scenario.id}`}>Category</label>
+          <input
+            id={`qe-sc-category-${scenario.id}`}
+            type="text"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          />
+        </div>
+      </div>
+      <div className="qe-field-grid">
+        <div className="qe-field qe-field-full">
+          <label htmlFor={`qe-sc-persona-${scenario.id}`}>Persona</label>
+          <textarea
+            id={`qe-sc-persona-${scenario.id}`}
+            rows={2}
+            value={persona}
+            onChange={(e) => setPersona(e.target.value)}
+          />
+        </div>
+        <div className="qe-field qe-field-full">
+          <label htmlFor={`qe-sc-situation-${scenario.id}`}>Situation</label>
+          <textarea
+            id={`qe-sc-situation-${scenario.id}`}
+            rows={2}
+            value={situation}
+            onChange={(e) => setSituation(e.target.value)}
+          />
+        </div>
+        <div className="qe-field qe-field-full">
+          <label htmlFor={`qe-sc-objectives-${scenario.id}`}>Caller objectives</label>
+          <textarea
+            id={`qe-sc-objectives-${scenario.id}`}
+            rows={2}
+            value={callerObjectives}
+            onChange={(e) => setCallerObjectives(e.target.value)}
+          />
+        </div>
+        <div className="qe-field qe-field-full">
+          <label htmlFor={`qe-sc-behavior-${scenario.id}`}>Expected behavior</label>
+          <textarea
+            id={`qe-sc-behavior-${scenario.id}`}
+            rows={2}
+            value={expectedBehavior}
+            onChange={(e) => setExpectedBehavior(e.target.value)}
+          />
+        </div>
+        <div className="qe-field qe-field-full">
+          <label htmlFor={`qe-sc-criteria-${scenario.id}`}>Evaluation criteria (one per line)</label>
+          <textarea
+            id={`qe-sc-criteria-${scenario.id}`}
+            rows={3}
+            value={evaluationCriteria}
+            onChange={(e) => setEvaluationCriteria(e.target.value)}
+          />
+        </div>
+      </div>
+      {error && <p className="error-banner">{error}</p>}
+      <div className="qe-scenario-actions">
+        <button type="submit" className="btn-sm primary" disabled={busy || !name.trim()}>
+          {busy ? "Saving…" : "Save changes"}
+        </button>
+        <button type="button" className="btn-sm ghost" onClick={onCancel} disabled={busy}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function ScenarioCard({ scenario, onApprove, onReject, onRun, onDelete, onEdit, busy }) {
   const latestRun = scenario.runs?.[0] ?? null;
   const status = runStatus(latestRun);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [editing, setEditing] = useState(false);
+
+  if (editing) {
+    return (
+      <div className={`qe-scenario-card is-${scenario.status}`}>
+        <div className="qe-scenario-head">
+          <h4>{scenario.name}</h4>
+          <div className="qe-scenario-badges">
+            {scenario.category && <span className="qe-cat-badge">{scenario.category}</span>}
+            <span className={`qe-status-chip is-${scenario.status}`}>{scenario.status}</span>
+          </div>
+        </div>
+        <EditScenarioForm
+          scenario={scenario}
+          busy={busy}
+          onCancel={() => setEditing(false)}
+          onSaved={async (fields) => {
+            await onEdit(scenario, fields);
+            setEditing(false);
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={`qe-scenario-card is-${scenario.status}`}>
@@ -388,6 +522,9 @@ function ScenarioCard({ scenario, onApprove, onReject, onRun, onDelete, busy }) 
             ▶ Run
           </button>
         )}
+        <button type="button" className="btn-sm ghost" onClick={() => setEditing(true)} disabled={busy}>
+          Edit
+        </button>
         {confirmingDelete ? (
           <>
             <span className="qe-delete-confirm-text">Delete this scenario?</span>
@@ -546,6 +683,8 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [activeTab, setActiveTab] = useState("pending");
+  const [confirmingDeleteAllTab, setConfirmingDeleteAllTab] = useState(false);
+  const [deletingAllTab, setDeletingAllTab] = useState(false);
 
   const load = async () => {
     try {
@@ -616,6 +755,16 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
     }
   };
 
+  const onEditScenario = async (scenario, fields) => {
+    setBusyScenarioId(scenario.id);
+    try {
+      await updateScenario(scenario.id, fields);
+      await load();
+    } finally {
+      setBusyScenarioId(null);
+    }
+  };
+
   const onDeleteScenario = async (scenario) => {
     setActionError(null);
     setBusyScenarioId(scenario.id);
@@ -626,6 +775,20 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
       setActionError(err.message ?? "Could not delete the scenario.");
     } finally {
       setBusyScenarioId(null);
+    }
+  };
+
+  const onDeleteAllInTab = async () => {
+    setActionError(null);
+    setDeletingAllTab(true);
+    try {
+      await deleteScenariosByStatus(evaluationId, activeTab);
+      setConfirmingDeleteAllTab(false);
+      await load();
+    } catch (err) {
+      setActionError(err.message ?? "Could not delete these scenarios.");
+    } finally {
+      setDeletingAllTab(false);
     }
   };
 
@@ -733,13 +896,51 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
                   key={tab.key}
                   type="button"
                   className={`qe-tab ${activeTab === tab.key ? "is-active" : ""}`}
-                  onClick={() => setActiveTab(tab.key)}
+                  onClick={() => {
+                    setActiveTab(tab.key);
+                    setConfirmingDeleteAllTab(false);
+                  }}
                 >
                   {tab.label}
                   <span className="qe-tab-count">({tabCounts[tab.key]})</span>
                 </button>
               ))}
             </div>
+            {tabCounts[activeTab] > 0 && (
+              <div className="qe-tab-actions">
+                {confirmingDeleteAllTab ? (
+                  <>
+                    <span className="qe-delete-confirm-text">
+                      Delete all {tabCounts[activeTab]} scenario{tabCounts[activeTab] === 1 ? "" : "s"} in this tab?
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-sm danger"
+                      onClick={onDeleteAllInTab}
+                      disabled={deletingAllTab}
+                    >
+                      {deletingAllTab ? "Deleting…" : "Confirm delete all"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-sm ghost"
+                      onClick={() => setConfirmingDeleteAllTab(false)}
+                      disabled={deletingAllTab}
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-sm ghost"
+                    onClick={() => setConfirmingDeleteAllTab(true)}
+                  >
+                    Delete all in this tab
+                  </button>
+                )}
+              </div>
+            )}
             {actionError && <p className="error-banner">{actionError}</p>}
             {scenarios.length === 0 && <p className="pack-note">No scenarios yet. Generate a batch to get started.</p>}
             {scenarios.length > 0 && visibleScenarios.length === 0 && (
@@ -753,6 +954,7 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
                 onReject={onReject}
                 onRun={onRun}
                 onDelete={onDeleteScenario}
+                onEdit={onEditScenario}
                 busy={busyScenarioId === scenario.id}
               />
             ))}

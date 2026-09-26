@@ -2259,6 +2259,22 @@ button.site-nav-link {
   margin-left: 4px;
 }
 
+.qe-tab-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.qe-scenario-edit-form {
+  margin-top: 10px;
+}
+
+.qe-scenario-edit-form .qe-field-grid {
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
 .qe-template-row {
   display: flex;
   gap: 8px;

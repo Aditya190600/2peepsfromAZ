@@ -11,6 +11,7 @@ import {
   getScenario,
   updateScenario,
   deleteScenario,
+  deleteScenariosByStatus,
   deleteUnapprovedScenarios,
   createRun,
   getRun,
@@ -128,6 +129,13 @@ function fakePool() {
       if (!row || !evaluationOwns(row.evaluation_id, clerkUserId)) return { rows: [] };
       tables.qualeval_scenarios = rows.filter((r) => r.id !== id);
       return { rows: [row] };
+    }
+    if (sql.startsWith("delete from qualeval_scenarios") && sql.includes("status = $2")) {
+      const [evaluationId, status, clerkUserId] = params;
+      tables.qualeval_scenarios = rows.filter(
+        (r) => !(r.evaluation_id === evaluationId && r.status === status && evaluationOwns(evaluationId, clerkUserId)),
+      );
+      return { rows: [] };
     }
     if (sql.startsWith("delete from qualeval_scenarios")) {
       const [evaluationId] = params;
@@ -333,6 +341,53 @@ test("deleteScenario removes a single scenario regardless of status, scoped by c
   await assert.rejects(() => deleteScenario(scenario.id, "user_2", {}, pool));
   await deleteScenario(scenario.id, "user_1", {}, pool);
   assert.equal(await getScenario(scenario.id, "user_1", {}, pool), null);
+});
+
+test("deleteScenariosByStatus only removes scenarios in that evaluation and status", async () => {
+  const pool = fakePool();
+  const evaluation = await createEvaluation({ clerkUserId: "user_1", name: "Eval" }, {}, pool);
+  const other = await createEvaluation({ clerkUserId: "user_1", name: "Other eval" }, {}, pool);
+  const [pending1, pending2] = await insertScenarios(
+    evaluation.id,
+    [
+      { name: "Pending 1", evaluationCriteria: [] },
+      { name: "Pending 2", evaluationCriteria: [] },
+    ],
+    {},
+    pool,
+  );
+  const [approved] = await insertScenarios(evaluation.id, [{ name: "Approved", evaluationCriteria: [] }], {}, pool);
+  await updateScenario(approved.id, "user_1", { status: "approved" }, {}, pool);
+  const [otherPending] = await insertScenarios(other.id, [{ name: "Other pending", evaluationCriteria: [] }], {}, pool);
+
+  await deleteScenariosByStatus(evaluation.id, "user_1", "pending", {}, pool);
+
+  const remaining = await listScenarios(evaluation.id, "user_1", {}, pool);
+  assert.deepEqual(remaining.map((s) => s.name), ["Approved"]);
+  assert.equal(await getScenario(pending1.id, "user_1", {}, pool), null);
+  assert.equal(await getScenario(pending2.id, "user_1", {}, pool), null);
+  const otherRemaining = await listScenarios(other.id, "user_1", {}, pool);
+  assert.deepEqual(otherRemaining.map((s) => s.name), ["Other pending"]);
+  assert.ok(otherPending);
+});
+
+test("deleteScenariosByStatus is scoped by clerkUserId", async () => {
+  const pool = fakePool();
+  const evaluation = await createEvaluation({ clerkUserId: "user_1", name: "Eval" }, {}, pool);
+  const [pending] = await insertScenarios(evaluation.id, [{ name: "Pending", evaluationCriteria: [] }], {}, pool);
+
+  await deleteScenariosByStatus(evaluation.id, "user_2", "pending", {}, pool);
+
+  const remaining = await listScenarios(evaluation.id, "user_1", {}, pool);
+  assert.deepEqual(remaining.map((s) => s.name), ["Pending"]);
+  assert.ok(pending);
+});
+
+test("deleteScenariosByStatus rejects an invalid status", async () => {
+  const pool = fakePool();
+  const evaluation = await createEvaluation({ clerkUserId: "user_1", name: "Eval" }, {}, pool);
+
+  await assert.rejects(() => deleteScenariosByStatus(evaluation.id, "user_1", "bogus", {}, pool));
 });
 
 test("deleteUnapprovedScenarios keeps approved scenarios and drops the rest", async () => {

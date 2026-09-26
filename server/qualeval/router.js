@@ -154,6 +154,22 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
     }),
   );
 
+  // Bulk-deletes every scenario in one tab (?status=pending|approved|rejected)
+  // for this evaluation - the "delete all" button per tab. Scoped to this
+  // evaluation and that status only, so it never touches another tab or
+  // another evaluation.
+  router.delete(
+    "/evaluations/:id/scenarios",
+    wrap(async (req, res) => {
+      const evaluation = await store.getEvaluation(req.params.id, visitorId(req));
+      if (!evaluation) return res.status(404).json({ error: "Evaluation not found" });
+      const { status } = req.query;
+      if (!status) return res.status(400).json({ error: "status query parameter is required" });
+      await store.deleteScenariosByStatus(evaluation.id, visitorId(req), status);
+      res.status(204).end();
+    }),
+  );
+
   // Creates a Run for an approved scenario and, when Twilio is configured
   // (TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN + QUALEVAL_PERSONA_NUMBER - see
   // AGENTS.md), places a real outbound call instead of leaving the run
