@@ -152,6 +152,57 @@ test("a Twilio hangup with no session.ended still finishes the bridge with whate
   assert.equal(finished.turns.length, 1);
 });
 
+test("Twilio 'stop' finishes the bridge after a grace window even if neither socket ever closes", async () => {
+  const twilioWs = new FakeSocket();
+  const aaiWs = new FakeSocket();
+  let finished;
+  createBridgeSession({
+    twilioWs,
+    token: "tok",
+    WebSocketImpl: fakeWebSocketImpl(aaiWs),
+    systemPrompt: "be a caller",
+    stopGraceMs: 10,
+    onFinished: (result) => (finished = result),
+  });
+  twilioWs.emit("message", JSON.stringify({ event: "start", start: { streamSid: "MZ1", callSid: "CA1" } }));
+  aaiWs.emit("message", JSON.stringify({ type: "session.ready" }));
+  aaiWs.emit("message", JSON.stringify({ type: "transcript.agent", text: "Thanks, bye." }));
+
+  // Twilio sends "stop" (a reliable message) but - as observed live - never
+  // follows up with its own socket close event, and AssemblyAI never sends
+  // session.ended either. Nothing but the grace timer can finish this call.
+  twilioWs.emit("message", JSON.stringify({ event: "stop" }));
+  assert.equal(finished, undefined);
+
+  await new Promise((resolve) => setTimeout(resolve, 30));
+
+  assert.ok(finished);
+  assert.equal(finished.reason, "twilio_stop_grace");
+  assert.equal(finished.turns.length, 1);
+});
+
+test("AssemblyAI's session.ended arriving during the stop grace window finishes immediately, not late", async () => {
+  const twilioWs = new FakeSocket();
+  const aaiWs = new FakeSocket();
+  let finished;
+  createBridgeSession({
+    twilioWs,
+    token: "tok",
+    WebSocketImpl: fakeWebSocketImpl(aaiWs),
+    systemPrompt: "be a caller",
+    stopGraceMs: 5000,
+    onFinished: (result) => (finished = result),
+  });
+  twilioWs.emit("message", JSON.stringify({ event: "start", start: { streamSid: "MZ1", callSid: "CA1" } }));
+  aaiWs.emit("message", JSON.stringify({ type: "session.ready" }));
+
+  twilioWs.emit("message", JSON.stringify({ event: "stop" }));
+  aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
+
+  assert.ok(finished);
+  assert.equal(finished.reason, "session.ended");
+});
+
 test("an AssemblyAI session.error calls onError instead of onFinished", async () => {
   const twilioWs = new FakeSocket();
   const aaiWs = new FakeSocket();

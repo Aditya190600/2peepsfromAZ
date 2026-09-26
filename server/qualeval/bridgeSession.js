@@ -77,6 +77,10 @@ export function createBridgeSession({
   // Twilio leg - see the header comment above.
   onReplyAudio,
   maxDurationMs = 5 * 60 * 1000,
+  // Bounded grace window given to AssemblyAI to flush a final transcript/
+  // session.ended after we've sent it session.end - see the "stop" case
+  // below for why this exists at all.
+  stopGraceMs = 2000,
 }) {
   let startedAtMs = null;
   let streamSid = null;
@@ -85,6 +89,7 @@ export function createBridgeSession({
   let aaiReady = false;
   const turns = [];
   let maxDurationTimer = null;
+  let stopGraceTimer = null;
 
   const aaiWs = new WebSocketImpl(wsUrl);
 
@@ -116,6 +121,7 @@ export function createBridgeSession({
     if (finished) return;
     finished = true;
     clearTimeout(maxDurationTimer);
+    clearTimeout(stopGraceTimer);
     closeSockets();
     onFinished?.({ turns: [...turns], callSid, reason });
   }
@@ -124,6 +130,7 @@ export function createBridgeSession({
     if (finished) return;
     finished = true;
     clearTimeout(maxDurationTimer);
+    clearTimeout(stopGraceTimer);
     closeSockets();
     onError?.(message);
   }
@@ -219,6 +226,24 @@ export function createBridgeSession({
       case "stop":
         if (aaiWs.readyState === aaiWs.OPEN) {
           aaiWs.send(JSON.stringify({ type: "session.end" }));
+          // "stop" is a Media Stream *message*, delivered reliably like every
+          // other message on this socket - unlike the raw "close"/"error"
+          // socket events, it isn't subject to abnormal-closure races. Real
+          // outbound calls showed Twilio tearing down its side of the stream
+          // (often an abrupt 1005 close) immediately after "stop", before our
+          // own session.end round-trip with AssemblyAI completes - sometimes
+          // before AssemblyAI's session.ended is ever processed at all
+          // (reproduced live 2026-09-25: a full multi-turn conversation whose
+          // "stop" fired, then twilio closed at 1005, with AssemblyAI's own
+          // session.ended arriving too late to matter). Previously this
+          // handler did nothing further and relied entirely on one of the two
+          // sockets' own close event to notice and call finish() - so a
+          // missed/delayed close on either side left the run hung forever.
+          // Treat "stop" itself as the authoritative end-of-call signal:
+          // give AssemblyAI a short bounded window to flush anything final,
+          // then finish regardless of what either socket does afterward.
+          clearTimeout(stopGraceTimer);
+          stopGraceTimer = setTimeout(() => finish("twilio_stop_grace"), stopGraceMs);
         } else {
           finish("twilio_stop");
         }
