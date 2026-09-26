@@ -100,6 +100,10 @@ Compliance Examples folded into the Try page as a tab (2026-09-25): `client/src/
 
 `server/package-lock.json` and `client/package-lock.json` are committed - do not gitignore them. `server/package.json` pins `qs` via an `overrides` entry (body-parser hard-pins a vulnerable `qs` version transitively; the override is the fix, not a workaround to remove later). `client/package.json` is on Vite 7.x deliberately, not the audit-suggested Vite 8 - v8 ships the experimental rolldown-vite engine and `@vitejs/plugin-react` doesn't officially peer-support it yet. On a fresh macOS install `npm install` warns that `fsevents`'s install script isn't in `allowScripts`; that's expected and safe to leave unapproved (fsevents is an optional macOS-only file-watcher acceleration, not required for `vite`/`npm test`/`npm run build` to work).
 
+## Shared visual language across pages
+
+Home, Try (Compliance Lab, including its Voice Compliance tab), the standalone Examples page, and the splash page (`Landing.jsx`) opt into QualEval's visual language (Space Grotesk headings, elevated/gradient cards with hover lift) via a shared `.styled-page` wrapper class, scoped alongside `.qualeval-page` in `client/src/App.css` (search `--- Shared visual-consistency pass ---`). Pages not wrapped in it (Evals, ApiKeys, PhoneNumbers, SessionInspector, History) keep the original flat look - add the class to a new page's content wrapper rather than duplicating the rules if it should match.
+
 ## Maintaining this file
 
 Keep this file proportionate: durable, project-wide facts only (constraints, architecture, how to run things). Prefer pointing at the authoritative file/command over duplicating details that will drift. Update it when the product direction, stack, or hard constraints change - not for routine feature work.
