@@ -23,6 +23,28 @@ export async function getEvaluation(id) {
   return json(await fetch(`/v1/qualeval/evaluations/${encodeURIComponent(id)}`));
 }
 
+export async function updateEvaluation(id, fields) {
+  return json(
+    await fetch(`/v1/qualeval/evaluations/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(fields),
+    }),
+  );
+}
+
+export async function deleteEvaluation(id) {
+  const resp = await fetch(`/v1/qualeval/evaluations/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({}));
+    throw new Error(body.error ?? "Could not delete the evaluation.");
+  }
+}
+
+export async function getQualevalConfig() {
+  return json(await fetch("/v1/qualeval/config"));
+}
+
 export async function generateScenarios(evaluationId, feedback, count) {
   return json(
     await fetch(`/v1/qualeval/evaluations/${encodeURIComponent(evaluationId)}/scenarios/generate`, {
@@ -41,6 +63,14 @@ export async function updateScenario(id, fields) {
       body: JSON.stringify(fields),
     }),
   );
+}
+
+export async function deleteScenario(id) {
+  const resp = await fetch(`/v1/qualeval/scenarios/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({}));
+    throw new Error(body.error ?? "Could not delete the scenario.");
+  }
 }
 
 export async function createRun(scenarioId) {

@@ -32,15 +32,22 @@ architecture, which supersedes the "Stubbed, honestly" section below.
   rather than fabricating a verdict when there's no transcript.
 - REST routes (`server/qualeval/router.js`, mounted at `/v1/qualeval` behind
   the same `requireVisitor`/`visitorId` gate as every other product route in
-  `server/index.js`): create evaluation, list/get evaluations (with nested
-  scenarios+runs), generate/regenerate scenarios (typed feedback folds into
-  the next prompt; regeneration replaces pending/rejected scenarios but
-  keeps approved ones), approve/reject/edit a scenario, create a run for an
-  approved scenario, list runs, get one run.
+  `server/index.js`): create/edit/delete an evaluation, list/get evaluations
+  (with nested scenarios+runs), generate/regenerate scenarios (typed feedback
+  folds into the next prompt; regeneration replaces pending/rejected
+  scenarios but keeps approved ones), approve/reject/edit/delete a scenario,
+  create a run for an approved scenario, list runs, get one run. `GET
+  /v1/qualeval/config` exposes the deployment's `QUALEVAL_AGENT_NUMBER` so
+  the client can prefill the target-agent phone number field instead of
+  hardcoding it into the bundle.
 - Frontend: `/qualeval` route (`client/src/routes.js`, `client/src/QualEval.jsx`),
   new left-rail nav link (`client/src/chromeNav.js`), evaluation creation
-  form, and a combined generation-review page (scenario cards + a persistent
-  typed-feedback regenerate panel - not a per-item wizard).
+  form (editable after creation), and a combined generation-review page
+  (scenario cards split into Generated/Accepted/Rejected tabs, each
+  deletable, plus a persistent typed-feedback regenerate panel - not a
+  per-item wizard). Every generated scenario carries an LLM-authored name;
+  `generator.js`'s `fallbackScenarioName` only covers the rare case where the
+  model omits one.
 
 **Stubbed at the time this slice landed (now superseded, see above):**
 `POST /v1/qualeval/scenarios/:id/runs` created a Run recorded as

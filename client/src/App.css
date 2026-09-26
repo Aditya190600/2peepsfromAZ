@@ -2159,6 +2159,106 @@ button.site-nav-link {
   max-width: 560px;
 }
 
+.qe-lede-list {
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+  max-width: 640px;
+}
+
+.qe-lede-list li {
+  position: relative;
+  padding-left: 18px;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.qe-lede-list li::before {
+  content: "-";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+}
+
+.qe-eval-summary {
+  margin: 0 0 20px;
+  padding: 0;
+  list-style: none;
+}
+
+.qe-eval-summary li {
+  position: relative;
+  padding-left: 18px;
+  margin-bottom: 6px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.qe-eval-summary li::before {
+  content: "-";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+}
+
+.qe-eval-summary strong {
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.qe-eval-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.qe-eval-edit-form {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--qe-radius-sm);
+  padding: 18px;
+  margin-bottom: 20px;
+}
+
+.qe-eval-edit-form .qe-field-grid {
+  margin-top: 12px;
+}
+
+.qe-tab-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.qe-tab {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.qe-tab.is-active {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+.qe-tab-count {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: 4px;
+}
+
 .qe-template-row {
   display: flex;
   gap: 8px;
@@ -2202,6 +2302,26 @@ button.site-nav-link {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+}
+
+/* Name/phone are short values - keep their inputs narrow instead of
+   stretching them across half the panel like the description/requirements
+   textareas. */
+.qe-field-row-narrow {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.qe-field-row-narrow .qe-field {
+  flex: 0 1 240px;
+}
+
+.qe-field-hint {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 12.5px;
 }
 
 .qe-field-full {
@@ -2457,6 +2577,18 @@ button.site-nav-link {
 
 .btn-sm.ghost {
   background: transparent;
+}
+
+.btn-sm.danger {
+  background: var(--flag);
+  border-color: var(--flag);
+  color: #fff;
+}
+
+.qe-delete-confirm-text {
+  font-size: 12.5px;
+  color: var(--muted);
+  align-self: center;
 }
 
 /* Feedback / regenerate panel */
