@@ -6,9 +6,46 @@ import { headlineVerdict } from "./compliance";
 import { analyze, mapWithConcurrency, fetchBootStatus } from "./analyzeClient";
 import { FleetView, Report, sampleLabel } from "./Dashboard";
 import { flaggedTaskItems } from "./fleetStats";
+import tryScreenshot from "./assets/home/try-screenshot.png";
+import examplesScreenshot from "./assets/home/examples-screenshot.png";
+import qualevalScreenshot from "./assets/home/qualeval-screenshot.png";
 import "./App.css";
 
 const GENERIC_PACKS = ["generic"];
+
+const NAV_OVERVIEW = [
+  {
+    href: "/home",
+    label: "Home",
+    what: "This page. A map of what ComplyLine does and where each piece of it lives.",
+    click:
+      "You're already here - it also runs the Northstar Voice compliance sweep below, a canned fleet of 12 sample calls you can analyze in one click.",
+  },
+  {
+    href: "/try",
+    label: "Try Compliance",
+    what: "The live analysis lab: run a real mic call against the AssemblyAI Voice Agent, send a call through the webhook sandbox, or paste a transcript.",
+    click:
+      "Pick a persona, consent to analysis, then start a call or paste/upload a transcript. ComplyLine ends the call, runs every checked compliance check, and shows a severity-ranked report with a regulatory citation on each finding.",
+    screenshot: tryScreenshot,
+  },
+  {
+    href: "/examples",
+    label: "Compliance Examples",
+    what: "Playable sample calls and scripted violation demos - no sign-in, API key, or live call needed.",
+    click:
+      "Pick a sample (a clean call, a TCPA violation, a late AI disclosure, etc.) to see a full compliance report instantly, or auto-split an uploaded recording by speaker to see the same pipeline on your own audio.",
+    screenshot: examplesScreenshot,
+  },
+  {
+    href: "/qualeval",
+    label: "Qualitative Evals",
+    what: "A separate testing tool: it phones your AI voice agent like a real customer would, instead of scanning a transcript you already have.",
+    click:
+      "Describe your agent (phone number, what it does, what it must always/never do). QualEval writes a batch of test-call scenarios, you approve the ones worth running, then it places real calls and judges each transcript pass/fail with the exact moment that proves it.",
+    screenshot: qualevalScreenshot,
+  },
+];
 
 export default function Home({ navigate, path }) {
   const [fleetResults, setFleetResults] = useState([]);
@@ -110,10 +147,35 @@ export default function Home({ navigate, path }) {
       }
     >
       <p className="app-lede">
+        ComplyLine turns a completed AI voice call into a compliance report - consent, disclosure,
+        and PII checks, ranked by severity with a regulatory citation on each finding. QualEval,
+        alongside it, tests an AI voice agent by actually calling it, the way a real customer
+        would. Here is what each link in the left rail does.
+      </p>
+      <div className="home-overview-grid">
+        {NAV_OVERVIEW.map((item) => (
+          <a key={item.href} className="home-overview-card" href={item.href} onClick={(e) => {
+            e.preventDefault();
+            navigate(item.href);
+          }}>
+            {item.screenshot ? (
+              <img className="home-overview-shot" src={item.screenshot} alt={`${item.label} page`} />
+            ) : null}
+            <h3>{item.label}</h3>
+            <p className="home-overview-what">{item.what}</p>
+            <p className="home-overview-click">
+              <strong>Click it:</strong> {item.click}
+            </p>
+          </a>
+        ))}
+      </div>
+
+      <h2 className="home-section-title">Compliance sweep - Northstar Voice program</h2>
+      <p className="app-lede">
         Click "Run compliance sweep" to analyze the Northstar Voice program's fleet of sample
         sessions. What you can do: watch the fleet queue analyze in real time, open any flagged
         task to jump straight to its session, and hide the task rail when you just want the
-        scoreboard. To analyze your own call, head to Try.
+        scoreboard. To analyze your own call, head to Try Compliance.
       </p>
       {bootWarning && fleetResults?.length > 0 && <p className="error-banner">{bootWarning}</p>}
       {fleetError ? (
