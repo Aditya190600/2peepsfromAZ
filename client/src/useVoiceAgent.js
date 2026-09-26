@@ -38,8 +38,11 @@ export function useVoiceAgent() {
   const lastAudibleAtRef = useRef(0);
   const silenceCheckIntervalRef = useRef(null);
   const recordCallRef = useRef(false);
-  const recordDestInRef = useRef(null); // MediaStreamAudioDestinationNode, mic side
-  const recordDestOutRef = useRef(null); // MediaStreamAudioDestinationNode, agent-reply side
+  // Single MediaStreamAudioDestinationNode, in the output AudioContext, that both
+  // the mic and the agent-reply audio are mixed into - see startRecorder's comment
+  // for why this can't be two destination nodes combined at the MediaRecorder level.
+  const recordDestRef = useRef(null);
+  const recordMicSourceRef = useRef(null); // mic stream re-tapped into the output context for mixing
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
 
@@ -81,7 +84,7 @@ export function useVoiceAgent() {
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(ctx.destination);
-    if (recordDestOutRef.current) source.connect(recordDestOutRef.current);
+    if (recordDestRef.current) source.connect(recordDestRef.current);
 
     // Schedule back-to-back against context time (no sleep-based timing) so the
     // browser's own audio buffer absorbs network jitter between chunks.
@@ -139,7 +142,7 @@ export function useVoiceAgent() {
       audioCtxOutRef.current = new AudioContext({ sampleRate: SAMPLE_RATE });
       nextPlaybackTimeRef.current = 0;
       if (recordCall) {
-        recordDestOutRef.current = audioCtxOutRef.current.createMediaStreamDestination();
+        recordDestRef.current = audioCtxOutRef.current.createMediaStreamDestination();
       }
 
       ws.onopen = () => {
@@ -257,9 +260,14 @@ export function useVoiceAgent() {
 
     source.connect(worklet);
 
-    if (recordCallRef.current) {
-      recordDestInRef.current = ctx.createMediaStreamDestination();
-      source.connect(recordDestInRef.current);
+    if (recordCallRef.current && audioCtxOutRef.current) {
+      // Re-tap the mic MediaStream as a source node inside the OUTPUT AudioContext
+      // (where recordDestRef lives) so both sides land as one mixed track. AudioNodes
+      // can't cross contexts, but a raw MediaStream (from getUserMedia) can be wrapped
+      // in a MediaStreamAudioSourceNode in any context - it isn't tied to the context
+      // that captured it.
+      recordMicSourceRef.current = audioCtxOutRef.current.createMediaStreamSource(stream);
+      if (recordDestRef.current) recordMicSourceRef.current.connect(recordDestRef.current);
       startRecorder();
     }
 
@@ -270,14 +278,14 @@ export function useVoiceAgent() {
     }, 1000);
   }, []);
 
-  // Mixes the mic-tap and agent-reply-tap MediaStreamAudioDestinationNodes
-  // (set up above and in connect()) into one MediaRecorder - a copy of what's
-  // already flowing through the live call, not a second capture path.
+  // Records recordDestRef's single mixed track (mic + agent reply, both routed
+  // into it above and in connect()) - a copy of what's already flowing through
+  // the live call, not a second capture path. This has to be ONE audio track:
+  // MediaRecorder only encodes the first audio track of a MediaStream, silently
+  // dropping the rest, so combining two separate destination-node streams into
+  // one MediaStream at record time (the previous approach) recorded mic-only.
   const startRecorder = useCallback(() => {
-    const micStream = recordDestInRef.current?.stream;
-    const agentStream = recordDestOutRef.current?.stream;
-    if (!micStream && !agentStream) return;
-    const tracks = [...(micStream?.getAudioTracks() ?? []), ...(agentStream?.getAudioTracks() ?? [])];
+    const tracks = recordDestRef.current?.stream.getAudioTracks() ?? [];
     if (tracks.length === 0) return;
     const combined = new MediaStream(tracks);
     const recorder = new MediaRecorder(combined);
@@ -305,7 +313,8 @@ export function useVoiceAgent() {
     micStreamRef.current = null;
     audioCtxInRef.current?.close();
     audioCtxInRef.current = null;
-    recordDestInRef.current = null;
+    recordMicSourceRef.current?.disconnect();
+    recordMicSourceRef.current = null;
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       mediaRecorderRef.current.stop();
     }
@@ -328,7 +337,7 @@ export function useVoiceAgent() {
     stopMic();
     audioCtxOutRef.current?.close();
     audioCtxOutRef.current = null;
-    recordDestOutRef.current = null;
+    recordDestRef.current = null;
     setStatus("idle");
   }, [stopMic]);
 
