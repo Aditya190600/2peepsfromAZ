@@ -71,7 +71,7 @@ function memoryPool() {
         return { rows: [row] };
       }
       if (text.startsWith("insert into production_calls")) {
-        const [sid, direction, transcript, endReason, variantKey, agentId] = params;
+        const [sid, direction, transcript, endReason, variantKey, agentId, audioRef] = params;
         let row = rows.find((r) => r.twilio_call_sid === sid);
         if (!row) {
           row = {
@@ -92,6 +92,7 @@ function memoryPool() {
         row.ended_at = "t1";
         row.variant_key = variantKey ?? row.variant_key;
         row.agent_id = agentId ?? row.agent_id;
+        row.audio_ref = audioRef ?? row.audio_ref;
         return { rows: [row] };
       }
       throw new Error(`unexpected sql: ${text}`);
@@ -145,6 +146,7 @@ test("finishProductionCall attaches the transcript without dropping the caller",
       endReason: "session.ended",
       variantKey: "compliant",
       agentId: "agent_1",
+      audioRef: "/v1/qualeval/production-calls/CA123/audio",
     },
     {},
     pool,
@@ -152,6 +154,7 @@ test("finishProductionCall attaches the transcript without dropping the caller",
   assert.equal(finished.fromNumber, "+13128003792");
   assert.equal(finished.callerName, "Rastopopulous");
   assert.equal(finished.endReason, "session.ended");
+  assert.equal(finished.audioRef, "/v1/qualeval/production-calls/CA123/audio");
   assert.deepEqual(finished.transcript, [{ speaker: "user", text: "This is Rastopopulous" }]);
   assert.equal(pool.rows.length, 1);
 });

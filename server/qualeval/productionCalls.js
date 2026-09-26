@@ -43,13 +43,14 @@ function callRow(row) {
     transcript: row.transcript,
     variantKey: row.variant_key,
     agentId: row.agent_id,
+    audioRef: row.audio_ref,
     qualevalRunId: row.qualeval_run_id,
     createdAt: row.created_at,
   };
 }
 
 const RETURNING =
-  "id, twilio_call_sid, direction, from_number, to_number, caller_name, started_at, ended_at, end_reason, transcript, variant_key, agent_id, qualeval_run_id, created_at";
+  "id, twilio_call_sid, direction, from_number, to_number, caller_name, started_at, ended_at, end_reason, transcript, variant_key, agent_id, audio_ref, qualeval_run_id, created_at";
 
 export async function recordProductionCall(fields, env = process.env, pool = getPool(env)) {
   if (!pool || !fields?.twilioCallSid) return null;
@@ -80,14 +81,15 @@ export async function finishProductionCall(fields, env = process.env, pool = get
   const transcript = fields.transcript == null ? null : JSON.stringify(fields.transcript);
   const { rows } = await pool.query(
     `insert into production_calls
-       (twilio_call_sid, direction, transcript, end_reason, ended_at, variant_key, agent_id)
-     values ($1, $2, $3::jsonb, $4, now(), $5, $6)
+       (twilio_call_sid, direction, transcript, end_reason, ended_at, variant_key, agent_id, audio_ref)
+     values ($1, $2, $3::jsonb, $4, now(), $5, $6, $7)
      on conflict (twilio_call_sid) do update set
        transcript = excluded.transcript,
        end_reason = excluded.end_reason,
        ended_at = now(),
        variant_key = coalesce(excluded.variant_key, production_calls.variant_key),
-       agent_id = coalesce(excluded.agent_id, production_calls.agent_id)
+       agent_id = coalesce(excluded.agent_id, production_calls.agent_id),
+       audio_ref = coalesce(excluded.audio_ref, production_calls.audio_ref)
      returning ${RETURNING}`,
     [
       fields.twilioCallSid,
@@ -96,7 +98,17 @@ export async function finishProductionCall(fields, env = process.env, pool = get
       fields.endReason ?? null,
       fields.variantKey ?? null,
       fields.agentId ?? null,
+      fields.audioRef ?? null,
     ],
+  );
+  return callRow(rows[0]);
+}
+
+export async function getProductionCallBySid(twilioCallSid, env = process.env, pool = getPool(env)) {
+  if (!pool || !twilioCallSid) return null;
+  const { rows } = await pool.query(
+    `select ${RETURNING} from production_calls where twilio_call_sid = $1`,
+    [twilioCallSid],
   );
   return callRow(rows[0]);
 }

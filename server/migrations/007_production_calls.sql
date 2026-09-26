@@ -15,6 +15,7 @@ create table if not exists production_calls (
   transcript jsonb,
   variant_key text,
   agent_id text,
+  audio_ref text,
   qualeval_run_id uuid references qualeval_runs (id) on delete set null,
   created_at timestamptz not null default now()
 );
@@ -23,3 +24,8 @@ create index if not exists production_calls_from_number_idx on production_calls 
 create index if not exists production_calls_to_number_idx on production_calls (to_number);
 create index if not exists production_calls_caller_name_idx on production_calls (caller_name);
 create index if not exists production_calls_qualeval_run_id_idx on production_calls (qualeval_run_id);
+
+-- audio_ref is also added on its own so a database that already applied the
+-- create table above (this migration is replayed on every boot) still gains
+-- the recording pointer.
+alter table production_calls add column if not exists audio_ref text;

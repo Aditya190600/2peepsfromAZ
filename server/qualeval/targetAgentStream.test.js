@@ -247,18 +247,59 @@ test("writes the transcript onto the production call when the inbound bridge end
   await new Promise((resolve) => setImmediate(resolve));
   await new Promise((resolve) => setImmediate(resolve));
 
-  sessionArgs.onFinished({
+  await sessionArgs.onFinished({
     turns: [{ speaker: "user", text: "This is Rastopopulous" }],
     callSid: "CA999",
     reason: "session.ended",
   });
 
-  assert.deepEqual(finished, {
-    twilioCallSid: "CA999",
-    direction: "inbound",
-    transcript: [{ speaker: "user", text: "This is Rastopopulous" }],
-    endReason: "session.ended",
-    variantKey: "compliant",
-    agentId: "agent_1",
+  assert.equal(finished.audioRef, null);
+  assert.equal(finished.twilioCallSid, "CA999");
+  assert.deepEqual(finished.transcript, [{ speaker: "user", text: "This is Rastopopulous" }]);
+});
+
+test("uploads a mixed WAV for an inbound call and stores its audio path", async () => {
+  const twilioWs = new FakeSocket();
+  const httpServer = new EventEmitter();
+  let sessionArgs;
+  let uploaded;
+  let finished;
+  const wav = Buffer.from("RIFFwav");
+  const wss = attachTargetAgentStreamServer(httpServer, {
+    getActiveVariant: async () => ({ key: "compliant", agentId: "agent_1" }),
+    mintToken: async () => "tok",
+    createSession: (args) => {
+      sessionArgs = args;
+      return { injectAudio: () => {} };
+    },
+    waitForClaimableRun: async () => null,
+    createRecorder: () => ({
+      addFrame() {},
+      hasAudio: () => true,
+      toWavBuffer: () => wav,
+    }),
+    recordingsReady: () => true,
+    uploadRecording: async (key, body, contentType) => {
+      uploaded = { key, body, contentType };
+    },
+    finishCall: async (fields) => {
+      finished = fields;
+    },
   });
+  connect(wss, twilioWs);
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  sessionArgs.onIncomingAudio("AAAA", 0);
+  sessionArgs.onOutgoingAudio("BBBB", 20);
+  await sessionArgs.onFinished({
+    turns: [{ speaker: "agent", text: "hello" }],
+    callSid: "CA111",
+    reason: "session.ended",
+  });
+
+  assert.equal(uploaded.key, "production-calls/CA111.wav");
+  assert.equal(uploaded.contentType, "audio/wav");
+  assert.equal(uploaded.body, wav);
+  assert.equal(finished.audioRef, "/v1/qualeval/production-calls/CA111/audio");
 });
