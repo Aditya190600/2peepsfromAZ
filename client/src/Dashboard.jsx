@@ -952,7 +952,7 @@ export default function Dashboard({ navigate, path }) {
 
   return (
     <AppShell path={path} navigate={navigate} title="Compliance Lab">
-      <main className="layout">
+      <main className="layout styled-page">
         {sessionTab === "examples" ? (
           <ExamplesPanels navigate={navigate} topTabBar={topTabBar} />
         ) : (

@@ -2231,12 +2231,16 @@ button.site-nav-link {
 
 .qualeval-page h2,
 .qualeval-page h3,
-.qualeval-page h4 {
+.qualeval-page h4,
+.styled-page h2,
+.styled-page h3,
+.styled-page h4 {
   font-family: var(--qe-heading);
   font-weight: 700;
 }
 
-.qualeval-page .app-lede {
+.qualeval-page .app-lede,
+.styled-page .app-lede {
   max-width: 640px;
 }
 
@@ -3004,4 +3008,70 @@ button.site-nav-link {
   .qe-field-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* --- Shared visual-consistency pass ---
+   Brings QualEval's elevated-card / Space Grotesk look (see the block above)
+   to Home, Try (Compliance Lab, including its Voice Compliance tab), Compliance
+   Examples, and the splash page. Scoped to .styled-page so pages not part of
+   this pass (SessionInspector, Evals, ApiKeys, PhoneNumbers, History) are
+   untouched - only the shared class names below pick up the new look. */
+.styled-page .panel,
+.styled-page .home-overview-card,
+.styled-page .persona-card,
+.styled-page .trust-strip-item {
+  border-radius: var(--qe-radius-sm);
+}
+
+.styled-page .home-overview-card,
+.styled-page .persona-card {
+  background: linear-gradient(180deg, #fff, #fcfcfb);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.styled-page .home-overview-card:hover,
+.styled-page .persona-card:hover:not(.disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--qe-glow);
+}
+
+.styled-page .persona-card.selected {
+  border-color: transparent;
+}
+
+.styled-page .persona-card.selected::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: var(--qe-radius-sm) 0 0 var(--qe-radius-sm);
+  background: var(--accent);
+}
+
+.styled-page .home-overview-shot {
+  border-radius: var(--qe-radius-sm);
+}
+
+.styled-page .home-section-title {
+  font-family: var(--qe-heading);
+  font-weight: 700;
+}
+
+.styled-page .hero-headline,
+.styled-page .section-heading {
+  font-family: var(--qe-heading);
+  font-weight: 700;
+}
+
+.styled-page .trust-strip-item {
+  background: linear-gradient(180deg, #fff, #fcfcfb);
+  border: 1px solid var(--line);
+  padding: 18px 20px;
+}
+
+.styled-page .sample-report-preview .panel,
+.styled-page .report-panel {
+  background: linear-gradient(180deg, #fff, #fcfcfb);
 }

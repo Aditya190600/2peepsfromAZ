@@ -378,7 +378,7 @@ export function ExamplesPanels({ navigate, topTabBar = null }) {
 export default function Examples({ navigate, path }) {
   return (
     <AppShell path={path} navigate={navigate} title="Examples">
-      <main className="layout">
+      <main className="layout styled-page">
         <ExamplesPanels navigate={navigate} />
       </main>
     </AppShell>
