@@ -146,49 +146,51 @@ export default function Home({ navigate, path }) {
         ) : null
       }
     >
-      <p className="app-lede">
-        ComplyLine turns a completed AI voice call into a compliance report - consent, disclosure,
-        and PII checks, ranked by severity with a regulatory citation on each finding. QualEval,
-        alongside it, tests an AI voice agent by actually calling it, the way a real customer
-        would. Here is what each link in the left rail does.
-      </p>
-      <div className="home-overview-grid">
-        {NAV_OVERVIEW.map((item) => (
-          <a key={item.href} className="home-overview-card" href={item.href} onClick={(e) => {
-            e.preventDefault();
-            navigate(item.href);
-          }}>
-            {item.screenshot ? (
-              <img className="home-overview-shot" src={item.screenshot} alt={`${item.label} page`} />
-            ) : null}
-            <h3>{item.label}</h3>
-            <p className="home-overview-what">{item.what}</p>
-            <p className="home-overview-click">
-              <strong>Click it:</strong> {item.click}
-            </p>
-          </a>
-        ))}
-      </div>
+      <div className="styled-page">
+        <p className="app-lede">
+          ComplyLine turns a completed AI voice call into a compliance report - consent, disclosure,
+          and PII checks, ranked by severity with a regulatory citation on each finding. QualEval,
+          alongside it, tests an AI voice agent by actually calling it, the way a real customer
+          would. Here is what each link in the left rail does.
+        </p>
+        <div className="home-overview-grid">
+          {NAV_OVERVIEW.map((item) => (
+            <a key={item.href} className="home-overview-card" href={item.href} onClick={(e) => {
+              e.preventDefault();
+              navigate(item.href);
+            }}>
+              {item.screenshot ? (
+                <img className="home-overview-shot" src={item.screenshot} alt={`${item.label} page`} />
+              ) : null}
+              <h3>{item.label}</h3>
+              <p className="home-overview-what">{item.what}</p>
+              <p className="home-overview-click">
+                <strong>Click it:</strong> {item.click}
+              </p>
+            </a>
+          ))}
+        </div>
 
-      <h2 className="home-section-title">Compliance sweep - Northstar Voice program</h2>
-      <p className="app-lede">
-        Click "Run compliance sweep" to analyze the Northstar Voice program's fleet of sample
-        sessions. What you can do: watch the fleet queue analyze in real time, open any flagged
-        task to jump straight to its session, and hide the task rail when you just want the
-        scoreboard. To analyze your own call, head to Try Compliance.
-      </p>
-      {bootWarning && fleetResults?.length > 0 && <p className="error-banner">{bootWarning}</p>}
-      {fleetError ? (
-        <Report report={null} error={fleetError} />
-      ) : fleetLoading && fleetResults.length === 0 ? (
-        <Report report={null} loading />
-      ) : fleetResults?.length ? (
-        <FleetView results={fleetResults} progress={fleetProgress} navigate={navigate} />
-      ) : !hasRun ? (
-        <Report report={null} idleMessage="No compliance sweep has been run yet. Click 'Run compliance sweep' to start." />
-      ) : (
-        <Report report={null} idleMessage="The program could not be analyzed." />
-      )}
+        <h2 className="home-section-title">Compliance sweep - Northstar Voice program</h2>
+        <p className="app-lede">
+          Click "Run compliance sweep" to analyze the Northstar Voice program's fleet of sample
+          sessions. What you can do: watch the fleet queue analyze in real time, open any flagged
+          task to jump straight to its session, and hide the task rail when you just want the
+          scoreboard. To analyze your own call, head to Try Compliance.
+        </p>
+        {bootWarning && fleetResults?.length > 0 && <p className="error-banner">{bootWarning}</p>}
+        {fleetError ? (
+          <Report report={null} error={fleetError} />
+        ) : fleetLoading && fleetResults.length === 0 ? (
+          <Report report={null} loading />
+        ) : fleetResults?.length ? (
+          <FleetView results={fleetResults} progress={fleetProgress} navigate={navigate} />
+        ) : !hasRun ? (
+          <Report report={null} idleMessage="No compliance sweep has been run yet. Click 'Run compliance sweep' to start." />
+        ) : (
+          <Report report={null} idleMessage="The program could not be analyzed." />
+        )}
+      </div>
     </AppShell>
   );
 }
