@@ -19,7 +19,12 @@ const STREAM_PATH = "/v1/qualeval/target-agent-stream";
 // demoAgentConfig.js's active variant), not something carried on the call
 // via a Custom Parameter, so there's no need to wait for the Media Streams
 // "start" event before creating the bridge session - createBridgeSession
-// itself picks up streamSid/callSid whenever "start" arrives.
+// itself picks up streamSid/callSid whenever "start" arrives, and buffers
+// any reply.audio that AssemblyAI sends before "start" lands (confirmed
+// live 2026-09-26: AssemblyAI's session.ready/reply.audio and Twilio's
+// "start" arrive over two independent sockets with no ordering guarantee,
+// and the greeting's audio was silently dropped when reply.audio won that
+// race - see bridgeSession.js's pendingReplyAudio comment).
 //
 // The bridge session is created immediately regardless of whether this call
 // turns out to be a QualEval-placed run or a real external caller, so a real
