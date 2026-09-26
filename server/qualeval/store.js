@@ -386,6 +386,22 @@ export async function markRunAwaitingEvaluation(id, transcript, env = process.en
   return runRow(rows[0]);
 }
 
+// Stores the durable server route (e.g. `/v1/qualeval/runs/<id>/audio`) that
+// serves this run's call recording, once server/qualeval/twilioStream.js has
+// uploaded it via server/recordingsStore.js. Never called with a fabricated
+// path - only after a real upload succeeds.
+export async function attachAudioRef(id, audioRef, env = process.env, pool = getPool(env)) {
+  requirePool(pool);
+  const { rows } = await pool.query(
+    `update qualeval_runs set audio_ref = $2
+     where id = $1
+     returning ${RUN_COLUMNS}`,
+    [id, audioRef],
+  );
+  if (rows.length === 0) throw new Error("Run not found");
+  return runRow(rows[0]);
+}
+
 export async function recordVerdict(
   id,
   { verdict, assessment, criterionResults, evidenceQuotes },
