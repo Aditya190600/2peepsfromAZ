@@ -1,6 +1,6 @@
 # Playable sample
 
-Playable samples run canned transcripts through `/v1/analyze-session` and show a severity-ranked report. Analyze uses the canned text. Diarize re-uploads an MP3.
+Playable samples run canned transcripts through `/v1/analyze-session` and show a severity-ranked report. Analyze uses the canned text. Auto-split speakers re-uploads an MP3.
 
 ## Sub-features
 
@@ -11,7 +11,7 @@ Playable samples run canned transcripts through `/v1/analyze-session` and show a
 ## How to get to it (user POV)
 
 - Choose **Try**.
-- Under **Playable samples**, choose a sample label, then **Analyze** (the left button, not **Diarize upload**).
+- Under **Playable samples**, choose a sample label, then **Analyze** (the left button, not **Auto-split speakers**).
 
 ## Driving it with cursor-ide-browser
 
@@ -29,7 +29,7 @@ Preconditions:
 
 ## Gotchas
 
-- **Diarize upload** is a different path (`POST /v1/transcribe-upload`). It needs the MP3 under `client/public/samples/`. Do not use it for `sample-analyze`.
+- **Auto-split speakers** is a different path (`POST /v1/transcribe-upload`). It needs the MP3 under `client/public/samples/`. Do not use it for `sample-analyze`.
 - Industry pack checkboxes (HIPAA / GLBA) change findings. Leave them unchecked unless the recipe names them.
 - Gateway 429s surface as `unable to run` / `status: error` cards. That is a failed proof, not a UI bug, unless the mutex tests are also red.
 - Scripted violation demos are a separate section below playable samples. They still need the matching pack checked.

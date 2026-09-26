@@ -1192,9 +1192,10 @@ export default function Dashboard({ navigate, path }) {
               <h3>Demo: try your own audio</h3>
               <p className="pack-note upload-note">
                 Not a live call — drop in any recorded audio file and AssemblyAI&apos;s pre-recorded
-                STT + speaker diarization turns it into the same multi-turn session shape a live call
-                produces, with playback synced to each finding. Samples below are two-speaker
-                recordings so diarization returns real agent/user turns (not one collapsed utterance).
+                STT automatically splits it by speaker, turning it into the same multi-turn session
+                shape a live call produces, with playback synced to each finding. Samples below are
+                two-speaker recordings so the split returns real agent/user turns (not one collapsed
+                utterance).
               </p>
               <label
                 className={`dropzone ${dragActive ? "is-active" : ""} ${!consent ? "is-disabled" : ""}`}
