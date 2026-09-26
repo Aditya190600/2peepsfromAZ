@@ -124,7 +124,7 @@ export default function Examples({ navigate, path }) {
       showAudio(url);
       const { session, report: nextReport } = await diarizeSample(key, patternPackIds);
       setReport(nextReport);
-      recordHistory(`${sampleLabel(key)} (diarized upload)`, nextReport, session, {
+      recordHistory(`${sampleLabel(key)} (speaker-split upload)`, nextReport, session, {
         audioKey: key,
       });
       setDiarizeStatus("idle");
@@ -255,8 +255,9 @@ export default function Examples({ navigate, path }) {
             {sampleTab === "samples" && (
               <div className="section-block tab-panel">
                 <p className="pack-note">
-                  Analyze uses the canned transcript. Diarize re-uploads the MP3 through AssemblyAI
-                  speaker labels — use that to demo the upload path without bringing your own file.
+                  Analyze uses the canned transcript. Auto-split speakers re-uploads the MP3 so the
+                  transcript shows who's talking (agent vs. caller) — use that to demo the upload
+                  path without bringing your own file.
                 </p>
                 <div className="sample-buttons">
                   {PLAYABLE_KEYS.map((key) => (
@@ -277,8 +278,8 @@ export default function Examples({ navigate, path }) {
                           disabled={sampleLoadingKey === key || diarizeStatus === "uploading"}
                         >
                           {sampleLoadingKey === key && diarizeStatus === "uploading"
-                            ? "Diarizing…"
-                            : "Diarize upload"}
+                            ? "Splitting speakers…"
+                            : "Auto-split speakers"}
                         </button>
                       </div>
                       <AudioPlayer src={SAMPLE_AUDIO_URLS[key]} compact />
