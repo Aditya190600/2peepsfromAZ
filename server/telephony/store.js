@@ -9,6 +9,19 @@ function empty() {
   return { credentials: [], numbers: [], sessions: [] };
 }
 
+// Records written before per-user scoping carry no ownerId. They belong to the
+// "anon" visitor - the one shared account index.js's visitorId(req) returns
+// when Clerk is off - so local dev keeps its data, and with Clerk on no
+// signed-in user inherits them.
+const LEGACY_OWNER = "anon";
+
+function ownedBy(ownerId) {
+  return (record) => (record.ownerId ?? LEGACY_OWNER) === ownerId;
+}
+
+// Every read and write is scoped to one owner (a Clerk user id, or "anon").
+// The one cross-owner lookup is findNumberOwner, which routes a
+// webhook-delivered call to whoever registered the dialed number.
 export class TelephonyStore {
   constructor(file = process.env.TELEPHONY_STORE_PATH || defaultFile) {
     this.file = file;
@@ -28,24 +41,31 @@ export class TelephonyStore {
     await writeFile(this.file, JSON.stringify(data, null, 2));
   }
 
-  async listNumbers() {
-    return (await this.read()).numbers;
+  async listNumbers(ownerId) {
+    return (await this.read()).numbers.filter(ownedBy(ownerId));
   }
 
-  async saveNumber(input) {
+  // A number routes inbound calls to exactly one account, so e164 stays
+  // unique across owners.
+  async saveNumber(ownerId, input) {
     const data = await this.read();
     if (data.numbers.some((n) => n.e164 === input.e164)) {
       throw Object.assign(new Error("A number with that e164 already exists"), { status: 409 });
     }
-    const number = { id: `num_${randomUUID()}`, direction: "inbound", ...input };
+    const number = { id: `num_${randomUUID()}`, direction: "inbound", ...input, ownerId };
     data.numbers.push(number);
     await this.write(data);
     return number;
   }
 
-  async updateNumber(id, patch) {
+  async findNumberOwner(e164) {
+    const number = (await this.read()).numbers.find((n) => n.e164 === e164);
+    return number ? (number.ownerId ?? LEGACY_OWNER) : null;
+  }
+
+  async updateNumber(ownerId, id, patch) {
     const data = await this.read();
-    const number = data.numbers.find((n) => n.id === id);
+    const number = data.numbers.find((n) => n.id === id && ownedBy(ownerId)(n));
     if (!number) return null;
     if (patch.label !== undefined) number.label = patch.label;
     if (patch.direction !== undefined) number.direction = patch.direction;
@@ -54,34 +74,34 @@ export class TelephonyStore {
     return number;
   }
 
-  async deleteNumber(id) {
+  async deleteNumber(ownerId, id) {
     const data = await this.read();
-    const next = data.numbers.filter((n) => n.id !== id);
+    const next = data.numbers.filter((n) => !(n.id === id && ownedBy(ownerId)(n)));
     if (next.length === data.numbers.length) return false;
     data.numbers = next;
     await this.write(data);
     return true;
   }
 
-  async listCredentials() {
-    return (await this.read()).credentials;
+  async listCredentials(ownerId) {
+    return (await this.read()).credentials.filter(ownedBy(ownerId));
   }
 
-  async getCredential(id) {
-    return (await this.read()).credentials.find((c) => c.id === id) ?? null;
+  async getCredential(ownerId, id) {
+    return (await this.listCredentials(ownerId)).find((c) => c.id === id) ?? null;
   }
 
-  async saveCredential(input) {
+  async saveCredential(ownerId, input) {
     const data = await this.read();
-    const credential = { id: `cred_${randomUUID()}`, ...input };
+    const credential = { id: `cred_${randomUUID()}`, ...input, ownerId };
     data.credentials.push(credential);
     await this.write(data);
     return credential;
   }
 
-  async deleteCredential(id) {
+  async deleteCredential(ownerId, id) {
     const data = await this.read();
-    const next = data.credentials.filter((c) => c.id !== id);
+    const next = data.credentials.filter((c) => !(c.id === id && ownedBy(ownerId)(c)));
     if (next.length === data.credentials.length) return false;
     data.credentials = next;
     data.numbers = data.numbers.map((n) => (n.credentialId === id ? { ...n, credentialId: null } : n));
@@ -89,21 +109,24 @@ export class TelephonyStore {
     return true;
   }
 
-  async saveSession(entry) {
+  // Two owners can post the same carrier callId, so a session is keyed by
+  // owner and sessionId together.
+  async saveSession(ownerId, entry) {
     const data = await this.read();
-    const existing = data.sessions.findIndex((s) => s.sessionId === entry.sessionId);
-    if (existing >= 0) data.sessions[existing] = entry;
-    else data.sessions.unshift(entry);
+    const owned = { ...entry, ownerId };
+    const existing = data.sessions.findIndex((s) => s.sessionId === entry.sessionId && ownedBy(ownerId)(s));
+    if (existing >= 0) data.sessions[existing] = owned;
+    else data.sessions.unshift(owned);
     await this.write(data);
-    return entry;
+    return owned;
   }
 
-  async listSessions() {
-    return (await this.read()).sessions;
+  async listSessions(ownerId) {
+    return (await this.read()).sessions.filter(ownedBy(ownerId));
   }
 
-  async getSession(sessionId) {
-    return (await this.read()).sessions.find((s) => s.sessionId === sessionId) ?? null;
+  async getSession(ownerId, sessionId) {
+    return (await this.listSessions(ownerId)).find((s) => s.sessionId === sessionId) ?? null;
   }
 }
 
