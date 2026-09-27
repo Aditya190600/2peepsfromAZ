@@ -183,3 +183,80 @@ test("an operator can re-run a finished Phone Evals call's analyses", async () =
   }, options);
   assert.deepEqual(analyzed, [sid]);
 });
+
+test("an email allowlist blocks a signed-in non-listed user from every operator route, and * opens them", async () => {
+  const { createOperatorCheck, parseOperatorEmails } = await import("./operatorAccess.js");
+  const emailsByUser = { user_captain: ["Captain@Example.com"], user_stranger: ["stranger@example.com"] };
+  const operatorCheck = (raw) =>
+    createOperatorCheck({
+      allowlist: parseOperatorEmails(raw),
+      clerkEnabled: true,
+      userIdOf: (req) => req.get("x-test-user"),
+      lookupEmails: async (userId) => emailsByUser[userId] ?? [],
+    });
+  const sid = "CA0123456789abcdef0123456789abcdef";
+  const options = {
+    getProductionCall: async () => ({ twilioCallSid: sid, direction: "inbound", endedAt: "2026-09-27T20:00:00Z" }),
+    analyzeCall: async () => {},
+  };
+  const json = { "content-type": "application/json" };
+  const operatorRoutes = [
+    ["GET", "/phone-evals"],
+    ["POST", `/phone-evals/${sid}/analyze`],
+    ["GET", `/production-calls/${sid}/audio`],
+    ["GET", "/demo-agent/variants"],
+    ["PATCH", "/demo-agent/variants/compliant", { systemPrompt: "x" }],
+    ["POST", "/demo-agent/active", { variant: "flawed" }],
+  ];
+  const hit = (base, user, [method, path, body]) =>
+    fetch(`${base}${path}`, {
+      method,
+      headers: { ...json, ...(user && { "x-test-user": user }) },
+      ...(body && { body: JSON.stringify(body) }),
+    });
+
+  const serve = async (raw, fn) => {
+    const { default: express } = await import("express");
+    const { qualevalRouter } = await import("./router.js");
+    const app = express();
+    app.use(express.json());
+    app.use(qualevalRouter({ isOperator: operatorCheck(raw), ...options }));
+    const server = app.listen(0);
+    await new Promise((resolve) => server.once("listening", resolve));
+    try {
+      await fn(`http://127.0.0.1:${server.address().port}`);
+    } finally {
+      server.close();
+    }
+  };
+
+  await serve("captain@example.com", async (base) => {
+    for (const user of ["user_stranger", undefined]) {
+      for (const route of operatorRoutes) {
+        const resp = await hit(base, user, route);
+        assert.equal(resp.status, 403, `${user ?? "signed-out"} ${route[0]} ${route[1]}`);
+        assert.deepEqual(await resp.json(), { error: "Operator access required." });
+      }
+      assert.equal((await (await hit(base, user, ["GET", "/config"])).json()).isOperator, false);
+    }
+    // The listed user passes the gate on each route (no DB/bucket in tests, so
+    // later handler steps may 404/500 - but never the operator 403).
+    for (const route of operatorRoutes) {
+      const resp = await hit(base, "user_captain", route);
+      assert.notEqual(resp.status, 403, `captain ${route[0]} ${route[1]}`);
+    }
+    assert.equal((await hit(base, "user_captain", ["GET", "/phone-evals"])).status, 200);
+    assert.equal((await (await hit(base, "user_captain", ["GET", "/config"])).json()).isOperator, true);
+  });
+
+  await serve("*", async (base) => {
+    assert.equal((await hit(base, "user_stranger", ["GET", "/phone-evals"])).status, 200);
+    assert.equal((await (await hit(base, "user_stranger", ["GET", "/config"])).json()).isOperator, true);
+  });
+
+  for (const raw of [undefined, "", "captain@example.com,*"]) {
+    await serve(raw, async (base) => {
+      assert.equal((await hit(base, "user_stranger", ["GET", "/phone-evals"])).status, 403, String(raw));
+    });
+  }
+});
