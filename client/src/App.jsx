@@ -10,6 +10,7 @@ import ApiKeys from "./ApiKeys";
 import Evals from "./Evals";
 import PhoneNumbers from "./PhoneNumbers";
 import QualEval from "./QualEval";
+import Settings from "./Settings";
 import { matchRoute } from "./routes";
 import "./App.css";
 
@@ -116,6 +117,13 @@ export default function App() {
     return (
       <RequireVisitor>
         <QualEval navigate={navigate} path={viewPath} evaluationId={view.evaluationId} />
+      </RequireVisitor>
+    );
+  }
+  if (view.name === "settings") {
+    return (
+      <RequireVisitor>
+        <Settings navigate={navigate} path={viewPath} />
       </RequireVisitor>
     );
   }

@@ -17,7 +17,7 @@ test("creates an agent and persists its id only for a variant with no agent_id y
   const updated = [];
   const updateVariant = async (key, fields) => updated.push({ key, fields });
 
-  await ensureDemoAgentsProvisioned({ env: ENV, listVariants, updateVariant, create });
+  await ensureDemoAgentsProvisioned({ env: ENV, ensureVariantRows: async () => {}, listVariants, updateVariant, create });
 
   assert.equal(created.length, 1);
   assert.equal(created[0].name, "QualEval demo target agent - compliant");
@@ -43,7 +43,26 @@ test("a failed create for one variant does not block the other", async () => {
   const updated = [];
   const updateVariant = async (key, fields) => updated.push({ key, fields });
 
-  await ensureDemoAgentsProvisioned({ env: ENV, listVariants, updateVariant, create });
+  await ensureDemoAgentsProvisioned({ env: ENV, ensureVariantRows: async () => {}, listVariants, updateVariant, create });
 
   assert.deepEqual(updated, [{ key: "flawed", fields: { agentId: "flawed_agent_id" } }]);
+});
+
+test("seeds catalog rows before listing, so a newly added catalog agent gets provisioned", async () => {
+  const rows = [{ key: "compliant", agentId: "already_provisioned" }];
+  const ensureVariantRows = async () => rows.push({ key: "flight-compliant", agentId: null });
+  const created = [];
+  const create = async (body) => {
+    created.push(body);
+    return { id: "flight_agent_id" };
+  };
+  const updated = [];
+  const updateVariant = async (key, fields) => updated.push({ key, fields });
+
+  await ensureDemoAgentsProvisioned({ env: ENV, ensureVariantRows, listVariants: async () => rows, updateVariant, create });
+
+  assert.equal(created.length, 1);
+  assert.equal(created[0].name, "QualEval demo target agent - flight compliant");
+  assert.deepEqual(created[0].input, { format: { encoding: "audio/pcmu" } });
+  assert.deepEqual(updated, [{ key: "flight-compliant", fields: { agentId: "flight_agent_id" } }]);
 });

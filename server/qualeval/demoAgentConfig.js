@@ -1,9 +1,11 @@
 import { getPool, dbConfigured } from "../db.js";
 import * as demoAgentAgents from "./demoAgentAgents.js";
+import { DEMO_AGENTS, DEMO_AGENT_KEYS } from "./demoAgentDefaults.js";
 
-// Persistence for QUALEVAL_AGENT_NUMBER's two selectable target-agent
-// variants (server/migrations/005_qualeval_demo_agent.sql) and which one is
-// currently active. Each variant stores only an AssemblyAI `agent_id`, not
+// Persistence for QUALEVAL_AGENT_NUMBER's selectable target agents
+// (server/migrations/005_qualeval_demo_agent.sql, 008_qualeval_demo_agent_catalog.sql)
+// and which one is currently active. The set of keys comes from
+// server/qualeval/demoAgentDefaults.js's DEMO_AGENTS catalog. Each variant stores only an AssemblyAI `agent_id`, not
 // prompt text - the prompt/greeting/voice live on AssemblyAI's own stored
 // agent record (server/qualeval/demoAgentAgents.js), and `updateVariant`'s
 // systemPrompt/greeting/voice fields write straight through to that record.
@@ -15,7 +17,7 @@ export const NOT_CONFIGURED_ERROR =
 
 export { dbConfigured };
 
-export const VARIANT_KEYS = ["compliant", "flawed"];
+export const VARIANT_KEYS = DEMO_AGENT_KEYS;
 
 function requirePool(pool) {
   if (!pool) throw new Error(NOT_CONFIGURED_ERROR);
@@ -36,10 +38,28 @@ function variantRow(row) {
   };
 }
 
+// Catalog order (DEMO_AGENTS), not alphabetical, so agents group by domain.
+// A leftover row whose key was removed from the catalog is skipped rather
+// than surfaced as an agent that can no longer be selected or edited.
 export async function listVariants(env = process.env, pool = getPool(env)) {
   requirePool(pool);
-  const { rows } = await pool.query(`select key, name, agent_id, updated_at from qualeval_demo_agent_variants order by key`);
-  return rows.map(variantRow);
+  const { rows } = await pool.query(`select key, name, agent_id, updated_at from qualeval_demo_agent_variants`);
+  const byKey = new Map(rows.map((row) => [row.key, variantRow(row)]));
+  return VARIANT_KEYS.filter((key) => byKey.has(key)).map((key) => byKey.get(key));
+}
+
+// Inserts a row (key + display name, no agent_id yet) for every catalog
+// agent that doesn't have one, so a newly added DEMO_AGENTS entry becomes
+// selectable on the next boot without a migration. Existing rows, including
+// any operator-edited name, are left alone.
+export async function ensureVariantRows(env = process.env, pool = getPool(env)) {
+  requirePool(pool);
+  await pool.query(
+    `insert into qualeval_demo_agent_variants (key, name)
+     select * from unnest($1::text[], $2::text[])
+     on conflict (key) do nothing`,
+    [DEMO_AGENTS.map((a) => a.key), DEMO_AGENTS.map((a) => a.label)],
+  );
 }
 
 export async function getVariant(key, env = process.env, pool = getPool(env)) {
@@ -101,9 +121,17 @@ export async function getActiveVariantKey(env = process.env, pool = getPool(env)
   return rows[0]?.active_variant ?? null;
 }
 
+// Refuses an agent with no AssemblyAI agent_id yet: making it active would
+// leave QUALEVAL_AGENT_NUMBER unable to answer at all (getActiveVariant
+// throws for it) until provisioning catches up on the next boot.
 export async function setActiveVariant(key, env = process.env, pool = getPool(env)) {
   requirePool(pool);
   requireValidKey(key);
+  const variant = await getVariant(key, env, pool);
+  if (!variant) throw new Error(`Variant "${key}" not found.`);
+  if (!variant.agentId) {
+    throw new Error(`Variant "${key}" has no AssemblyAI agent_id yet - it hasn't been provisioned.`);
+  }
   const { rows } = await pool.query(
     `update qualeval_demo_agent_state set active_variant = $1, updated_at = now()
      where id = true

@@ -60,3 +60,58 @@ test("dispatchCallPlacement swallows a markRunError failure instead of rejecting
     }),
   );
 });
+
+async function withRouter(isOperator, fn) {
+  const { default: express } = await import("express");
+  const { qualevalRouter } = await import("./router.js");
+  const app = express();
+  app.use(express.json());
+  app.use(qualevalRouter({ isOperator: async () => isOperator }));
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+  try {
+    await fn(`http://127.0.0.1:${server.address().port}`);
+  } finally {
+    server.close();
+  }
+}
+
+test("non-operators get 403 from every demo-agent route and no persona number from /config", async () => {
+  const saved = { agent: process.env.QUALEVAL_AGENT_NUMBER, persona: process.env.QUALEVAL_PERSONA_NUMBER };
+  process.env.QUALEVAL_AGENT_NUMBER = "+15550000001";
+  process.env.QUALEVAL_PERSONA_NUMBER = "+15550000002";
+  try {
+    await withRouter(false, async (base) => {
+      const variants = await fetch(`${base}/demo-agent/variants`);
+      assert.equal(variants.status, 403);
+      const patch = await fetch(`${base}/demo-agent/variants/compliant`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ systemPrompt: "x" }),
+      });
+      assert.equal(patch.status, 403);
+      const active = await fetch(`${base}/demo-agent/active`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ variant: "flawed" }),
+      });
+      assert.equal(active.status, 403);
+      assert.deepEqual(await (await fetch(`${base}/config`)).json(), {
+        agentPhoneNumber: "+15550000001",
+        isOperator: false,
+      });
+    });
+    await withRouter(true, async (base) => {
+      assert.deepEqual(await (await fetch(`${base}/config`)).json(), {
+        agentPhoneNumber: "+15550000001",
+        isOperator: true,
+        personaPhoneNumber: "+15550000002",
+      });
+    });
+  } finally {
+    for (const [key, value] of [["QUALEVAL_AGENT_NUMBER", saved.agent], ["QUALEVAL_PERSONA_NUMBER", saved.persona]]) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
