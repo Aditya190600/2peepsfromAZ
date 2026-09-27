@@ -5,6 +5,7 @@ import { AppShell } from "./Chrome";
 import AudioPlayer from "./AudioPlayer";
 import { Timestamp } from "./Dashboard";
 import { seekAudio } from "./seek";
+import { runToAudioMarkers } from "./qualEvalAudioMarkers";
 import {
   listEvaluations,
   createEvaluation,
@@ -351,13 +352,11 @@ function RunResult({ run }) {
       <VerdictPill run={run} />
       {run?.audioRef && (
         <div className="qe-run-audio">
-          <AudioPlayer
-            src={run.audioRef}
-            audioRef={audioRef}
-            markers={turns
-              .filter((t) => t.tMs != null)
-              .map((t) => ({ tMs: t.tMs, kind: "turn", label: `${t.role}: ${(t.text ?? "").slice(0, 60)}` }))}
-          />
+          <AudioPlayer src={run.audioRef} audioRef={audioRef} markers={runToAudioMarkers(run)} />
+          <p className="hint">
+            Click a transcript timestamp or a waveform marker to seek. Red markers show evaluation
+            evidence for failed criteria.
+          </p>
         </div>
       )}
       <div className="qe-run-layout">
@@ -812,6 +811,7 @@ function InboundCallList({ calls }) {
                   audioRef: call.audioRef,
                   transcript: call.transcript,
                   criterionResults: call.criterionResults,
+                  evidenceQuotes: call.evidenceQuotes,
                 }}
               />
             ) : (
