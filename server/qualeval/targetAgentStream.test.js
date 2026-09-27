@@ -36,7 +36,7 @@ test("bridges immediately using the active variant, without waiting for a start 
   let sessionArgs;
   const createSession = (args) => {
     sessionArgs = args;
-    return { injectAudio: () => {} };
+    return {};
   };
   const waitForClaimableRun = async () => null;
 
@@ -74,85 +74,62 @@ test("closes the stream instead of hanging when loading the active variant fails
   assert.equal(twilioWs.readyState, twilioWs.CLOSED);
 });
 
-test("a real external caller (no claimable run) still gets a working bridge, with no cross-wire", async () => {
+test("reply audio goes only to this call's own Twilio leg, never cross-fed to another session", async () => {
   const twilioWs = new FakeSocket();
   const httpServer = new EventEmitter();
-  const getActiveVariant = async () => ({ key: "compliant", agentId: "agent_compliant" });
-  let onReplyAudio;
-  const createSession = (args) => {
-    onReplyAudio = args.onReplyAudio;
-    return { injectAudio: () => {} };
-  };
-  const waitForClaimableRun = async () => null;
-
+  let sessionArgs;
   const wss = attachTargetAgentStreamServer(httpServer, {
-    getActiveVariant,
+    getActiveVariant: async () => ({ key: "compliant", agentId: "agent_compliant" }),
     mintToken: async () => "tok",
-    createSession,
-    waitForClaimableRun,
-  });
-  connect(wss, twilioWs);
-  await new Promise((resolve) => setImmediate(resolve));
-  await new Promise((resolve) => setImmediate(resolve));
-
-  // No claimed run - forwarding reply audio anywhere should just be a no-op,
-  // never throw (a real external caller has no QualEval run to cross-wire to).
-  assert.doesNotThrow(() => onReplyAudio("some-audio"));
-});
-
-test("a claimed QualEval run gets registered with the broker for cross-wiring", async () => {
-  const twilioWs = new FakeSocket();
-  const httpServer = new EventEmitter();
-  const getActiveVariant = async () => ({ key: "compliant", agentId: "agent_compliant" });
-  const injectAudio = () => {};
-  const createSession = () => ({ injectAudio });
-  let registeredRunId;
-  let registeredInjectAudio;
-
-  const wss = attachTargetAgentStreamServer(httpServer, {
-    getActiveVariant,
-    mintToken: async () => "tok",
-    createSession,
-    waitForClaimableRun: async () => "run_xyz",
-    registerTargetLeg: (runId, fn) => {
-      registeredRunId = runId;
-      registeredInjectAudio = fn;
+    createSession: (args) => {
+      sessionArgs = args;
+      return {};
     },
+    waitForClaimableRun: async () => "run_xyz",
   });
-
   connect(wss, twilioWs);
   await new Promise((resolve) => setImmediate(resolve));
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(registeredRunId, "run_xyz");
-  assert.equal(registeredInjectAudio, injectAudio);
+
+  // The caller hears this agent over the phone line only. A second,
+  // server-side copy fed into the calling agent made both sides talk over
+  // each other (see bridgeSession.js's header comment).
+  assert.equal(sessionArgs.onReplyAudio, undefined);
 });
 
-test("forwards reply audio to the claimed run's persona leg via the injected forwardToPersona", async () => {
+test("a claimed QualEval run is linked onto the production call and its evaluation", async () => {
   const twilioWs = new FakeSocket();
   const httpServer = new EventEmitter();
-  const getActiveVariant = async () => ({ key: "compliant", agentId: "agent_compliant" });
-  let onReplyAudio;
-  const createSession = (args) => {
-    onReplyAudio = args.onReplyAudio;
-    return { injectAudio: () => {} };
-  };
-  const forwarded = [];
-
+  let sessionArgs;
+  let finished;
+  let evaluated;
+  const released = [];
   const wss = attachTargetAgentStreamServer(httpServer, {
-    getActiveVariant,
+    getActiveVariant: async () => ({ key: "compliant", agentId: "agent_compliant" }),
     mintToken: async () => "tok",
-    createSession,
+    createSession: (args) => {
+      sessionArgs = args;
+      return {};
+    },
     waitForClaimableRun: async () => "run_xyz",
-    registerTargetLeg: () => {},
-    forwardToPersona: (runId, audio) => forwarded.push({ runId, audio }),
+    releaseRun: (runId) => released.push(runId),
+    finishCall: async (fields) => {
+      finished = fields;
+      return {};
+    },
+    evaluateCall: async (fields) => {
+      evaluated = fields;
+    },
+    recordingsReady: () => false,
   });
-
   connect(wss, twilioWs);
   await new Promise((resolve) => setImmediate(resolve));
   await new Promise((resolve) => setImmediate(resolve));
 
-  onReplyAudio("target-said-this");
-  assert.deepEqual(forwarded, [{ runId: "run_xyz", audio: "target-said-this" }]);
+  await sessionArgs.onFinished({ turns: [], callSid: "CA1", reason: "session.ended" });
+  assert.equal(finished.qualevalRunId, "run_xyz");
+  assert.equal(evaluated.qualevalRunId, "run_xyz");
+  assert.deepEqual(released, ["run_xyz"]);
 });
 
 // Reproduces the real inbound-call failure (confirmed from production logs
@@ -214,7 +191,7 @@ test("does not open an AssemblyAI session when the caller hangs up during setup"
     mintToken: async () => "tok",
     createSession: () => {
       created = true;
-      return { injectAudio: () => {} };
+      return {};
     },
     waitForClaimableRun: async () => null,
   });
@@ -236,7 +213,7 @@ test("writes the transcript onto the production call when the inbound bridge end
     mintToken: async () => "tok",
     createSession: (args) => {
       sessionArgs = args;
-      return { injectAudio: () => {} };
+      return {};
     },
     waitForClaimableRun: async () => null,
     finishCall: async (fields) => {
@@ -272,7 +249,7 @@ test("uploads a mixed WAV for an inbound call and stores its audio path", async 
     mintToken: async () => "tok",
     createSession: (args) => {
       sessionArgs = args;
-      return { injectAudio: () => {} };
+      return {};
     },
     waitForClaimableRun: async () => null,
     createRecorder: () => ({

@@ -42,20 +42,21 @@ export const DEFAULT_SILENCE_TIMEOUT_MS = 30 * 1000;
 //   needs no swap. That side passes transcriptUserRole="user",
 //   transcriptAgentRole="agent".
 //
-// `onReplyAudio`/`injectAudio` exist because Twilio does NOT bridge real
-// audio between the persona leg and the target-agent leg of a QualEval-
-// placed call: each leg's own standalone `<Connect><Stream>` (twilioVoice.js
-// and demoAgentVoice.js respectively) hijacks THAT leg's own audio path into
-// its own AssemblyAI session, so the two real phone legs never actually
-// carry each other's voice (verified live 2026-09-25 - steady real media
-// flow on both legs, zero cross-talk ever transcribed). server/qualeval/
-// callBridgeBroker.js cross-wires the two bridgeSession instances for one
-// call server-side instead: each side's `onReplyAudio` callback hands its
-// own synthesized speech to the broker, which calls the OTHER side's
-// `injectAudio` to feed it in as if it arrived over the phone. Both legs are
-// still real Twilio calls carrying real Media Streams - only the "who hears
-// whom" wiring moved from Twilio's native call bridge (which doesn't apply
-// here) to our own server code.
+// Each leg of a QualEval-placed call hears the other leg over the real phone
+// line: this session's reply.audio goes out on its own Twilio leg, Twilio
+// carries it across the call, and the other leg's Media Stream delivers it
+// as that leg's inbound "media". An earlier design ALSO cross-fed each
+// session's synthesized speech straight into the other session's AssemblyAI
+// input (a server-side "broker"), on the belief that Twilio did not carry
+// audio between the two legs - that belief came from calls made while this
+// file dropped every reply.audio chunk before Twilio's "start" event (the
+// pendingReplyAudio bug below), so nothing ever reached the wire. Once that
+// was fixed, both paths were live and each AssemblyAI session heard the
+// other party twice - once early (as fast as it was synthesized) and once
+// in real time over the phone - which, reproduced live 2026-09-27 against
+// real calls, made the two agents talk over each other from the first
+// seconds of every call and garbled every turn after. The phone line is
+// the only audio path now, the same one a real external caller uses.
 export function createBridgeSession({
   twilioWs,
   token,
@@ -79,10 +80,6 @@ export function createBridgeSession({
   onReady,
   onFinished,
   onError,
-  // Called with each base64 audio/pcmu chunk this session's AssemblyAI
-  // agent speaks, in addition to the existing relay to this session's own
-  // Twilio leg - see the header comment above.
-  onReplyAudio,
   // Called with each raw base64 audio/pcmu chunk this bridge relays, plus
   // its tMs offset since call start (same clock as the transcript turns
   // above) - server/qualeval/twilioStream.js feeds both into a
@@ -260,8 +257,25 @@ export function createBridgeSession({
         } else {
           pendingReplyAudio.push(msg.data);
         }
-        onReplyAudio?.(msg.data);
         onOutgoingAudio?.(msg.data, startedAtMs ? Date.now() - startedAtMs : 0);
+        break;
+      case "reply.done":
+        log("aai reply.done status", msg.status);
+        // Barge-in: the far end started talking over this agent, so
+        // AssemblyAI cancelled the reply. Twilio has already buffered every
+        // reply.audio chunk sent so far and keeps playing them unless told
+        // otherwise, so without "clear" the caller keeps hearing the
+        // cancelled reply over their own speech and the next one - per
+        // AssemblyAI's own guidance to flush playback on an interrupted
+        // reply (docs/voice-agents/voice-agent-api, "reply.done") and
+        // Twilio's Media Streams "clear" message
+        // (https://www.twilio.com/docs/voice/media-streams/websocket-messages).
+        if (msg.status === "interrupted") {
+          pendingReplyAudio.length = 0;
+          if (streamSid && twilioWs.readyState === twilioWs.OPEN) {
+            twilioWs.send(JSON.stringify({ event: "clear", streamSid }));
+          }
+        }
         break;
       case "session.ended":
         finish("session.ended");
@@ -363,17 +377,6 @@ export function createBridgeSession({
         }
       }
       finish("manual_stop");
-    },
-    // Feeds a base64 audio/pcmu chunk into THIS session's AssemblyAI agent
-    // as if it arrived over the phone - the cross-wiring half of
-    // onReplyAudio, called by server/qualeval/callBridgeBroker.js with the
-    // OTHER leg's synthesized speech. Silently dropped before session.ready,
-    // same gating as real Twilio media (see the "media" case above).
-    injectAudio: (audio) => {
-      noteAudioActivity(audio);
-      if (aaiReady && aaiWs.readyState === aaiWs.OPEN) {
-        aaiWs.send(JSON.stringify({ type: "input.audio", audio }));
-      }
     },
   };
 }

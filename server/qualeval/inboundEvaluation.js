@@ -6,7 +6,7 @@ import {
 
 // Scores a finished inbound call against the evaluation whose target number
 // was dialed. QualEval scenario runs already judge the outbound leg, so a
-// cross-wired inbound leg is recorded as skipped_run instead of calling the
+// run-linked inbound leg is recorded as skipped_run instead of calling the
 // model twice. A real caller is judged on the evaluation's requirements
 // (one criterion per line). No requirements means no_rubric: the call is
 // stored, not invented a verdict.

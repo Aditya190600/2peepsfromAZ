@@ -32,10 +32,9 @@ test("resolves runId from the start event's customParameters, not the connection
   const getScenario = async () => ({ id: "scn_1", name: "test" });
   const mintToken = async () => "tok";
   let sessionArgs;
-  const fakeInjectAudio = () => {};
   const createSession = (args) => {
     sessionArgs = args;
-    return { injectAudio: fakeInjectAudio };
+    return {};
   };
 
   const wss = attachTwilioStreamServer(httpServer, { getRun, getScenario, mintToken, createSession });
@@ -57,13 +56,12 @@ test("resolves runId from the start event's customParameters, not the connection
   assert.ok(sessionArgs, "createSession should have been called once the run/scenario/token resolved");
   assert.equal(sessionArgs.token, "tok");
 
-  // Registered with the broker immediately so the target-agent side can
-  // claim this run for cross-wiring (see bridgeSession.js's header comment).
-  broker.forwardToTarget("nonexistent", "should be a no-op"); // sanity: doesn't throw for an unregistered run
-  let forwarded;
-  broker.registerTargetLeg("run_1", (audio) => (forwarded = audio));
-  sessionArgs.onReplyAudio("some-audio-payload");
-  assert.equal(forwarded, "some-audio-payload");
+  // The persona's speech reaches the target over the phone line only - no
+  // server-side copy (see bridgeSession.js's header comment).
+  assert.equal(sessionArgs.onReplyAudio, undefined);
+  // Registered with the broker so the target-agent leg can link its
+  // production call to this run.
+  assert.equal(broker.claimPendingRunForTarget(), "run_1");
   broker.releaseRun("run_1");
 });
 
