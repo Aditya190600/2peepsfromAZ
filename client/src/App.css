@@ -1902,8 +1902,7 @@ button.site-nav-link {
   transition: opacity 0.12s ease, visibility 0.12s ease;
 }
 
-.pack-row:hover .pack-tooltip,
-.pack-row:focus-within .pack-tooltip {
+.pack-row:hover .pack-tooltip {
   opacity: 1;
   visibility: visible;
 }
