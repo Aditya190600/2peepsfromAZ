@@ -7,6 +7,7 @@ import { Timestamp } from "./Dashboard";
 import { seekAudio } from "./seek";
 import { runToAudioMarkers } from "./qualEvalAudioMarkers";
 import { getDefaultPhoneNumber } from "./phoneNumberPreference";
+import { getLiveAudioPreference, listenToLiveCall, setLiveAudioPreference } from "./liveCallAudio";
 import {
   listEvaluations,
   createEvaluation,
@@ -341,6 +342,101 @@ function VerdictPill({ run }) {
   );
 }
 
+// Listen-in for one in-progress run: both sides of the call as they happen,
+// plus the transcript so far (client/src/liveCallAudio.js). Starts listening
+// on its own only when the page-level auto-play toggle is on; otherwise the
+// viewer opts in per call, so parallel runs don't all stream at once.
+function LiveCallPanel({ run, autoListen }) {
+  const [listening, setListening] = useState(autoListen);
+  const [turns, setTurns] = useState([]);
+  const [suspended, setSuspended] = useState(false);
+  const [ended, setEnded] = useState(false);
+  const listenerRef = useRef(null);
+  const transcriptRef = useRef(null);
+
+  useEffect(() => {
+    setListening(autoListen);
+  }, [autoListen]);
+
+  useEffect(() => {
+    if (!listening) return undefined;
+    const listener = listenToLiveCall(run.id, {
+      onOpen: () => setTurns([]),
+      onTurn: (turn) => setTurns((prev) => [...prev, turn]),
+      // The card itself switches to the result once polling sees the run
+      // finish; until then, say the stream is over rather than "waiting".
+      onEnd: () => {
+        setSuspended(false);
+        setEnded(true);
+      },
+      onStateChange: () => setSuspended(listener.suspended),
+    });
+    listenerRef.current = listener;
+    setSuspended(listener.suspended);
+    return () => {
+      listener.stop();
+      listenerRef.current = null;
+      setTurns([]);
+      setSuspended(false);
+      setEnded(false);
+    };
+  }, [listening, run.id]);
+
+  useEffect(() => {
+    const el = transcriptRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [turns]);
+
+  return (
+    <div className="qe-live-call">
+      <div className="qe-live-head">
+        <span className="qe-live-badge">
+          <span className="qe-live-dot" />
+          Live
+        </span>
+        <span className="qe-live-status">
+          {!listening
+            ? "Call in progress"
+            : ended
+              ? "Live stream ended"
+              : suspended
+                ? "Audio paused by the browser"
+                : "Listening to both sides"}
+        </span>
+        {listening && suspended && (
+          <button type="button" className="btn-sm primary" onClick={() => listenerRef.current?.resume()}>
+            Enable audio
+          </button>
+        )}
+        <button
+          type="button"
+          className={`btn-sm ${listening ? "ghost" : "primary"}`}
+          onClick={() => setListening((on) => !on)}
+        >
+          {listening ? "Stop listening" : "🔊 Listen live"}
+        </button>
+      </div>
+      {listening && (
+        <div className="qe-transcript-card qe-live-transcript" ref={transcriptRef}>
+          {turns.length === 0 ? (
+            <p className="hint">{ended ? "No live audio for this call." : "Waiting for the first words…"}</p>
+          ) : (
+            turns.map((turn, i) => (
+              <div key={i} className={`qe-turn qe-turn-${turn.role === "user" ? "caller" : "agent"}`}>
+                <span className="qe-turn-avatar">{turn.role === "user" ? "C" : "A"}</span>
+                <span className="qe-turn-bubble">
+                  {turn.text}
+                  {formatTimestamp(turn.tMs) && <span className="qe-turn-time">{formatTimestamp(turn.tMs)}</span>}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function RunResult({ run }) {
   const audioRef = useRef(null);
   const turns = run?.transcript?.turns ?? [];
@@ -512,7 +608,7 @@ function EditScenarioForm({ scenario, onSaved, onCancel, busy }) {
   );
 }
 
-function ScenarioCard({ scenario, onApprove, onReject, onRun, onDelete, onEdit, onEndCall, busy }) {
+function ScenarioCard({ scenario, onApprove, onReject, onRun, onDelete, onEdit, onEndCall, busy, autoListen }) {
   const latestRun = scenario.runs?.[0] ?? null;
   const status = runStatus(latestRun);
   const inProgress = latestRun?.verdict === "in_progress";
@@ -660,10 +756,16 @@ function ScenarioCard({ scenario, onApprove, onReject, onRun, onDelete, onEdit, 
         )}
       </div>
 
-      {latestRun && latestRun.verdict !== "pass" && latestRun.verdict !== "fail" && (
-        <div className="call-row">
-          <span className={`finding-status ${status.cls}`}>{status.text}</span>
-        </div>
+      {inProgress ? (
+        <LiveCallPanel run={latestRun} autoListen={autoListen} />
+      ) : (
+        latestRun &&
+        latestRun.verdict !== "pass" &&
+        latestRun.verdict !== "fail" && (
+          <div className="call-row">
+            <span className={`finding-status ${status.cls}`}>{status.text}</span>
+          </div>
+        )
       )}
       <RunResult run={latestRun} />
     </div>
@@ -800,6 +902,7 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
   const [deletingAllTab, setDeletingAllTab] = useState(false);
   const [approvingAllTab, setApprovingAllTab] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [autoListen, setAutoListen] = useState(() => getLiveAudioPreference());
 
   useEffect(() => {
     createTimeGenErrors.delete(evaluationId);
@@ -1070,11 +1173,27 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
           <div className="qualeval-review-scenarios">
             <div className="qe-scenarios-heading">
               <h2>Scenarios ({scenarios.length})</h2>
-              {scenarios.length > 0 && (
-                <button type="button" className="btn-sm ghost" onClick={onExport} disabled={exporting}>
-                  {exporting ? "Exporting…" : "Export to Excel"}
-                </button>
-              )}
+              <div className="qe-scenarios-heading-actions">
+                <label
+                  className="check-row qe-live-toggle"
+                  title="Off by default, so running many scenarios at once doesn't stream every call's audio. You can still listen to a single call from its card."
+                >
+                  <input
+                    type="checkbox"
+                    checked={autoListen}
+                    onChange={(e) => {
+                      setAutoListen(e.target.checked);
+                      setLiveAudioPreference(e.target.checked);
+                    }}
+                  />
+                  Auto-play live call audio
+                </label>
+                {scenarios.length > 0 && (
+                  <button type="button" className="btn-sm ghost" onClick={onExport} disabled={exporting}>
+                    {exporting ? "Exporting…" : "Export to Excel"}
+                  </button>
+                )}
+              </div>
             </div>
             <div className="qe-tab-bar">
               {STATUS_TABS.map((tab) => (
@@ -1153,6 +1272,7 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
                 onEdit={onEditScenario}
                 onEndCall={onEndCall}
                 busy={busyScenarioId === scenario.id}
+                autoListen={autoListen}
               />
             ))}
           </div>

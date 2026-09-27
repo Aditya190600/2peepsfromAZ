@@ -10,6 +10,7 @@ import { endCall } from "./twilioClient.js";
 import { getObjectByKey, sendRecording } from "../recordingsStore.js";
 import { qualevalCallAudioKey, productionCallAudioKey } from "./callRecorder.js";
 import { getProductionCallBySid, listPhoneEvalCalls } from "./productionCalls.js";
+import * as liveCallHub from "./liveCallHub.js";
 import { buildScenariosWorkbook, scenariosExportFilename } from "./scenarioExport.js";
 
 const TWILIO_CALL_SID = /^CA[0-9a-f]{32}$/i;
@@ -97,7 +98,14 @@ async function listScenariosWithRuns(evaluationId, visitor) {
   return Promise.all(scenarios.map(async (scenario) => ({ ...scenario, runs: await store.listRuns(scenario.id) })));
 }
 
-export function qualevalRouter({ visitorId = () => "anon", isOperator = async () => false } = {}) {
+export function qualevalRouter({
+  visitorId = () => "anon",
+  isOperator = async () => false,
+  liveCalls = liveCallHub,
+  heartbeatMs = 15000,
+  // Longest a listener waits for a ringing call to be answered and bridged.
+  startWaitMs = 2 * 60 * 1000,
+} = {}) {
   const router = Router();
 
   const requireOperator = wrap(async (req, res, next) => {
@@ -334,6 +342,55 @@ export function qualevalRouter({ visitorId = () => "anon", isOperator = async ()
       if (!run.twilioCallSid) return res.status(400).json({ error: "Run has no live call to end." });
       await endCall(run.twilioCallSid);
       res.status(202).json({ ok: true });
+    }),
+  );
+
+  // Live listen-in for an in-progress run: a Server-Sent Events stream of
+  // the call's audio frames (both sides, raw base64 audio/pcmu at 8 kHz) and
+  // transcript turns as they happen, fed by server/qualeval/liveCallHub.js.
+  // Opened only when the viewer asks to listen (client/src/QualEval.jsx), so
+  // a page watching many parallel runs doesn't stream every call's audio.
+  // A run that isn't live in this process gets a single "end" event.
+  router.get(
+    "/runs/:id/live",
+    wrap(async (req, res) => {
+      const run = await store.getRun(req.params.id, visitorId(req));
+      if (!run) return res.status(404).json({ error: "Run not found" });
+      res.writeHead(200, {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache, no-transform",
+        connection: "keep-alive",
+        "x-accel-buffering": "no",
+      });
+      res.flushHeaders?.();
+      const openedAt = Date.now();
+      let unsubscribe = null;
+      let heartbeat = null;
+      const send = (event) => {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+        if (event.type === "end") close();
+      };
+      function close() {
+        clearInterval(heartbeat);
+        unsubscribe?.();
+        unsubscribe = null;
+        res.end();
+      }
+      // An in_progress run may still be ringing - its bridge hasn't
+      // started yet (liveCallHub.js), so wait for it rather than ending.
+      // Anything else that isn't live here is over (or in another process).
+      unsubscribe = liveCalls.subscribe(run.id, send, { waitForStart: run.verdict === "in_progress" });
+      if (!unsubscribe) {
+        send({ type: "end" });
+        return;
+      }
+      heartbeat = setInterval(() => {
+        // Never answered, or the process that owns the call restarted:
+        // store.expireStaleRuns retires the run, so stop waiting then.
+        if (!liveCalls.isLive(run.id) && Date.now() - openedAt > startWaitMs) send({ type: "end" });
+        else res.write(": keep-alive\n\n");
+      }, heartbeatMs);
+      req.on("close", close);
     }),
   );
 
