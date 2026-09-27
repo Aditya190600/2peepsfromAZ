@@ -18,6 +18,7 @@ import {
   updateScenario,
   deleteScenario,
   deleteScenariosByStatus,
+  exportScenariosXlsx,
   createRun,
   getRun,
   endRun,
@@ -846,6 +847,7 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
   const [confirmingDeleteAllTab, setConfirmingDeleteAllTab] = useState(false);
   const [deletingAllTab, setDeletingAllTab] = useState(false);
   const [approvingAllTab, setApprovingAllTab] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     createTimeGenErrors.delete(evaluationId);
@@ -974,6 +976,18 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
       setActionError(err.message ?? "Could not delete the scenario.");
     } finally {
       setBusyScenarioId(null);
+    }
+  };
+
+  const onExport = async () => {
+    setActionError(null);
+    setExporting(true);
+    try {
+      await exportScenariosXlsx(evaluationId);
+    } catch (err) {
+      setActionError(err.message ?? "Could not export these scenarios.");
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -1116,7 +1130,14 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
 
         <div className="qualeval-review">
           <div className="qualeval-review-scenarios">
-            <h2>Scenarios ({scenarios.length})</h2>
+            <div className="qe-scenarios-heading">
+              <h2>Scenarios ({scenarios.length})</h2>
+              {scenarios.length > 0 && (
+                <button type="button" className="btn-sm ghost" onClick={onExport} disabled={exporting}>
+                  {exporting ? "Exporting…" : "Export to Excel"}
+                </button>
+              )}
+            </div>
             <div className="qe-tab-bar">
               {STATUS_TABS.map((tab) => (
                 <button

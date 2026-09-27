@@ -10,6 +10,7 @@ import { endCall } from "./twilioClient.js";
 import { getObjectByKey, sendRecording } from "../recordingsStore.js";
 import { qualevalCallAudioKey, productionCallAudioKey } from "./callRecorder.js";
 import { getProductionCallBySid, listProductionCallsForEvaluation } from "./productionCalls.js";
+import { buildScenariosWorkbook, scenariosExportFilename } from "./scenarioExport.js";
 
 const TWILIO_CALL_SID = /^CA[0-9a-f]{32}$/i;
 
@@ -91,6 +92,11 @@ export async function dispatchEvaluation(runId, { llmGateway = providers.getMode
   }
 }
 
+async function listScenariosWithRuns(evaluationId, visitor) {
+  const scenarios = await store.listScenarios(evaluationId, visitor);
+  return Promise.all(scenarios.map(async (scenario) => ({ ...scenario, runs: await store.listRuns(scenario.id) })));
+}
+
 export function qualevalRouter({ visitorId = () => "anon", isOperator = async () => false } = {}) {
   const router = Router();
 
@@ -155,11 +161,23 @@ export function qualevalRouter({ visitorId = () => "anon", isOperator = async ()
       const evaluation = await store.getEvaluation(req.params.id, visitorId(req));
       if (!evaluation) return res.status(404).json({ error: "Evaluation not found" });
       await reconcileStaleRuns();
-      const scenarios = await store.listScenarios(evaluation.id, visitorId(req));
-      const scenariosWithRuns = await Promise.all(
-        scenarios.map(async (scenario) => ({ ...scenario, runs: await store.listRuns(scenario.id) })),
-      );
-      res.json({ ...evaluation, scenarios: scenariosWithRuns });
+      res.json({ ...evaluation, scenarios: await listScenariosWithRuns(evaluation.id, visitorId(req)) });
+    }),
+  );
+
+  // Downloads the evaluation's whole scenario set (every status tab) as an
+  // .xlsx workbook - see scenarioExport.js for the columns.
+  router.get(
+    "/evaluations/:id/scenarios.xlsx",
+    wrap(async (req, res) => {
+      const evaluation = await store.getEvaluation(req.params.id, visitorId(req));
+      if (!evaluation) return res.status(404).json({ error: "Evaluation not found" });
+      await reconcileStaleRuns();
+      const scenarios = await listScenariosWithRuns(evaluation.id, visitorId(req));
+      const workbook = await buildScenariosWorkbook(evaluation, scenarios);
+      res.attachment(scenariosExportFilename(evaluation));
+      res.type("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.send(workbook);
     }),
   );
 
