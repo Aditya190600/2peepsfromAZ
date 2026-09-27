@@ -56,6 +56,8 @@ test("resolves runId from the start event's customParameters, not the connection
 
   assert.ok(sessionArgs, "createSession should have been called once the run/scenario/token resolved");
   assert.equal(sessionArgs.token, "tok");
+  // The simulated caller can hang up once the conversation is over.
+  assert.equal(sessionArgs.endCallTool, true);
 
   // The persona's speech reaches the target over the phone line only - no
   // server-side copy (see bridgeSession.js's header comment).
