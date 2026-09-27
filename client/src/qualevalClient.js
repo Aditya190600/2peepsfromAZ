@@ -123,3 +123,31 @@ export async function setActiveDemoAgent(key) {
     }),
   ).then((body) => body.activeKey);
 }
+
+// Downloads an evaluation's scenario set as .xlsx (GET
+// /evaluations/:id/scenarios.xlsx). Fetched as a blob rather than a plain
+// link so a failure surfaces as an error instead of a downloaded JSON body.
+export async function exportScenariosXlsx(evaluationId) {
+  const resp = await fetch(`/v1/qualeval/evaluations/${encodeURIComponent(evaluationId)}/scenarios.xlsx`);
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({}));
+    throw new Error(body.error ?? "Could not export these scenarios.");
+  }
+  const blob = await resp.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = attachmentFilename(resp.headers.get("content-disposition")) ?? "scenarios.xlsx";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function attachmentFilename(header) {
+  if (!header) return null;
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header);
+  if (encoded) return decodeURIComponent(encoded[1]);
+  const plain = /filename="([^"]+)"/i.exec(header);
+  return plain ? plain[1] : null;
+}

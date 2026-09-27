@@ -768,6 +768,14 @@ button.site-nav-link {
   min-width: 0;
 }
 
+.qe-scenarios-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .qualeval-review-feedback {
   position: sticky;
   top: 24px;
