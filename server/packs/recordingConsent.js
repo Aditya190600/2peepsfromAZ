@@ -11,6 +11,7 @@ export const recordingConsentPack = {
     "Two-party/all-party-consent wiretap statutes, e.g. Cal. Penal Code §632 and similar statutes in IL, FL, PA, MA, MD, WA, and other two-party-consent states.",
   asserts:
     "Surfaces the always-on recording-disclosure check (was recording-disclosure language detected in the first 10s of agent turns). Not a state-by-state legal determination - two-party-consent requirements and exceptions vary by state and this check does not identify caller/callee jurisdiction.",
+  detectionSummary: "Recording-disclosure language in first 10s",
   alwaysOn: false,
   statutoryDamage: {
     range: "Greater of $5,000 or 3x actual damages per violation (California)",

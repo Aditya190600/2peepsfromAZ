@@ -58,16 +58,24 @@ export function requirePack(id) {
 export function packCatalog() {
   return Object.values(PACKS)
     .filter((pack) => !pack.alwaysOn)
-    .map((pack) => ({
-      id: pack.id,
-      name: pack.name,
-      citation: pack.citation,
-      asserts: pack.asserts,
-      alwaysOn: false,
-      patternIds: pack.patterns.map((p) => p.id),
-      checkpointCount: countCheckpoints(pack),
-      statutoryDamage: pack.statutoryDamage ?? null,
-    }));
+    .map((pack) => {
+      const patterns = pack.patterns.map((p) => ({ id: p.id, label: p.label }));
+      const row = {
+        id: pack.id,
+        name: pack.name,
+        citation: pack.citation,
+        asserts: pack.asserts,
+        alwaysOn: false,
+        patternIds: patterns.map((p) => p.id),
+        patterns,
+        checkpointCount: countCheckpoints(pack),
+        statutoryDamage: pack.statutoryDamage ?? null,
+      };
+      if (patterns.length === 0) {
+        row.detectionSummary = pack.detectionSummary ?? pack.asserts.split(".")[0];
+      }
+      return row;
+    });
 }
 
 function countCheckpoints(pack) {

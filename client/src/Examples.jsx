@@ -15,6 +15,7 @@ import { seekAudio } from "./seek";
 import { headlineVerdict } from "./compliance";
 import { analyze, diarizeSample, mapWithConcurrency } from "./analyzeClient";
 import { listIndustryPacks } from "./evalsClient";
+import PatternPackSelect from "./PatternPackSelect";
 import "./App.css";
 
 // Playable samples and scripted violation demos. Originally its own nav
@@ -221,18 +222,11 @@ export function ExamplesPanels({ navigate, topTabBar = null, onShowLiveCall = nu
           <div className="section-block">
             <h2>Pattern packs</h2>
             <p className="panel-label">Industry pattern packs (in addition to the generic scan)</p>
-            <div className="pack-select">
-              {industryPacks.map((pack) => (
-                <label className="check-row" key={pack.id}>
-                  <input
-                    type="checkbox"
-                    checked={selectedPacks.includes(pack.id)}
-                    onChange={() => togglePack(pack.id)}
-                  />
-                  {pack.name}
-                </label>
-              ))}
-            </div>
+            <PatternPackSelect
+              packs={industryPacks}
+              selectedPacks={selectedPacks}
+              onToggle={togglePack}
+            />
             <p className="pack-note">Drop-in extensions over the generic scan — no core changes.</p>
             {packCatalogStale && (
               <p className="pack-note">

@@ -40,10 +40,46 @@ test("packCatalog lists industry packs only and strips regexes", () => {
   for (const row of catalog) {
     assert.equal(typeof row.asserts, "string");
     assert.ok(row.asserts.length > 0);
-    assert.equal(row.patterns, undefined);
+    assert.ok(Array.isArray(row.patterns));
     assert.equal(row.specimens, undefined);
     assert.ok(row.checkpointCount > 0);
+    for (const pattern of row.patterns) {
+      assert.equal(typeof pattern.id, "string");
+      assert.equal(typeof pattern.label, "string");
+      assert.equal(pattern.regex, undefined);
+    }
+    if (row.patterns.length === 0) {
+      assert.equal(typeof row.detectionSummary, "string");
+      assert.ok(row.detectionSummary.length > 0);
+    } else {
+      assert.equal(row.detectionSummary, undefined);
+    }
   }
+});
+
+test("packCatalog includes HIPAA pattern labels for tooltips", () => {
+  const hipaa = packCatalog().find((p) => p.id === "hipaa");
+  assert.deepEqual(
+    hipaa.patterns.map((p) => p.label),
+    [
+      "Possible Medical Record Number (MRN)",
+      "Possible National Provider Identifier (NPI)",
+      "Possible patient ID",
+    ],
+  );
+});
+
+test("check-only packs expose detectionSummary for tooltips", () => {
+  const catalog = packCatalog();
+  assert.equal(catalog.find((p) => p.id === "tcpa").detectionSummary, "Consent event logged before call");
+  assert.equal(
+    catalog.find((p) => p.id === "recording_consent").detectionSummary,
+    "Recording-disclosure language in first 10s",
+  );
+  assert.equal(
+    catalog.find((p) => p.id === "ca_sb1001").detectionSummary,
+    "Bot/AI self-identification anywhere in call",
+  );
 });
 
 test("HIPAA asserts identifier detection, not Safe Harbor coverage", () => {

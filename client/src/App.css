@@ -1835,6 +1835,64 @@ button.site-nav-link {
   gap: 8px;
 }
 
+.pack-row-body {
+  position: relative;
+  flex: 1;
+}
+
+.pack-tooltip {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  min-width: 220px;
+  max-width: 320px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.12s ease, visibility 0.12s ease;
+}
+
+.pack-row:hover .pack-tooltip,
+.pack-row:focus-within .pack-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+.pack-tooltip-title {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.pack-tooltip-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.pack-tooltip-list li + li {
+  margin-top: 4px;
+}
+
+.pack-tooltip-summary {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
 .provider-row {
   margin-top: 14px;
 }
