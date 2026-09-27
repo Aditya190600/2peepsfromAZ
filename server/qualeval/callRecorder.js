@@ -16,19 +16,20 @@ export function productionCallAudioKey(callSid) {
   return `production-calls/${encodeURIComponent(callSid)}.wav`;
 }
 
-function encodeWav(pcmData, sampleRate) {
+function encodeWav(pcmData, sampleRate, channels = 1) {
   const header = Buffer.alloc(44);
-  const byteRate = sampleRate * 2;
+  const blockAlign = channels * 2;
+  const byteRate = sampleRate * blockAlign;
   header.write("RIFF", 0);
   header.writeUInt32LE(36 + pcmData.length, 4);
   header.write("WAVE", 8);
   header.write("fmt ", 12);
   header.writeUInt32LE(16, 16);
   header.writeUInt16LE(1, 20); // PCM
-  header.writeUInt16LE(1, 22); // mono
+  header.writeUInt16LE(channels, 22);
   header.writeUInt32LE(sampleRate, 24);
   header.writeUInt32LE(byteRate, 28);
-  header.writeUInt16LE(2, 32); // block align
+  header.writeUInt16LE(blockAlign, 32);
   header.writeUInt16LE(16, 34); // bits per sample
   header.write("data", 36);
   header.writeUInt32LE(pcmData.length, 40);
@@ -97,11 +98,27 @@ export function createCallRecorder(maxDurationMs) {
     return encodeWav(pcm, SAMPLE_RATE);
   }
 
+  // Stereo WAV for waveform playback: channel 0 = caller/user, channel 1 =
+  // agent. On the inbound target-agent leg incoming is the caller and
+  // outgoing is the agent; on the outbound persona leg those are swapped.
+  function toStereoWavBuffer({ userTrackName = "incoming", agentTrackName = "outgoing" } = {}) {
+    const userTrack = tracks[userTrackName];
+    const agentTrack = tracks[agentTrackName];
+    const length = Math.max(userTrack.end, agentTrack.end);
+    const pcm = Buffer.alloc(length * 4);
+    for (let i = 0; i < length; i++) {
+      pcm.writeInt16LE(userTrack.samples[i] ?? 0, i * 4);
+      pcm.writeInt16LE(agentTrack.samples[i] ?? 0, i * 4 + 2);
+    }
+    return encodeWav(pcm, SAMPLE_RATE, 2);
+  }
+
   return {
     addIncomingFrame: (base64Payload, tMs) => write(tracks.incoming, base64Payload, tMs),
     addOutgoingFrame: (base64Payload, tMs) => write(tracks.outgoing, base64Payload, tMs),
     clearOutgoingFrom,
     hasAudio,
     toWavBuffer,
+    toStereoWavBuffer,
   };
 }

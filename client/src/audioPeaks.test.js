@@ -38,6 +38,24 @@ test("computeDualPeaks() routes peaks to the active speaker per turn interval", 
   assert.equal(agent[3], 0);
 });
 
+test("computeDualPeaks() uses stereo channels when present (ch0=user, ch1=agent)", () => {
+  const left = new Float32Array(400);
+  const right = new Float32Array(400);
+  left.fill(0.8, 0, 200);
+  right.fill(0.8, 200, 400);
+  const buf = {
+    duration: 4,
+    length: 400,
+    numberOfChannels: 2,
+    getChannelData: (c) => (c === 0 ? left : right),
+  };
+  const { agent, user } = computeDualPeaks(buf, [{ role: "agent", text: "wrong", tMs: 0 }], 4);
+  assert.ok(user[0] > 0.9);
+  assert.equal(user[3], 0);
+  assert.equal(agent[0], 0);
+  assert.ok(agent[3] > 0.9);
+});
+
 test("computeDualPeaks() shifts turn timestamps by the recording start offset", () => {
   const buf = fakeBuffer({
     channelFn: () => 0.9,

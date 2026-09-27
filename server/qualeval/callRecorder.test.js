@@ -79,6 +79,19 @@ test("createCallRecorder ignores empty payloads", () => {
   assert.equal(recorder.hasAudio(), false);
 });
 
+test("createCallRecorder.toStereoWavBuffer writes caller on channel 0 and agent on channel 1", () => {
+  const recorder = createCallRecorder(1000);
+  recorder.addIncomingFrame(frame(Array(MS).fill(1000)), 0);
+  recorder.addOutgoingFrame(frame(Array(MS).fill(-1000)), 0);
+
+  const wav = recorder.toStereoWavBuffer();
+  assert.equal(wav.readUInt16LE(22), 2);
+  const left = wav.readInt16LE(44);
+  const right = wav.readInt16LE(46);
+  assert.ok(left > 900);
+  assert.ok(right < -900);
+});
+
 test("qualevalCallAudioKey scopes by runId", () => {
   assert.equal(qualevalCallAudioKey("run_1"), "qualeval-calls/run_1.wav");
 });

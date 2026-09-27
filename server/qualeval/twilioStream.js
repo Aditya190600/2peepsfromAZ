@@ -89,7 +89,11 @@ export function attachTwilioStreamServer(
     async function saveRecording() {
       if (!recordingsConfigured() || !recorder.hasAudio()) return;
       try {
-        await uploadObject(qualevalCallAudioKey(runId), recorder.toWavBuffer(), "audio/wav");
+        await uploadObject(
+          qualevalCallAudioKey(runId),
+          recorder.toStereoWavBuffer({ userTrackName: "outgoing", agentTrackName: "incoming" }),
+          "audio/wav",
+        );
         await store.attachAudioRef(runId, `/v1/qualeval/runs/${encodeURIComponent(runId)}/audio`);
       } catch (err) {
         console.error(`QualEval call bridge: recording upload failed for run ${runId}: ${err.message}`);
