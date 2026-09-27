@@ -6,6 +6,8 @@ import {
   recordProductionCall,
   finishProductionCall,
   listPhoneEvalCalls,
+  recordProductionCallCompliance,
+  markProductionCallAnalysisStarted,
 } from "./productionCalls.js";
 
 test("reads Twilio CNAM, and a quoted SIP display name when CNAM is absent", () => {
@@ -182,4 +184,56 @@ test("listPhoneEvalCalls lists only direct inbound calls, never QualEval run leg
   const noPersona = await listPhoneEvalCalls({}, pool);
   assert.deepEqual(noPersona.map((c) => c.twilioCallSid), ["CA_direct", "CA_persona", "CA_persona_formatted"]);
   assert.deepEqual(await listPhoneEvalCalls({}, null), []);
+});
+
+test("stores a call's compliance report and returns it on the call", async () => {
+  let seen;
+  const report = { findings: [{ check: "pii_scan", status: "flag" }], violationCount: 1 };
+  const pool = {
+    async query(sql, params) {
+      seen = { sql, params };
+      return {
+        rows: [
+          {
+            twilio_call_sid: params[0],
+            compliance_status: params[1],
+            compliance_report: JSON.parse(params[2]),
+            compliance_error: params[3],
+          },
+        ],
+      };
+    },
+  };
+  const call = await recordProductionCallCompliance(
+    { twilioCallSid: "CA1", complianceStatus: "done", complianceReport: report },
+    {},
+    pool,
+  );
+  assert.match(seen.sql, /update production_calls set/);
+  assert.deepEqual(seen.params, ["CA1", "done", JSON.stringify(report), null]);
+  assert.equal(call.complianceStatus, "done");
+  assert.deepEqual(call.complianceReport, report);
+  assert.equal(call.complianceError, null);
+
+  await recordProductionCallCompliance({ twilioCallSid: "CA2", complianceStatus: "no_transcript" }, {}, pool);
+  assert.deepEqual(seen.params, ["CA2", "no_transcript", null, null]);
+  assert.equal(await recordProductionCallCompliance({ twilioCallSid: "CA1" }, {}, null), null);
+});
+
+test("marking an analysis start clears both results and stamps the time", async () => {
+  let seen;
+  const pool = {
+    async query(sql, params) {
+      seen = { sql: sql.replace(/\s+/g, " "), params };
+      return { rows: [{ twilio_call_sid: params[0], analysis_started_at: "2026-09-27T20:00:00Z" }] };
+    },
+  };
+  const call = await markProductionCallAnalysisStarted("CA1", {}, pool);
+  assert.deepEqual(seen.params, ["CA1"]);
+  assert.match(seen.sql, /analysis_started_at = now\(\)/);
+  assert.match(seen.sql, /evaluation_status = null/);
+  assert.match(seen.sql, /compliance_report = null/);
+  assert.equal(call.analysisStartedAt, "2026-09-27T20:00:00Z");
+  assert.equal(await markProductionCallAnalysisStarted("CA1", {}, null), null);
+  assert.equal(await markProductionCallAnalysisStarted(null, {}, pool), null);
 });
