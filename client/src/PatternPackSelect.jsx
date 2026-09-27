@@ -1,4 +1,7 @@
-/** Shared industry pattern-pack checkboxes with hover/focus identifier tooltips. */
+/**
+ * Shared industry pattern-pack checkboxes with hover/focus identifier tooltips.
+ * A checked pack shows its own `asserts` copy directly under its checkbox line.
+ */
 
 export function packTooltipContent(pack) {
   const labels = pack.patterns?.map((p) => p.label).filter(Boolean) ?? [];
@@ -29,20 +32,26 @@ function PackTooltip({ pack }) {
 export default function PatternPackSelect({ packs, selectedPacks, onToggle }) {
   return (
     <div className="pack-select">
-      {packs.map((pack) => (
-        <label className="check-row pack-row" key={pack.id}>
-          <input
-            type="checkbox"
-            checked={selectedPacks.includes(pack.id)}
-            onChange={() => onToggle(pack.id)}
-            aria-describedby={`pack-tip-${pack.id}`}
-          />
-          <span className="pack-row-body">
-            {pack.name}
-            <PackTooltip pack={pack} />
-          </span>
-        </label>
-      ))}
+      {packs.map((pack) => {
+        const checked = selectedPacks.includes(pack.id);
+        return (
+          <div className="pack-item" key={pack.id}>
+            <label className="check-row pack-row">
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => onToggle(pack.id)}
+                aria-describedby={`pack-tip-${pack.id}`}
+              />
+              <span className="pack-row-body">
+                {pack.name}
+                <PackTooltip pack={pack} />
+              </span>
+            </label>
+            {checked && pack.asserts && <p className="pack-note pack-asserts">{pack.asserts}</p>}
+          </div>
+        );
+      })}
     </div>
   );
 }
