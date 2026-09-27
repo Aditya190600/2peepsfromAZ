@@ -3,23 +3,23 @@ import assert from "node:assert/strict";
 import { PRODUCT_NAV, PRODUCT_NAV_ALL, productNav } from "./chromeNav.js";
 
 describe("PRODUCT_NAV", () => {
-  it("is Home, Voice Compliance, Qualitative Evals, and Settings for a non-operator", () => {
+  it("is Voice Compliance, Qualitative Evals, and Settings for a non-operator", () => {
     assert.deepEqual(
       PRODUCT_NAV.map((item) => item.label),
-      ["Home", "Voice Compliance", "Qualitative Evals", "Settings"]
+      ["Voice Compliance", "Qualitative Evals", "Settings"]
     );
   });
 
   it("shows the same nav for an operator", () => {
     assert.deepEqual(
       productNav({ isOperator: true }).map((item) => item.label),
-      ["Home", "Voice Compliance", "Qualitative Evals", "Settings"]
+      ["Voice Compliance", "Qualitative Evals", "Settings"]
     );
   });
 
-  it("keeps Compliance Examples, Sessions, Numbers, API Keys, Evals present but hidden", () => {
+  it("keeps Home, Compliance Examples, Sessions, Numbers, API Keys, Evals present but hidden", () => {
     const hiddenLabels = PRODUCT_NAV_ALL.filter((item) => item.hidden).map((item) => item.label);
-    assert.deepEqual(hiddenLabels, ["Compliance Examples", "Sessions", "Numbers", "API Keys", "Evals"]);
+    assert.deepEqual(hiddenLabels, ["Home", "Compliance Examples", "Sessions", "Numbers", "API Keys", "Evals"]);
   });
 
   it("marks Sessions active on a session report URL", () => {

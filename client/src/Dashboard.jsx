@@ -27,7 +27,6 @@ import {
   llmParsePastedSession,
 } from "./analyzeClient";
 import { listIndustryPacks } from "./evalsClient";
-import PackEvals from "./PackEvals";
 import PatternPackSelect from "./PatternPackSelect";
 import { parseSessionPaste } from "./sessionPaste";
 import { PERSONAS, findPersona } from "./personas";
@@ -1046,7 +1045,6 @@ export default function Dashboard({ navigate, path }) {
                 Pack catalog did not load. Checkboxes still work. Eval coverage copy may be stale.
               </p>
             )}
-            <PackEvals selectedPacks={selectedPacks} catalog={industryPacks} />
           </div>
 
           <ProviderSettings />

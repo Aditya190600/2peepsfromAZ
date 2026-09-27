@@ -82,7 +82,7 @@ function SignOutConfirm({ onCancel, onConfirm }) {
 
 // Signed-in top-right navbar: Sign out, plus (on the splash page only) a
 // "Go to app" link back into the app - the splash page has no other route
-// back in for a signed-in visitor. Home/Sessions/Try still live in the app
+// back in for a signed-in visitor. The product pages still live in the app
 // shell's left rail (see AppShell below) once inside the app, so this stays
 // a single link rather than duplicating that nav.
 function SignedInNav({ navigate, splash }) {
@@ -91,7 +91,7 @@ function SignedInNav({ navigate, splash }) {
   return (
     <>
       {splash ? (
-        <a className="site-nav-link" href="/home" onClick={(e) => go(navigate, "/home", e)}>
+        <a className="site-nav-link" href="/try" onClick={(e) => go(navigate, "/try", e)}>
           Go to app
         </a>
       ) : null}
@@ -119,7 +119,7 @@ export function AuthNav({ path, navigate, splash }) {
   return (
     <>
       <SignedOut>
-        <SignInButton mode="modal" forceRedirectUrl="/home">
+        <SignInButton mode="modal" forceRedirectUrl="/try">
           <button type="button" className="site-nav-link">
             Get started
           </button>

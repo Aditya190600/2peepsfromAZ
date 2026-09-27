@@ -134,5 +134,5 @@ export default function App() {
       </RequireVisitor>
     );
   }
-  return <Landing onGetStarted={() => navigate("/home")} navigate={navigate} path={path} />;
+  return <Landing onGetStarted={() => navigate("/try")} navigate={navigate} path={path} />;
 }
