@@ -92,7 +92,9 @@ test("reply.audio arriving before Twilio's 'start' event is buffered and flushed
 });
 
 function loudPcmuPayload() {
-  return Buffer.alloc(160, 0x7f).toString("base64");
+  // 0x00 is the peak mu-law sample (~32124). 0x7F and 0xFF decode to
+  // amplitude 0 (bias-only silence) and never reset the watchdog.
+  return Buffer.alloc(160, 0x00).toString("base64");
 }
 
 test("silence timeout ends the call when neither leg carries audible audio", async () => {
@@ -130,6 +132,9 @@ test("audible media on either leg resets the silence watchdog", async () => {
     systemPrompt: "be a caller",
     maxDurationMs: 60_000,
     silenceTimeoutMs: 80,
+    // Short enough that a watchdog which was not reset finishes inside the
+    // wait below. The default 2000ms grace would leave `finished` null either way.
+    stopGraceMs: 10,
     onFinished: (payload) => {
       finished = payload;
     },
