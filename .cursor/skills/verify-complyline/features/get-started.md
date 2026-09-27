@@ -10,7 +10,7 @@ Get started takes a judge from the landing page to `/try`, the Voice Compliance 
 ## How to get to it (user POV)
 
 - Choose **Get started** (Clerk on) or **Run this sample yourself** on the landing page.
-- Signed in, choose **Go to app** in the landing page's top-right nav.
+- Signed in, choose **Get started** in the landing page's top-right nav.
 
 ## Driving it with cursor-ide-browser
 
