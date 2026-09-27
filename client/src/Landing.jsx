@@ -132,23 +132,28 @@ export default function Landing({ onGetStarted, navigate, path }) {
         </p>
       </header>
 
-      <main className="hero">
-        <h2 className="hero-headline">Know what your voice agent said before your lawyer finds out.</h2>
-        <p className="hero-lede">
-          Feed us one completed AssemblyAI call. Get back a severity-ranked report on consent, disclosure, and PII
-          exposure, with a regulatory citation on every finding. Each call is checked against regulatory packs (TCPA,
-          HIPAA, state AI-disclosure laws) and your own custom policy requirements.
-        </p>
+      <main>
+        <div className="hero hero-head">
+          <h2 className="hero-headline">Know what your voice agent said before your lawyer finds out.</h2>
+        </div>
 
-        <ul className="hero-value-list">
-          <li>Catch a missing Telephone Consumer Protection Act (TCPA) consent record before it becomes a complaint.</li>
-          <li>Confirm your agent disclosed it's AI in the first few seconds, every call.</li>
-          <li>Spot an SSN or account number leaking into a transcript before it spreads.</li>
-          <li>Hand legal a clear, cited report they can act on.</li>
-        </ul>
+        <WorkflowDiagram label="ComplyLine: how a call becomes a compliance report" steps={COMPLYLINE_STEPS} />
+
+        <div className="hero hero-body">
+          <p className="hero-lede">
+            Feed us one completed AssemblyAI call. Get back a severity-ranked report on consent, disclosure, and PII
+            exposure, with a regulatory citation on every finding. Each call is checked against regulatory packs (TCPA,
+            HIPAA, state AI-disclosure laws) and your own custom policy requirements.
+          </p>
+
+          <ul className="hero-value-list">
+            <li>Catch a missing Telephone Consumer Protection Act (TCPA) consent record before it becomes a complaint.</li>
+            <li>Confirm your agent disclosed it's AI in the first few seconds, every call.</li>
+            <li>Spot an SSN or account number leaking into a transcript before it spreads.</li>
+            <li>Hand legal a clear, cited report they can act on.</li>
+          </ul>
+        </div>
       </main>
-
-      <WorkflowDiagram label="ComplyLine: how a call becomes a compliance report" steps={COMPLYLINE_STEPS} />
 
       <section className="sample-report-preview">
         <h2 className="section-heading">See a real finding</h2>
@@ -178,26 +183,31 @@ export default function Landing({ onGetStarted, navigate, path }) {
         </button>
       </section>
 
-      <section className="hero">
-        <h2 className="hero-headline">Know whether a voice agent is actually good, before you rely on it.</h2>
-        <p className="hero-lede">
-          QualEval places real test calls against any voice agent and judges the transcript against the scenarios and
-          success criteria you define. Anyone on your team can set it up in plain language. Write a custom scenario,
-          pick a persona, run the call, and get a pass/fail verdict backed by evidence from the transcript.
-        </p>
+      <section>
+        <div className="hero hero-head">
+          <h2 className="hero-headline">Know whether a voice agent is actually good, before you rely on it.</h2>
+        </div>
 
-        <ul className="hero-value-list">
-          <li>Define what "good" looks like for an agent in plain language.</li>
-          <li>Generate a full set of custom test scenarios and personas automatically.</li>
-          <li>Place a real call against the agent and get a pass/fail verdict backed by quotes from the transcript.</li>
-          <li>
-            Evaluate an agent you're <em>buying</em> from a vendor with the same scenarios and criteria you'd use on
-            one your own team built.
-          </li>
-        </ul>
+        <WorkflowDiagram label="QualEval: how a scenario becomes a pass/fail verdict" steps={QUALEVAL_STEPS} />
+
+        <div className="hero hero-body">
+          <p className="hero-lede">
+            QualEval places real test calls against any voice agent and judges the transcript against the scenarios and
+            success criteria you define. Anyone on your team can set it up in plain language. Write a custom scenario,
+            pick a persona, run the call, and get a pass/fail verdict backed by evidence from the transcript.
+          </p>
+
+          <ul className="hero-value-list">
+            <li>Define what "good" looks like for an agent in plain language.</li>
+            <li>Generate a full set of custom test scenarios and personas automatically.</li>
+            <li>Place a real call against the agent and get a pass/fail verdict backed by quotes from the transcript.</li>
+            <li>
+              Evaluate an agent you're <em>buying</em> from a vendor with the same scenarios and criteria you'd use on
+              one your own team built.
+            </li>
+          </ul>
+        </div>
       </section>
-
-      <WorkflowDiagram label="QualEval: how a scenario becomes a pass/fail verdict" steps={QUALEVAL_STEPS} />
 
       <section className="sample-report-preview">
         <h2 className="section-heading">See an example evaluation</h2>
