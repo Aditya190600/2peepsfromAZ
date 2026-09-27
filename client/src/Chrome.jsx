@@ -109,7 +109,7 @@ function SignedInNav({ navigate, splash }) {
 }
 
 // Signed-out: a "Get started" CTA that opens Clerk's sign-in modal.
-// Signed-in: Home/Sessions/Try links plus a Sign out control.
+// Signed-in: a Sign out control (plus "Go to app" on the splash page).
 // Shared by the splash-page top nav and the product app-shell topbar so both
 // render the same auth slot. No-op pass-through when Clerk isn't configured.
 export function AuthNav({ path, navigate, splash }) {
