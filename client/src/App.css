@@ -3435,6 +3435,58 @@ button.site-nav-link {
   margin: 0;
 }
 
+.persona-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.persona-picker-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 14px 16px;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.persona-picker-card:hover:not(:disabled) {
+  border-color: var(--accent);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.persona-picker-card.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.persona-picker-card:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.persona-picker-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.persona-picker-desc {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.persona-picker-packs {
+  font-size: 12px;
+  color: var(--accent);
+}
+
 .settings-notice {
   border: 1px solid var(--pass);
   background: var(--pass-soft);

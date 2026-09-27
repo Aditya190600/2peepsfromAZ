@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { AppShell } from "./Chrome";
 import { getQualevalConfig, listDemoAgents, setActiveDemoAgent } from "./qualevalClient";
 import { formatPhoneNumber, groupByDomain } from "./settingsView";
+import PersonaPicker from "./PersonaPicker";
+import { findPersona } from "./personas";
+import { getDefaultPersonaId, setDefaultPersonaId } from "./personaPreference";
 import "./App.css";
 
 function NumberCard({ title, number, children }) {
@@ -65,8 +68,10 @@ export default function Settings({ path, navigate }) {
   const [agents, setAgents] = useState(null);
   const [activeKey, setActiveKey] = useState(null);
   const [switchingKey, setSwitchingKey] = useState(null);
+  const [personaId, setPersonaId] = useState(() => getDefaultPersonaId());
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
+  const [personaNotice, setPersonaNotice] = useState(null);
 
   useEffect(() => {
     getQualevalConfig()
@@ -80,6 +85,12 @@ export default function Settings({ path, navigate }) {
       })
       .catch((err) => setError(err.message ?? "Could not load settings."));
   }, []);
+
+  const onSelectPersona = (id) => {
+    setPersonaId(id);
+    setDefaultPersonaId(id);
+    setPersonaNotice(`${findPersona(id).label} is now your default call persona on Voice Compliance.`);
+  };
 
   const onMakeLive = async (agent) => {
     setSwitchingKey(agent.key);
@@ -98,84 +109,95 @@ export default function Settings({ path, navigate }) {
   const agentNumber = config?.agentPhoneNumber;
   const liveAgent = agents?.find((a) => a.key === activeKey);
 
-  if (config && !config.isOperator) {
-    return (
-      <AppShell path={path} navigate={navigate} title="Settings">
-        <div className="qualeval-page">
-          <p className="app-lede">Settings are available to QualEval operators only.</p>
-        </div>
-      </AppShell>
-    );
-  }
+  const isOperator = Boolean(config?.isOperator);
 
   return (
     <AppShell path={path} navigate={navigate} title="Settings">
       <div className="qualeval-page">
         <p className="app-lede">
-          Pick which target agent answers the demo agent phone number, then call it to try that agent live.
-          The switch applies to the next call - no deploy or code change needed.
+          Choose your default Voice Compliance call persona here. QualEval operators can also switch which
+          target agent answers the demo phone number.
         </p>
 
         <section className="settings-section">
-          <h2>Phone numbers</h2>
-          <div className="settings-number-grid">
-            <NumberCard title="Demo agent number" number={agentNumber}>
-              {liveAgent ? (
-                <>
-                  Answered by <strong>{liveAgent.name}</strong>. Call it from any phone to talk to that agent.
-                </>
-              ) : (
-                "Call it from any phone to talk to the live target agent."
-              )}
-            </NumberCard>
-            <NumberCard title="QualEval caller number" number={config?.personaPhoneNumber}>
-              QualEval places its scenario test calls from this number.
-            </NumberCard>
-          </div>
+          <h2>Call persona</h2>
           <p className="pack-note">
-            Both numbers are Twilio numbers set on the deployment (QUALEVAL_AGENT_NUMBER and
-            QUALEVAL_PERSONA_NUMBER) and are read-only here.
+            This is the role the AI agent plays on live calls in Voice Compliance. Your choice is saved in
+            this browser and pre-selected on the Try page.
           </p>
+          {personaNotice && (
+            <p className="settings-notice" role="status">
+              {personaNotice}
+            </p>
+          )}
+          <PersonaPicker selectedId={personaId} onSelect={onSelectPersona} />
         </section>
 
-        {error && <p className="error-banner">{error}</p>}
-        {notice && (
-          <p className="settings-notice" role="status">
-            {notice}
-            {agentNumber && (
-              <>
-                {" "}
-                Call <a href={`tel:${agentNumber}`}>{formatPhoneNumber(agentNumber)}</a> to try it.
-              </>
-            )}
-          </p>
-        )}
-
-        <section className="settings-section">
-          <h2>Target agents</h2>
-          <p className="pack-note">
-            Each domain has a compliant agent and a flawed one with a seeded gap, so a QualEval evaluation
-            can demo both a pass and a fail. Only one agent answers the number at a time.
-          </p>
-          {!agents && !error && <p className="pack-note">Loading…</p>}
-          {agents &&
-            groupByDomain(agents).map((group) => (
-              <div key={group.domain} className="settings-domain">
-                <h3>{group.label}</h3>
-                <div className="settings-agent-grid">
-                  {group.agents.map((agent) => (
-                    <AgentCard
-                      key={agent.key}
-                      agent={agent}
-                      live={agent.key === activeKey}
-                      switching={switchingKey === agent.key}
-                      onMakeLive={() => onMakeLive(agent)}
-                    />
-                  ))}
-                </div>
+        {isOperator && (
+          <>
+            <section className="settings-section">
+              <h2>Phone numbers</h2>
+              <div className="settings-number-grid">
+                <NumberCard title="Demo agent number" number={agentNumber}>
+                  {liveAgent ? (
+                    <>
+                      Answered by <strong>{liveAgent.name}</strong>. Call it from any phone to talk to that
+                      agent.
+                    </>
+                  ) : (
+                    "Call it from any phone to talk to the live target agent."
+                  )}
+                </NumberCard>
+                <NumberCard title="QualEval caller number" number={config?.personaPhoneNumber}>
+                  QualEval places its scenario test calls from this number.
+                </NumberCard>
               </div>
-            ))}
-        </section>
+              <p className="pack-note">
+                Both numbers are Twilio numbers set on the deployment (QUALEVAL_AGENT_NUMBER and
+                QUALEVAL_PERSONA_NUMBER) and are read-only here.
+              </p>
+            </section>
+
+            {error && <p className="error-banner">{error}</p>}
+            {notice && (
+              <p className="settings-notice" role="status">
+                {notice}
+                {agentNumber && (
+                  <>
+                    {" "}
+                    Call <a href={`tel:${agentNumber}`}>{formatPhoneNumber(agentNumber)}</a> to try it.
+                  </>
+                )}
+              </p>
+            )}
+
+            <section className="settings-section">
+              <h2>Target agents</h2>
+              <p className="pack-note">
+                Each domain has a compliant agent and a flawed one with a seeded gap, so a QualEval
+                evaluation can demo both a pass and a fail. Only one agent answers the number at a time.
+              </p>
+              {!agents && !error && <p className="pack-note">Loading…</p>}
+              {agents &&
+                groupByDomain(agents).map((group) => (
+                  <div key={group.domain} className="settings-domain">
+                    <h3>{group.label}</h3>
+                    <div className="settings-agent-grid">
+                      {group.agents.map((agent) => (
+                        <AgentCard
+                          key={agent.key}
+                          agent={agent}
+                          live={agent.key === activeKey}
+                          switching={switchingKey === agent.key}
+                          onMakeLive={() => onMakeLive(agent)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+            </section>
+          </>
+        )}
       </div>
     </AppShell>
   );
