@@ -17,6 +17,7 @@ test("named product routes", () => {
   assert.deepEqual(matchRoute("/qualeval"), { name: "qualeval" });
   assert.deepEqual(matchRoute("/settings"), { name: "settings" });
   assert.deepEqual(matchRoute("/phone-evals"), { name: "phone-evals" });
+  assert.deepEqual(matchRoute("/examples/qualeval"), { name: "qualeval-example" });
 });
 
 test("qualeval evaluation id is decoded after the qualeval prefix", () => {

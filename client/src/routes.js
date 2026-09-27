@@ -1,6 +1,7 @@
 export function matchRoute(pathname) {
   if (pathname === "/try") return { name: "try" };
   if (pathname === "/examples") return { name: "examples" };
+  if (pathname === "/examples/qualeval") return { name: "qualeval-example" };
   if (pathname === "/api-keys") return { name: "api-keys" };
   if (pathname === "/evals") return { name: "evals" };
   if (pathname === "/numbers") return { name: "numbers" };

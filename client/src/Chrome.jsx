@@ -155,7 +155,7 @@ export function Footer() {
           Source on GitHub
         </a>
         <span aria-hidden="true"> · </span>
-        <span>ComplyLine — automated pattern-based screening, not legal advice.</span>
+        <span>ComplyLine is automated pattern-based screening. Consult counsel for legal advice.</span>
       </p>
     </footer>
   );
