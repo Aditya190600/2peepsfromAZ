@@ -36,6 +36,26 @@ function computePeaks(audioBuffer, buckets) {
   return peaks.map((p) => p / max);
 }
 
+function groupMarkersByTime(markers) {
+  const byTime = new Map();
+  for (const marker of markers) {
+    if (marker.tMs == null) continue;
+    const label = marker.label?.trim();
+    const prev = byTime.get(marker.tMs);
+    if (!prev) {
+      byTime.set(marker.tMs, {
+        tMs: marker.tMs,
+        kind: marker.kind,
+        labels: label ? [label] : [],
+      });
+      continue;
+    }
+    if (label && !prev.labels.includes(label)) prev.labels.push(label);
+    if (marker.kind === "flag") prev.kind = "flag";
+  }
+  return [...byTime.values()];
+}
+
 function drawWaveform(canvas, peaks, progress) {
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
@@ -217,24 +237,41 @@ export default function AudioPlayer({ src, audioRef, compact = false, markers = 
             onClick={onWaveformClick}
           />
           {duration > 0 &&
-            markers
-              .filter((m) => m.tMs != null && m.tMs - offsetMs >= 0)
-              .map((m, i) => {
+            groupMarkersByTime(markers.filter((m) => m.tMs != null && m.tMs - offsetMs >= 0)).map(
+              (m, i) => {
                 const relSeconds = (m.tMs - offsetMs) / 1000;
+                const left = `${Math.min(100, Math.max(0, (relSeconds / duration) * 100))}%`;
+                const isFlag = m.kind === "flag";
+                const tooltipId = `audio-marker-tip-${i}`;
                 return (
-                  <button
-                    key={i}
-                    type="button"
-                    className={`audio-marker ${m.kind === "flag" ? "is-flag" : "is-turn"}`}
-                    style={{ left: `${Math.min(100, Math.max(0, (relSeconds / duration) * 100))}%` }}
-                    title={m.label ?? formatTime(relSeconds)}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onMarkerClick(m);
-                    }}
-                  />
+                  <div key={`${m.tMs}-${i}`} className="audio-marker-wrap" style={{ left }}>
+                    <button
+                      type="button"
+                      className={`audio-marker ${isFlag ? "is-flag" : "is-turn"}`}
+                      aria-describedby={isFlag && m.labels.length > 0 ? tooltipId : undefined}
+                      title={!isFlag || m.labels.length === 0 ? m.labels[0] ?? formatTime(relSeconds) : undefined}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onMarkerClick(m);
+                      }}
+                    />
+                    {isFlag && m.labels.length > 0 && (
+                      <span id={tooltipId} role="tooltip" className="audio-marker-tooltip">
+                        {m.labels.length === 1 ? (
+                          m.labels[0]
+                        ) : (
+                          <ul>
+                            {m.labels.map((label) => (
+                              <li key={label}>{label}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </span>
+                    )}
+                  </div>
                 );
-              })}
+              },
+            )}
         </div>
       )}
     </div>
