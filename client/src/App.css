@@ -1875,6 +1875,10 @@ button.site-nav-link {
   gap: 8px;
 }
 
+.pack-asserts {
+  margin: 4px 0 0 25px;
+}
+
 .pack-row-body {
   position: relative;
   flex: 1;
@@ -1898,8 +1902,7 @@ button.site-nav-link {
   transition: opacity 0.12s ease, visibility 0.12s ease;
 }
 
-.pack-row:hover .pack-tooltip,
-.pack-row:focus-within .pack-tooltip {
+.pack-row:hover .pack-tooltip {
   opacity: 1;
   visibility: visible;
 }
@@ -1993,50 +1996,6 @@ button.site-nav-link {
   color: var(--ink);
   flex: 1;
   min-width: 0;
-}
-
-.pack-evals {
-  margin-top: 12px;
-  margin-bottom: 16px;
-  padding-top: 12px;
-  padding-bottom: 4px;
-  border-top: 1px solid var(--line, #d9dbd4);
-}
-
-.pack-evals-asserts {
-  margin: 0 0 8px;
-}
-
-.pack-evals-summary {
-  font-size: 13px;
-  margin: 10px 0 0;
-}
-
-.pack-evals-suite h3 {
-  font-size: 14px;
-  margin: 12px 0 6px;
-}
-
-.pack-evals-cases {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-}
-
-.pack-evals-cases .is-pass {
-  color: var(--ink);
-}
-
-.pack-evals-cases .is-flag {
-  color: var(--danger, #8b2e2e);
-}
-
-.pack-evals-fail-detail {
-  color: var(--muted);
 }
 
 .finding-citation {

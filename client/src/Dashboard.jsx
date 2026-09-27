@@ -27,7 +27,6 @@ import {
   llmParsePastedSession,
 } from "./analyzeClient";
 import { listIndustryPacks } from "./evalsClient";
-import PackEvals from "./PackEvals";
 import PatternPackSelect from "./PatternPackSelect";
 import { parseSessionPaste } from "./sessionPaste";
 import { PERSONAS, findPersona } from "./personas";
@@ -98,10 +97,6 @@ export function sampleLabel(key) {
   if (key.startsWith("sess_clean_")) return "Clean call — everything passes";
   return key;
 }
-
-// Packs whose "Verify" self-test is hidden from the Try page (not part of the
-// demo). The pack itself still runs in reports; only its verify entry is hidden.
-const PACK_EVALS_HIDDEN = new Set(["hipaa"]);
 
 export const INDUSTRY_PACKS = [
   {
@@ -968,13 +963,9 @@ export default function Dashboard({ navigate, path }) {
             <p className="pack-note">Drop-in extensions over the generic scan — no core changes.</p>
             {packCatalogStale && (
               <p className="pack-note">
-                Pack catalog did not load. Checkboxes still work. Eval coverage copy may be stale.
+                Pack catalog did not load. Checkboxes still work. Pack descriptions may be stale.
               </p>
             )}
-            <PackEvals
-              selectedPacks={selectedPacks}
-              catalog={industryPacks.filter((pack) => !PACK_EVALS_HIDDEN.has(pack.id))}
-            />
           </div>
 
           <ProviderSettings />
