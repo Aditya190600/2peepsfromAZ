@@ -55,11 +55,13 @@ test("returns bidirectional Connect/Stream TwiML pointed at the target-agent str
     },
   });
   assert.equal(ctx.contentType, "text/xml");
-  assert.match(ctx.body, /<Say>One moment please\.<\/Say>/);
+  // Connect/Stream is the whole response - no filler <Say> a calling agent
+  // could answer over the real greeting.
   assert.match(
     ctx.body,
-    /<Say>.*<\/Say><Connect><Stream url="wss:\/\/app\.example\.com\/v1\/qualeval\/target-agent-stream"\/><\/Connect>/,
+    /<Response><Connect><Stream url="wss:\/\/app\.example\.com\/v1\/qualeval\/target-agent-stream"\/><\/Connect><\/Response>/,
   );
+  assert.doesNotMatch(ctx.body, /<Say>/);
   assert.equal(validated[0], ENV.TWILIO_AUTH_TOKEN);
   assert.equal(validated[1], "sig");
   assert.equal(validated[2], "https://app.example.com/v1/qualeval/demo-agent-voice");

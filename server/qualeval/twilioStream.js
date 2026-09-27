@@ -141,9 +141,10 @@ export function attachTwilioStreamServer(
     }
 
     // Register immediately so the target-agent leg's waitForClaimableRun finds
-    // this run while getRun/scenario/token lookups run below. injectAudio is
-    // wired once createBridgeSession returns.
-    broker.registerPersonaLeg(runId, () => {});
+    // this run while getRun/scenario/token lookups run below (server/qualeval/
+    // callBridgeBroker.js - it links that leg's production-call record to
+    // this run; no audio passes through it).
+    broker.registerPersonaLeg(runId);
 
     try {
       const run = await getRun(runId, null);
@@ -154,22 +155,15 @@ export function attachTwilioStreamServer(
       console.log(`QualEval call bridge: run ${runId} - AssemblyAI token minted, opening bridge session`);
 
       twilioWs.off("message", bufferMessage);
-      const session = createSession({
+      createSession({
         twilioWs,
         token,
         systemPrompt: buildCallerSystemPrompt(scenario),
-        onReplyAudio: (audio) => broker.forwardToTarget(runId, audio),
         onIncomingAudio: (audio, tMs) => recorder.addFrame(audio, tMs),
         onOutgoingAudio: (audio, tMs) => recorder.addFrame(audio, tMs),
         onFinished,
         onError,
       });
-      // Registered as soon as the bridge session exists (not waiting on
-      // session.ready) so the target-agent side's claim (server/qualeval/
-      // callBridgeBroker.js's waitForClaimableRun, polling for up to ~10s)
-      // finds this run as early as possible - see bridgeSession.js's header
-      // comment for why this cross-wiring exists at all.
-      broker.registerPersonaLeg(runId, session.injectAudio);
       // Replay the start event (so createBridgeSession learns streamSid/
       // callSid) plus any media that arrived during the lookups above.
       for (const raw of buffered) twilioWs.emit("message", raw);

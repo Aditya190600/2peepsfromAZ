@@ -105,37 +105,35 @@ bridge with is a global setting, not something carried on the call, so
 creating the bridge session (`createBridgeSession` itself picks up
 `streamSid`/`callSid` whenever `start` arrives).
 
-## Twilio doesn't bridge the two legs - we do it ourselves
+## The two legs hear each other over the phone line
 
-Verified live 2026-09-25: placing a real outbound call from
-`QUALEVAL_PERSONA_NUMBER` to `QUALEVAL_AGENT_NUMBER` does NOT give the two
-legs each other's real audio, even though both sides' `<Connect><Stream>`
-correctly reach `session.ready` and carry real, continuous Media Stream
-frames. Each standalone `<Connect><Stream>` hijacks only *its own* leg's
-audio path into its own AssemblyAI session - Twilio's normal caller/callee
-audio bridge never forms, because both sides redirected their own audio
-elsewhere. (Twilio Call resource evidence: both legs show
-`parent_call_sid: null` - they're not linked as parent/child at all.)
+A QualEval-placed call from `QUALEVAL_PERSONA_NUMBER` to
+`QUALEVAL_AGENT_NUMBER` is an ordinary phone call: each leg's
+`<Connect><Stream>` sends its own AssemblyAI session's speech out on that
+leg, and Twilio carries it to the other leg, whose Media Stream delivers it
+as inbound `media`. No server-side audio relay is involved.
 
-`server/qualeval/callBridgeBroker.js` is the fix: an in-process registry that
-cross-wires the two `bridgeSession` instances for one call server-side.
-`createBridgeSession` gained two hooks for this:
+An earlier version believed Twilio did not carry audio between the legs
+(2026-09-25) and added a server-side "broker" that also fed each session's
+synthesized speech straight into the other session. That observation was an
+artifact of the target side dropping every `reply.audio` chunk before
+Twilio's `start` event (fixed since - see `bridgeSession.js`'s
+`pendingReplyAudio`). Once audio reached the wire, each AssemblyAI session
+heard the other party twice - once early, as fast as it was synthesized, and
+once in real time over the phone - and the two agents talked over each other
+from the first seconds of every call (reproduced live 2026-09-27 with
+Twilio dual-channel recordings). The audio relay was removed.
+`server/qualeval/callBridgeBroker.js` now only links the target-agent leg to
+the QualEval run that placed the call, so its production-call record and
+inbound evaluation carry `qualevalRunId`: the persona side registers its
+`runId` up front, and the target side (which also answers real external
+callers, who have no run) claims it via `waitForClaimableRun()` after its
+bridge session already exists, so a real caller's greeting is never delayed.
 
-- `onReplyAudio(audioBase64)` - called with every chunk of this session's own
-  synthesized speech, in addition to the existing relay to its own Twilio leg.
-- `injectAudio(audioBase64)` (on the returned control object) - feeds a chunk
-  into this session's AssemblyAI agent as if it arrived over the phone.
-
-The persona side (`twilioStream.js`) always knows its `runId` up front and
-registers immediately via `registerPersonaLeg`. The target-agent side has no
-run context (it also answers real external callers) and instead calls
-`waitForClaimableRun()`, which polls briefly for a run whose persona leg has
-registered but has no target leg yet, then claims it. The bridge session
-itself is created before that poll starts, so a real external caller's
-greeting is never delayed by it - a caller with nothing to claim just gets
-the standalone bridge, unaffected. Both legs are still real Twilio calls
-carrying real Media Streams; only the "who hears whom" wiring moved from
-Twilio's (nonexistent, for this call shape) native bridge to this broker.
+When the far end barges in, AssemblyAI cancels the reply (`reply.done` with
+`status: "interrupted"`) but Twilio keeps playing whatever `reply.audio` it
+has already buffered. `bridgeSession.js` sends Twilio a `clear` message on an
+interrupted reply so the cancelled speech actually stops.
 
 ## Role mapping is reversed from the caller side
 
