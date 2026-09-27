@@ -89,7 +89,7 @@ export function attachTargetAgentStreamServer(
       let audioRef = null;
       if (callSid && recordingsReady() && recorder.hasAudio()) {
         try {
-          await uploadRecording(productionCallAudioKey(callSid), recorder.toWavBuffer(), "audio/wav");
+          await uploadRecording(productionCallAudioKey(callSid), recorder.toStereoWavBuffer(), "audio/wav");
           audioRef = `/v1/qualeval/production-calls/${encodeURIComponent(callSid)}/audio`;
         } catch (err) {
           console.error(`QualEval target-agent bridge: inbound recording upload failed for ${callSid}: ${err.message}`);
