@@ -28,6 +28,7 @@ import {
 } from "./analyzeClient";
 import { listIndustryPacks } from "./evalsClient";
 import PackEvals from "./PackEvals";
+import PatternPackSelect from "./PatternPackSelect";
 import { parseSessionPaste } from "./sessionPaste";
 import { PERSONAS, findPersona } from "./personas";
 import { ExamplesPanels } from "./Examples";
@@ -97,11 +98,45 @@ export function sampleLabel(key) {
 }
 
 export const INDUSTRY_PACKS = [
-  { id: "hipaa", name: "HIPAA identifiers (healthcare)" },
-  { id: "finance", name: "GLBA finance identifiers (banking)" },
-  { id: "ferpa", name: "FERPA identifiers (education)" },
-  { id: "tcpa", name: "TCPA consent (robocall / marketing calls)" },
-  { id: "recording_consent", name: "Call-recording consent (two-party-consent states)" },
+  {
+    id: "hipaa",
+    name: "HIPAA identifiers (healthcare)",
+    patterns: [
+      { id: "mrn", label: "Possible Medical Record Number (MRN)" },
+      { id: "npi", label: "Possible National Provider Identifier (NPI)" },
+      { id: "patient_id", label: "Possible patient ID" },
+    ],
+  },
+  {
+    id: "finance",
+    name: "GLBA finance identifiers (banking)",
+    patterns: [
+      { id: "routing_number", label: "Possible ABA routing number" },
+      { id: "iban", label: "Possible IBAN" },
+      { id: "loan_number", label: "Possible loan or brokerage number" },
+    ],
+  },
+  {
+    id: "ferpa",
+    name: "FERPA identifiers (education)",
+    patterns: [
+      { id: "student_number", label: "Possible student number" },
+      { id: "student_dob", label: "Possible student date of birth" },
+      { id: "mothers_maiden_name", label: "Possible student's mother's maiden name" },
+    ],
+  },
+  {
+    id: "tcpa",
+    name: "TCPA consent (robocall / marketing calls)",
+    patterns: [],
+    detectionSummary: "Consent event logged before call",
+  },
+  {
+    id: "recording_consent",
+    name: "Call-recording consent (two-party-consent states)",
+    patterns: [],
+    detectionSummary: "Recording-disclosure language in first 10s",
+  },
 ];
 
 export function sessionByKey(key) {
@@ -988,18 +1023,11 @@ export default function Dashboard({ navigate, path }) {
           <div className="section-block">
             <h2>Session</h2>
             <p className="panel-label">Industry pattern packs (in addition to the generic scan)</p>
-            <div className="pack-select">
-              {industryPacks.map((pack) => (
-                <label className="check-row" key={pack.id}>
-                  <input
-                    type="checkbox"
-                    checked={selectedPacks.includes(pack.id)}
-                    onChange={() => togglePack(pack.id)}
-                  />
-                  {pack.name}
-                </label>
-              ))}
-            </div>
+            <PatternPackSelect
+              packs={industryPacks}
+              selectedPacks={selectedPacks}
+              onToggle={togglePack}
+            />
             <p className="pack-note">Drop-in extensions over the generic scan — no core changes.</p>
             {packCatalogStale && (
               <p className="pack-note">
