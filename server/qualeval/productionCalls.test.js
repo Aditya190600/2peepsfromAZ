@@ -166,19 +166,20 @@ test("does nothing when Postgres or the Call SID is missing", async () => {
   assert.equal(await finishProductionCall({ transcript: [] }, {}, memoryPool()), null);
 });
 
-test("listPhoneEvalCalls asks only for direct inbound calls, excluding QualEval run legs", async () => {
-  let seen;
-  const pool = {
-    async query(sql, params) {
-      seen = { sql: sql.replace(/\s+/g, " "), params };
-      return { rows: [{ twilio_call_sid: "CA1", direction: "inbound", transcript: [{ role: "user", text: "hi" }] }] };
-    },
-  };
+test("listPhoneEvalCalls lists only direct inbound calls, never QualEval run legs or outbound calls", async () => {
+  const stored = [
+    { twilio_call_sid: "CA_direct", direction: "inbound", from_number: "+13128003792", transcript: [{ role: "user", text: "hi" }] },
+    { twilio_call_sid: "CA_run", direction: "inbound", from_number: "+13128003792", qualeval_run_id: "run_1" },
+    { twilio_call_sid: "CA_persona", direction: "inbound", from_number: "+15550000002" },
+    { twilio_call_sid: "CA_persona_formatted", direction: "inbound", from_number: "1-555-000-0002" },
+    { twilio_call_sid: "CA_out", direction: "outbound", from_number: "+13128003792" },
+  ];
+  const pool = { query: async () => ({ rows: stored }) };
   const calls = await listPhoneEvalCalls({ QUALEVAL_PERSONA_NUMBER: "+1 (555) 000-0002" }, pool);
-  assert.match(seen.sql, /direction = 'inbound'/);
-  assert.match(seen.sql, /qualeval_run_id is null/);
-  assert.doesNotMatch(seen.sql, /evaluation_id/);
-  assert.deepEqual(seen.params, ["5550000002"]);
+  assert.deepEqual(calls.map((c) => c.twilioCallSid), ["CA_direct"]);
   assert.deepEqual(calls[0].transcript, { turns: [{ role: "user", text: "hi" }] });
+
+  const noPersona = await listPhoneEvalCalls({}, pool);
+  assert.deepEqual(noPersona.map((c) => c.twilioCallSid), ["CA_direct", "CA_persona", "CA_persona_formatted"]);
   assert.deepEqual(await listPhoneEvalCalls({}, null), []);
 });

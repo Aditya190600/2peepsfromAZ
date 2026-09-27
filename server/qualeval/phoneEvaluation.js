@@ -1,6 +1,6 @@
 import { evaluateTranscript } from "./evaluator.js";
 import { getVariantWithAgent } from "./demoAgentConfig.js";
-import { recordProductionCallEvaluation } from "./productionCalls.js";
+import { isPersonaNumber, recordProductionCallEvaluation } from "./productionCalls.js";
 
 // Scores a finished call that reached QUALEVAL_AGENT_NUMBER's target agent,
 // for the operator-only Phone Evals page (client/src/PhoneEvals.jsx). Phone
@@ -9,8 +9,9 @@ import { recordProductionCallEvaluation } from "./productionCalls.js";
 // since matching on the dialed number put a real caller's call inside
 // whichever evaluation set happened to target that number.
 //
-// A run-linked leg of a QualEval scenario run is recorded as skipped_run
-// instead of calling the model twice - the scenario run already judges it,
+// A run-linked leg of a QualEval scenario run (it claimed a run, or it came
+// from QUALEVAL_PERSONA_NUMBER but its claim never landed) is recorded as
+// skipped_run instead of calling the model twice - the scenario run already judges it,
 // and Phone Evals lists only calls with no run. A direct caller is judged on
 // the answering agent's own live instructions (its AssemblyAI stored agent's
 // system prompt), since that is the only rubric such a call has. No
@@ -50,15 +51,16 @@ export async function evaluatePhoneCall(
     getAgent = liveAgentFor,
     evaluate = evaluateTranscript,
     record = recordProductionCallEvaluation,
+    env = process.env,
   } = {},
 ) {
   if (!call?.twilioCallSid) return null;
 
-  if (call.qualevalRunId) {
+  if (call.qualevalRunId || isPersonaNumber(call.fromNumber, env)) {
     return record({
       twilioCallSid: call.twilioCallSid,
       evaluationStatus: "skipped_run",
-      qualevalRunId: call.qualevalRunId,
+      qualevalRunId: call.qualevalRunId ?? null,
     });
   }
 

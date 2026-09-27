@@ -95,7 +95,7 @@ export function attachTargetAgentStreamServer(
           console.error(`QualEval target-agent bridge: inbound recording upload failed for ${callSid}: ${err.message}`);
         }
       }
-      await finishCall({
+      const finished = await finishCall({
         twilioCallSid: callSid,
         direction: "inbound",
         transcript: turns,
@@ -110,6 +110,7 @@ export function attachTargetAgentStreamServer(
         variantKey: activeVariant?.key ?? null,
         transcript: turns,
         qualevalRunId: claimedRunId,
+        fromNumber: finished?.fromNumber ?? null,
       });
     }
     function onError(message) {

@@ -219,7 +219,7 @@ test("writes the transcript onto the production call when the inbound bridge end
     waitForClaimableRun: async () => null,
     finishCall: async (fields) => {
       finished = fields;
-      return { toNumber: "+18038245760" };
+      return { toNumber: "+18038245760", fromNumber: "+13128003792" };
     },
     evaluateCall: async (call) => {
       evaluated = call;
@@ -245,6 +245,7 @@ test("writes the transcript onto the production call when the inbound bridge end
     variantKey: "compliant",
     transcript: [{ speaker: "user", text: "This is Rastopopulous" }],
     qualevalRunId: null,
+    fromNumber: "+13128003792",
   });
 });
 

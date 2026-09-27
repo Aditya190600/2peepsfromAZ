@@ -161,26 +161,32 @@ export function phoneDigits(value) {
   return digits.slice(-10);
 }
 
+export function isPersonaNumber(value, env = process.env) {
+  const persona = phoneDigits(env.QUALEVAL_PERSONA_NUMBER);
+  return persona !== "" && phoneDigits(value) === persona;
+}
+
 // Phone Evals (client/src/PhoneEvals.jsx): calls that reached the agent
 // number directly. Legs of a QualEval scenario run belong to that run
 // instead, so they never appear here: they carry qualeval_run_id once the
 // bridge claims the run, and they always come from QUALEVAL_PERSONA_NUMBER,
 // which also covers the window before the claim lands (or a claim that never
 // does).
+export function isPhoneEvalCall(call, env = process.env) {
+  return call?.direction === "inbound" && !call.qualevalRunId && !isPersonaNumber(call.fromNumber, env);
+}
+
 export async function listPhoneEvalCalls(env = process.env, pool = getPool(env)) {
   if (!pool) return [];
   const { rows } = await pool.query(
     `select ${RETURNING} from production_calls
      where direction = 'inbound'
        and qualeval_run_id is null
-       and ($1 = '' or right(regexp_replace(coalesce(from_number, ''), '\\D', '', 'g'), 10) <> $1)
      order by started_at desc
      limit 50`,
-    [phoneDigits(env.QUALEVAL_PERSONA_NUMBER)],
   );
-  return rows.map((row) => {
-    const call = callRow(row);
-    call.transcript = transcriptForClient(call.transcript);
-    return call;
-  });
+  return rows
+    .map(callRow)
+    .filter((call) => isPhoneEvalCall(call, env))
+    .map((call) => ({ ...call, transcript: transcriptForClient(call.transcript) }));
 }

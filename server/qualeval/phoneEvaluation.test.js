@@ -66,6 +66,23 @@ test("does not call the model when this leg is already a QualEval run", async ()
   assert.equal(saved.qualevalRunId, "run_1");
 });
 
+test("does not call the model for a persona-number leg whose run claim never landed", async () => {
+  let saved;
+  await evaluatePhoneCall(
+    { twilioCallSid: "CA123", variantKey: "compliant", fromNumber: "1 (555) 000-0002", transcript: [{ role: "agent", text: "hi" }] },
+    {
+      getAgent: async () => agent,
+      evaluate: async () => assert.fail("should not score a scenario run leg"),
+      record: async (fields) => {
+        saved = fields;
+      },
+      env: { QUALEVAL_PERSONA_NUMBER: "+15550000002" },
+    },
+  );
+  assert.equal(saved.evaluationStatus, "skipped_run");
+  assert.equal(saved.qualevalRunId, null);
+});
+
 test("records no_rubric when the agent's instructions can't be loaded", async () => {
   for (const getAgent of [async () => ({ ...agent, systemPrompt: "  " }), async () => null, async () => {
     throw new Error("AssemblyAI down");
