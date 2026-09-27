@@ -1,6 +1,7 @@
 import { Router } from "express";
 import * as store from "./store.js";
 import * as demoAgentConfig from "./demoAgentConfig.js";
+import { findDemoAgent, DEMO_AGENT_DOMAINS } from "./demoAgentDefaults.js";
 import { generateScenarios } from "./generator.js";
 import { evaluateTranscript } from "./evaluator.js";
 import * as providers from "../providers/registry.js";
@@ -13,9 +14,9 @@ import { getProductionCallBySid, listProductionCallsForEvaluation } from "./prod
 const TWILIO_CALL_SID = /^CA[0-9a-f]{32}$/i;
 
 function wrap(fn) {
-  return async (req, res) => {
+  return async (req, res, next) => {
     try {
-      await fn(req, res);
+      await fn(req, res, next);
     } catch (err) {
       const status = err.message === store.NOT_CONFIGURED_ERROR ? 503 : err.status ?? 400;
       res.status(status).json({ error: err.message });
@@ -72,8 +73,13 @@ export async function dispatchEvaluation(runId, { llmGateway = providers.getMode
   }
 }
 
-export function qualevalRouter({ visitorId = () => "anon" } = {}) {
+export function qualevalRouter({ visitorId = () => "anon", isOperator = async () => false } = {}) {
   const router = Router();
+
+  const requireOperator = wrap(async (req, res, next) => {
+    if (!(await isOperator(req))) return res.status(403).json({ error: "Operator access required." });
+    next();
+  });
 
   router.post(
     "/evaluations",
@@ -98,13 +104,20 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
     }),
   );
 
-  // Read-only surface for the client to prefill the target-agent phone
-  // number field with the deployment's demo agent number, instead of the
-  // client bundle hardcoding QUALEVAL_AGENT_NUMBER's value.
+  // Read-only surface for the deployment's two Twilio numbers, instead of
+  // the client bundle hardcoding them: QualEval prefills the target-agent
+  // phone number field with QUALEVAL_AGENT_NUMBER for everyone. Only
+  // operators (operatorAccess.js) also get QUALEVAL_PERSONA_NUMBER, the caller
+  // ID QualEval dials out from, which the Settings page shows.
   router.get(
     "/config",
     wrap(async (req, res) => {
-      res.json({ agentPhoneNumber: process.env.QUALEVAL_AGENT_NUMBER || null });
+      const operator = await isOperator(req);
+      res.json({
+        agentPhoneNumber: process.env.QUALEVAL_AGENT_NUMBER || null,
+        isOperator: operator,
+        ...(operator && { personaPhoneNumber: process.env.QUALEVAL_PERSONA_NUMBER || null }),
+      });
     }),
   );
 
@@ -312,10 +325,13 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
     }),
   );
 
-  // Minimal operator surface for QUALEVAL_AGENT_NUMBER's two target-agent
-  // variants (server/qualeval/demoAgentConfig.js) - list/edit both prompts
-  // and switch which one is currently active. There's only one number, so
-  // "active" is a runtime toggle rather than two simultaneous numbers.
+  // Operator surface for QUALEVAL_AGENT_NUMBER's target agents
+  // (server/qualeval/demoAgentConfig.js, catalog in demoAgentDefaults.js) -
+  // list/edit their prompts and switch which one is currently active, backing
+  // client/src/Settings.jsx. There's only one number, so "active" is a
+  // runtime toggle rather than several simultaneous numbers. Operator-only:
+  // switching affects every caller of the shared number.
+  router.use("/demo-agent", requireOperator);
   router.get(
     "/demo-agent/variants",
     wrap(async (req, res) => {
@@ -323,7 +339,13 @@ export function qualevalRouter({ visitorId = () => "anon" } = {}) {
       // Reads each variant's live prompt/greeting/voice straight off its
       // AssemblyAI agent record (getVariantWithAgent), not a local copy that
       // could drift once PATCH starts writing to AssemblyAI directly.
-      const variants = await Promise.all(keys.map((v) => demoAgentConfig.getVariantWithAgent(v.key)));
+      const variants = await Promise.all(
+        keys.map(async (v) => {
+          const variant = await demoAgentConfig.getVariantWithAgent(v.key);
+          const { domain, variant: kind, description } = findDemoAgent(v.key);
+          return { ...variant, domain, domainLabel: DEMO_AGENT_DOMAINS[domain], kind, description };
+        }),
+      );
       res.json({ variants, activeKey });
     }),
   );

@@ -103,3 +103,19 @@ export async function getRun(id) {
 export async function endRun(id) {
   return json(await fetch(`/v1/qualeval/runs/${encodeURIComponent(id)}/end`, { method: "POST" }));
 }
+
+// Target agents that can answer QUALEVAL_AGENT_NUMBER, plus which one is
+// live right now (server/qualeval/router.js's /demo-agent routes).
+export async function listDemoAgents() {
+  return json(await fetch("/v1/qualeval/demo-agent/variants"));
+}
+
+export async function setActiveDemoAgent(key) {
+  return json(
+    await fetch("/v1/qualeval/demo-agent/active", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ variant: key }),
+    }),
+  ).then((body) => body.activeKey);
+}
