@@ -211,7 +211,7 @@ export function ExamplesPanels({ navigate, topTabBar = null, onShowLiveCall = nu
             <p className="pack-note">Drop-in extensions over the generic scan — no core changes.</p>
             {packCatalogStale && (
               <p className="pack-note">
-                Pack catalog did not load. Checkboxes still work. Pack descriptions may be stale.
+                Pack catalog did not load. Checkboxes still work. Eval coverage copy may be stale.
               </p>
             )}
           </div>

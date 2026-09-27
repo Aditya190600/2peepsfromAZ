@@ -27,6 +27,7 @@ import {
   llmParsePastedSession,
 } from "./analyzeClient";
 import { listIndustryPacks } from "./evalsClient";
+import PackEvals from "./PackEvals";
 import PatternPackSelect from "./PatternPackSelect";
 import { parseSessionPaste } from "./sessionPaste";
 import { PERSONAS, findPersona } from "./personas";
@@ -280,7 +281,7 @@ function FleetSummary({ results, progress }) {
         {tiles.map((tile) => (
           <li key={tile.check} className="monitor-card">
             <p className="monitor-kicker">{tile.label}</p>
-            <p className="monitor-attention">{tile.flag > 0 ? "Needs attention" : tile.error > 0 ? "Needs review" : "Clear"}</p>
+            <p className="monitor-attention">{tile.flag > 0 ? "Needs attention" : "Clear"}</p>
             <p className="monitor-count">{tile.flag}</p>
             <div className="app-progress-track" aria-hidden="true">
               <div
@@ -851,7 +852,7 @@ export default function Dashboard({ navigate, path }) {
     }
   };
 
-  const runUpload = async (file, { label = "Uploaded audio", consentEvent } = {}) => {
+  const runUpload = async (file, { label = "Uploaded audio" } = {}) => {
     if (!file) return;
     setReport(null);
     clearLabErrors();
@@ -860,15 +861,10 @@ export default function Dashboard({ navigate, path }) {
     showAudio(blobUrl);
     try {
       const session = await transcribeUpload(file);
-      // Optional consentEvent lets the "diarize this sample" path keep the
-      // fixture's TCPA consent flag while still going through real STT +
-      // speaker_labels. Raw drag-and-drop uploads leave it undefined → null.
-      const analyzedSession =
-        consentEvent !== undefined ? { ...session, consentEvent } : session;
-      const nextReport = await analyze(analyzedSession, patternPackIds);
+      const nextReport = await analyze(session, patternPackIds);
       setReport(nextReport);
-      registerLiveAudioBlob(analyzedSession.sessionId, blobUrl);
-      recordHistory(label, nextReport, analyzedSession);
+      registerLiveAudioBlob(session.sessionId, blobUrl);
+      recordHistory(label, nextReport, session);
       setUploadStatus("idle");
     } catch (err) {
       setUploadStatus("error");
@@ -1035,9 +1031,10 @@ export default function Dashboard({ navigate, path }) {
             <p className="pack-note">Drop-in extensions over the generic scan — no core changes.</p>
             {packCatalogStale && (
               <p className="pack-note">
-                Pack catalog did not load. Checkboxes still work. Pack descriptions may be stale.
+                Pack catalog did not load. Checkboxes still work. Eval coverage copy may be stale.
               </p>
             )}
+            <PackEvals selectedPacks={selectedPacks} catalog={industryPacks} />
           </div>
 
           <ProviderSettings />
