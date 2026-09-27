@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { createBridgeSession } from "./bridgeSession.js";
+import { createBridgeSession, END_CALL_TOOL } from "./bridgeSession.js";
 import { peakPcmuAmplitude, SILENCE_AMPLITUDE_THRESHOLD } from "./pcmuAudio.js";
 
 class FakeSocket extends EventEmitter {
@@ -528,4 +528,126 @@ test("reports outgoing audio at its Twilio playout position: back to back, reset
   assert.ok(outgoing[3] >= clears[0]);
   assert.ok(outgoing[3] < third + 37.5, "the next reply starts at the clear, not after the discarded audio");
   aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
+});
+
+// Starts a session with the end_call tool enabled and the call fully up
+// (Twilio "start" plus AssemblyAI session.ready).
+function startEndCallBridge(overrides = {}) {
+  const twilioWs = new FakeSocket();
+  const aaiWs = new FakeSocket();
+  const result = { finished: null };
+  createBridgeSession({
+    twilioWs,
+    token: "tok",
+    WebSocketImpl: fakeWebSocketImpl(aaiWs),
+    systemPrompt: "be a caller",
+    endCallTool: true,
+    silenceTimeoutMs: 0,
+    maxDurationMs: 60_000,
+    stopGraceMs: 10,
+    onFinished: (payload) => {
+      result.finished = payload;
+    },
+    ...overrides,
+  });
+  aaiWs.emit("open");
+  twilioWs.emit("message", JSON.stringify({ event: "start", start: { streamSid: "MZ1", callSid: "CA1" } }));
+  aaiWs.emit("message", JSON.stringify({ type: "session.ready" }));
+  return { twilioWs, aaiWs, result };
+}
+
+test("endCallTool registers the end_call tool on the session; it is off by default", () => {
+  const { aaiWs } = startEndCallBridge();
+  assert.deepEqual(aaiWs.sent[0].session.tools, [END_CALL_TOOL]);
+  assert.equal(END_CALL_TOOL.name, "end_call");
+  aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
+
+  const plainTwilio = new FakeSocket();
+  const plainAai = new FakeSocket();
+  createBridgeSession({ twilioWs: plainTwilio, token: "tok", WebSocketImpl: fakeWebSocketImpl(plainAai), systemPrompt: "x", silenceTimeoutMs: 0 });
+  plainAai.emit("open");
+  assert.equal(plainAai.sent[0].session.tools, undefined);
+  plainAai.emit("message", JSON.stringify({ type: "session.ended" }));
+});
+
+test("end_call hangs up only after Twilio has played the goodbye out, then ends the AssemblyAI session cleanly", () => {
+  const { twilioWs, aaiWs, result } = startEndCallBridge();
+  aaiWs.emit("message", JSON.stringify({ type: "reply.started" }));
+  aaiWs.emit("message", JSON.stringify({ type: "reply.audio", data: "goodbye" }));
+  aaiWs.emit("message", JSON.stringify({ type: "tool.call", call_id: "c1", name: "end_call", arguments: {} }));
+  // Still generating the goodbye - nothing ends yet.
+  assert.equal(aaiWs.sent.some((msg) => msg.type === "session.end"), false);
+
+  aaiWs.emit("message", JSON.stringify({ type: "reply.done", status: "completed" }));
+  // Twilio may still be playing the goodbye: ask to be told when it's done.
+  assert.deepEqual(twilioWs.sent.at(-1), { event: "mark", streamSid: "MZ1", mark: { name: "end_call" } });
+  assert.equal(aaiWs.sent.some((msg) => msg.type === "session.end"), false);
+  assert.equal(twilioWs.readyState, twilioWs.OPEN);
+
+  twilioWs.emit("message", JSON.stringify({ event: "mark", streamSid: "MZ1", mark: { name: "end_call" } }));
+  assert.deepEqual(aaiWs.sent.at(-1), { type: "session.end" });
+  aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
+
+  assert.equal(result.finished.reason, "end_call");
+  // Closing the Media Stream socket is what hangs up the phone call.
+  assert.equal(twilioWs.readyState, twilioWs.CLOSED);
+});
+
+test("an interrupted end_call reply cancels the hangup - the far end is still talking", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { twilioWs, aaiWs, result } = startEndCallBridge({ hangupTimeoutMs: 1000 });
+  aaiWs.emit("message", JSON.stringify({ type: "tool.call", call_id: "c1", name: "end_call", arguments: {} }));
+  aaiWs.emit("message", JSON.stringify({ type: "reply.done", status: "interrupted" }));
+
+  assert.equal(twilioWs.sent.some((msg) => msg.event === "mark"), false);
+  t.mock.timers.tick(5000);
+  assert.equal(result.finished, null);
+  assert.equal(aaiWs.sent.some((msg) => msg.type === "session.end"), false);
+
+  // A later, uninterrupted end_call still works.
+  aaiWs.emit("message", JSON.stringify({ type: "tool.call", call_id: "c2", name: "end_call", arguments: {} }));
+  aaiWs.emit("message", JSON.stringify({ type: "reply.done", status: "completed" }));
+  twilioWs.emit("message", JSON.stringify({ event: "mark", streamSid: "MZ1", mark: { name: "end_call" } }));
+  aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
+  assert.equal(result.finished.reason, "end_call");
+});
+
+test("a requested hangup still ends the call if reply.done or Twilio's mark never arrives", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { aaiWs, result } = startEndCallBridge({ hangupTimeoutMs: 1000 });
+  aaiWs.emit("message", JSON.stringify({ type: "tool.call", call_id: "c1", name: "end_call", arguments: {} }));
+  aaiWs.emit("message", JSON.stringify({ type: "reply.done", status: "completed" }));
+
+  t.mock.timers.tick(999);
+  assert.equal(result.finished, null);
+  t.mock.timers.tick(1);
+  assert.deepEqual(aaiWs.sent.at(-1), { type: "session.end" });
+  // AssemblyAI never confirms either - the grace window finishes it.
+  t.mock.timers.tick(10);
+  assert.equal(result.finished.reason, "end_call");
+});
+
+test("end_call is ignored unless endCallTool is enabled", () => {
+  const twilioWs = new FakeSocket();
+  const aaiWs = new FakeSocket();
+  let finished = null;
+  createBridgeSession({
+    twilioWs,
+    token: "tok",
+    WebSocketImpl: fakeWebSocketImpl(aaiWs),
+    systemPrompt: "x",
+    silenceTimeoutMs: 0,
+    onFinished: (payload) => {
+      finished = payload;
+    },
+  });
+  aaiWs.emit("open");
+  twilioWs.emit("message", JSON.stringify({ event: "start", start: { streamSid: "MZ1", callSid: "CA1" } }));
+  aaiWs.emit("message", JSON.stringify({ type: "session.ready" }));
+  aaiWs.emit("message", JSON.stringify({ type: "tool.call", call_id: "c1", name: "end_call", arguments: {} }));
+  aaiWs.emit("message", JSON.stringify({ type: "reply.done", status: "completed" }));
+  assert.equal(twilioWs.sent.some((msg) => msg.event === "mark"), false);
+  assert.equal(finished, null);
+  aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
+  assert.equal(finished.reason, "session.ended");
 });

@@ -19,3 +19,9 @@ test("buildCallerSystemPrompt tolerates a scenario missing optional fields", () 
   assert.equal(typeof prompt, "string");
   assert.ok(prompt.length > 0);
 });
+
+test("buildCallerSystemPrompt tells the caller to hang up with end_call once both sides have said goodbye", () => {
+  const prompt = buildCallerSystemPrompt({});
+  assert.match(prompt, /end_call/);
+  assert.match(prompt, /goodbye/i);
+});
