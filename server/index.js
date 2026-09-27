@@ -173,10 +173,7 @@ app.put("/v1/providers/credentials", (req, res) => {
   }
 });
 
-// Ungated like /examples itself: the catalog is static, client-safe pack
-// metadata (packCatalog strips regexes/specimens), and the zero-setup
-// Examples page's pack selector needs it for signed-out visitors.
-app.get("/v1/packs", (_req, res) => {
+app.get("/v1/packs", requireVisitor, (_req, res) => {
   res.json({ packs: packCatalog() });
 });
 
