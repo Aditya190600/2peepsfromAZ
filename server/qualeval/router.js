@@ -58,6 +58,24 @@ export function dispatchCallPlacement(
     });
 }
 
+// Retires runs stranded by a restart or a never-connected Media Stream (see
+// store.expireStaleRuns) before any read that shows run state, so a stuck
+// "Call in progress..." always resolves to an honest error on the next load.
+// Best-effort: a reconciliation failure must never fail the read itself.
+export async function reconcileStaleRuns({
+  expireStaleRuns = store.expireStaleRuns,
+  includePending = twilioConfigured(),
+} = {}) {
+  try {
+    const expired = await expireStaleRuns({ includePending });
+    for (const run of expired) {
+      console.error(`QualEval run ${run.id}: expired stale run - ${run.error}`);
+    }
+  } catch (err) {
+    console.error(`QualEval: stale-run reconciliation failed: ${err.message}`);
+  }
+}
+
 export async function dispatchEvaluation(runId, { llmGateway = providers.getModel().complete } = {}) {
   const run = await store.getRun(runId, null);
   if (!run) throw new Error("Run not found");
@@ -136,6 +154,7 @@ export function qualevalRouter({ visitorId = () => "anon", isOperator = async ()
     wrap(async (req, res) => {
       const evaluation = await store.getEvaluation(req.params.id, visitorId(req));
       if (!evaluation) return res.status(404).json({ error: "Evaluation not found" });
+      await reconcileStaleRuns();
       const scenarios = await store.listScenarios(evaluation.id, visitorId(req));
       const scenariosWithRuns = await Promise.all(
         scenarios.map(async (scenario) => ({ ...scenario, runs: await store.listRuns(scenario.id) })),
@@ -259,6 +278,7 @@ export function qualevalRouter({ visitorId = () => "anon", isOperator = async ()
     wrap(async (req, res) => {
       const scenario = await store.getScenario(req.params.id, visitorId(req));
       if (!scenario) return res.status(404).json({ error: "Scenario not found" });
+      await reconcileStaleRuns();
       const runs = await store.listRuns(scenario.id);
       res.json({ runs });
     }),
@@ -267,6 +287,7 @@ export function qualevalRouter({ visitorId = () => "anon", isOperator = async ()
   router.get(
     "/runs/:id",
     wrap(async (req, res) => {
+      await reconcileStaleRuns();
       const run = await store.getRun(req.params.id, visitorId(req));
       if (!run) return res.status(404).json({ error: "Run not found" });
       res.json(run);
@@ -281,11 +302,15 @@ export function qualevalRouter({ visitorId = () => "anon", isOperator = async ()
   router.post(
     "/runs/:id/end",
     wrap(async (req, res) => {
+      await reconcileStaleRuns();
       const run = await store.getRun(req.params.id, visitorId(req));
       if (!run) return res.status(404).json({ error: "Run not found" });
-      if (run.verdict !== "in_progress" || !run.twilioCallSid) {
-        return res.status(400).json({ error: "Run has no live call to end." });
+      // A client showing an outdated "Call in progress..." lands here after
+      // the call already finished on its own - say so, so it can refresh.
+      if (run.verdict !== "in_progress") {
+        return res.status(409).json({ error: "This call has already ended.", run });
       }
+      if (!run.twilioCallSid) return res.status(400).json({ error: "Run has no live call to end." });
       await endCall(run.twilioCallSid);
       res.status(202).json({ ok: true });
     }),

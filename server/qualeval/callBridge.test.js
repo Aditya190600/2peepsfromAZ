@@ -11,7 +11,6 @@ const ENV = {
 test("placeCall dials evaluation.agentPhoneNumber from QUALEVAL_PERSONA_NUMBER and marks the run in_progress", async () => {
   let placed;
   let markedInProgress;
-  let watchdogArmedFor;
   let recorded;
   const run = { id: "run_1" };
   const scenario = { id: "scenario_1" };
@@ -29,9 +28,6 @@ test("placeCall dials evaluation.agentPhoneNumber from QUALEVAL_PERSONA_NUMBER a
       return { id, verdict: "in_progress", twilioCallSid: sid };
     },
     markRunError: async () => assert.fail("should not error on success"),
-    watchdog: (id) => {
-      watchdogArmedFor = id;
-    },
     recordCall: async (fields) => {
       recorded = fields;
     },
@@ -43,7 +39,6 @@ test("placeCall dials evaluation.agentPhoneNumber from QUALEVAL_PERSONA_NUMBER a
   assert.equal(markedInProgress.id, "run_1");
   assert.equal(markedInProgress.sid, "CA123");
   assert.equal(result.verdict, "in_progress");
-  assert.equal(watchdogArmedFor, "run_1");
   assert.deepEqual(recorded, {
     twilioCallSid: "CA123",
     direction: "outbound",
@@ -51,21 +46,6 @@ test("placeCall dials evaluation.agentPhoneNumber from QUALEVAL_PERSONA_NUMBER a
     toNumber: "+15551234567",
     qualevalRunId: "run_1",
   });
-});
-
-test("placeCall does not arm the watchdog when the call is never placed", async () => {
-  await placeCall(
-    { id: "run_1" },
-    { id: "s1" },
-    { agentPhoneNumber: "+1555" },
-    {
-      baseUrl: "https://app.example.com",
-      env: {},
-      place: async () => assert.fail("should not place a call"),
-      markRunError: async () => {},
-      watchdog: () => assert.fail("should not arm the watchdog when placement failed"),
-    },
-  );
 });
 
 test("placeCall marks the run as error, never fabricating a transcript, when Twilio isn't configured", async () => {

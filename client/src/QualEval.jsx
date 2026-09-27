@@ -305,6 +305,17 @@ function EvaluationList({ evaluations, navigate }) {
   );
 }
 
+const RUN_POLL_INTERVAL_MS = 3000;
+// A 'pending' run only moves on its own for a short while after creation
+// (call placement dispatch); an older one is a no-Twilio stub that never will.
+const PENDING_POLL_WINDOW_MS = 3 * 60 * 1000;
+
+function runIsUnfinished(run) {
+  if (!run) return false;
+  if (run.verdict === "in_progress" || run.verdict === "awaiting_evaluation") return true;
+  return run.verdict === "pending" && Date.now() - new Date(run.createdAt).getTime() < PENDING_POLL_WINDOW_MS;
+}
+
 function runStatus(run) {
   if (!run) return { text: "No runs yet", cls: "is-na" };
   if (run.verdict === "pass") return { text: "Pass", cls: "is-pass" };
@@ -855,6 +866,19 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [evaluationId]);
 
+  // A run advances server-side (call placed, call ended, verdict recorded)
+  // with no push to this page, so keep re-fetching while any scenario's
+  // latest run is still unfinished - otherwise the page keeps showing
+  // "Call in progress…" long after the call ended. The server also retires
+  // runs stranded by a restart (store.expireStaleRuns), so this always ends.
+  const hasUnfinishedRun = (evaluation?.scenarios ?? []).some((s) => runIsUnfinished(s.runs?.[0]));
+  useEffect(() => {
+    if (!hasUnfinishedRun) return undefined;
+    const timer = setInterval(load, RUN_POLL_INTERVAL_MS);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasUnfinishedRun, evaluationId]);
+
   const onGenerate = async () => {
     setGenerating(true);
     setGenError(null);
@@ -914,10 +938,12 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
     setBusyScenarioId(run.scenarioId);
     try {
       await endRun(run.id);
-      await load();
     } catch (err) {
-      setActionError(err.message ?? "Could not end the call.");
+      if (err.status !== 409) setActionError(err.message ?? "Could not end the call.");
     } finally {
+      // Refresh either way: a failed end usually means the call already
+      // finished and this page was showing an outdated state.
+      await load();
       setBusyScenarioId(null);
     }
   };
