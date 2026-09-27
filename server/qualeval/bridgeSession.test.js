@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { createBridgeSession } from "./bridgeSession.js";
+import { peakPcmuAmplitude, SILENCE_AMPLITUDE_THRESHOLD } from "./pcmuAudio.js";
 
 class FakeSocket extends EventEmitter {
   constructor() {
@@ -92,8 +93,9 @@ test("reply.audio arriving before Twilio's 'start' event is buffered and flushed
 });
 
 function loudPcmuPayload() {
-  // 0x00 is the peak mu-law sample (~32124). 0x7F and 0xFF decode to
-  // amplitude 0 (bias-only silence) and never reset the watchdog.
+  // 0x00 is the peak negative mu-law sample (~32124) on the shared decode
+  // table. 0x7F and 0xFF decode to amplitude 0, so noteAudioActivity ignores
+  // them and the watchdog is never reset.
   return Buffer.alloc(160, 0x00).toString("base64");
 }
 
@@ -121,10 +123,15 @@ test("silence timeout ends the call when neither leg carries audible audio", asy
   assert.equal(finished.reason, "silence_timeout_grace");
 });
 
-test("audible media on either leg resets the silence watchdog", async () => {
+test("audible media on either leg resets the silence watchdog", (t) => {
+  // Mocked timers: a real 100ms wait plus the default 2000ms grace leaves
+  // `finished` null even when the 80ms watchdog already fired.
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   const twilioWs = new FakeSocket();
   const aaiWs = new FakeSocket();
   let finished = null;
+  const payload = loudPcmuPayload();
+  assert.ok(peakPcmuAmplitude(payload) >= SILENCE_AMPLITUDE_THRESHOLD);
   const bridge = createBridgeSession({
     twilioWs,
     token: "tok",
@@ -132,21 +139,23 @@ test("audible media on either leg resets the silence watchdog", async () => {
     systemPrompt: "be a caller",
     maxDurationMs: 60_000,
     silenceTimeoutMs: 80,
-    // Short enough that a watchdog which was not reset finishes inside the
-    // wait below. The default 2000ms grace would leave `finished` null either way.
     stopGraceMs: 10,
-    onFinished: (payload) => {
-      finished = payload;
+    onFinished: (result) => {
+      finished = result;
     },
   });
   aaiWs.emit("open");
   twilioWs.emit("message", JSON.stringify({ event: "start", start: { streamSid: "MZ1", callSid: "CA1" } }));
   aaiWs.emit("message", JSON.stringify({ type: "session.ready" }));
 
-  await new Promise((resolve) => setTimeout(resolve, 40));
-  twilioWs.emit("message", JSON.stringify({ event: "media", media: { payload: loudPcmuPayload() } }));
-  await new Promise((resolve) => setTimeout(resolve, 60));
+  t.mock.timers.tick(79);
+  twilioWs.emit("message", JSON.stringify({ event: "media", media: { payload } }));
+  // Cross the original 80ms deadline, then one more tick. A grace timer
+  // scheduled when that deadline fires does not run inside the same tick.
+  t.mock.timers.tick(20);
+  t.mock.timers.tick(10);
   assert.equal(finished, null);
+  assert.equal(aaiWs.sent.some((msg) => msg.type === "session.end"), false);
 
   bridge.stop();
   assert.equal(finished.reason, "manual_stop");
