@@ -167,7 +167,7 @@ function TenantIdentity({ name, email }) {
   if (!email) return null;
   return (
     <p className="app-tenant">
-      {name}
+      {name ? <span className="app-tenant-name">{name}</span> : null}
       <span className="app-tenant-mail">{email}</span>
     </p>
   );
