@@ -6,6 +6,7 @@ import AudioPlayer from "./AudioPlayer";
 import { Timestamp } from "./Dashboard";
 import { seekAudio } from "./seek";
 import { runToAudioMarkers } from "./qualEvalAudioMarkers";
+import { getDefaultPhoneNumber } from "./phoneNumberPreference";
 import {
   listEvaluations,
   createEvaluation,
@@ -140,10 +141,9 @@ function NewEvaluationForm({ onCreated }) {
   useEffect(() => {
     getQualevalConfig()
       .then((config) => {
-        if (config.agentPhoneNumber) {
-          setDefaultPhoneNumber(config.agentPhoneNumber);
-          setAgentPhoneNumber((current) => current || config.agentPhoneNumber);
-        }
+        if (config.agentPhoneNumber) setDefaultPhoneNumber(config.agentPhoneNumber);
+        const preferred = getDefaultPhoneNumber() || config.agentPhoneNumber;
+        if (preferred) setAgentPhoneNumber((current) => current || preferred);
       })
       .catch(() => {});
   }, []);
@@ -352,7 +352,12 @@ function RunResult({ run }) {
       <VerdictPill run={run} />
       {run?.audioRef && (
         <div className="qe-run-audio">
-          <AudioPlayer src={run.audioRef} audioRef={audioRef} markers={runToAudioMarkers(run)} />
+          <AudioPlayer
+            src={run.audioRef}
+            audioRef={audioRef}
+            turns={turns}
+            markers={runToAudioMarkers(run)}
+          />
           <p className="hint">
             Click a transcript timestamp or a waveform marker to seek. Red markers show evaluation
             evidence for failed criteria.
