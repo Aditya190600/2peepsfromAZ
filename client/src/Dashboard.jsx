@@ -31,6 +31,7 @@ import PackEvals from "./PackEvals";
 import PatternPackSelect from "./PatternPackSelect";
 import { parseSessionPaste } from "./sessionPaste";
 import { PERSONAS, findPersona } from "./personas";
+import { getDefaultPersonaId, setDefaultPersonaId } from "./personaPreference";
 import { ExamplesPanels } from "./Examples";
 import "./App.css";
 
@@ -604,8 +605,8 @@ export default function Dashboard({ navigate, path }) {
     connect,
     disconnect,
   } = useVoiceAgent();
-  const [selectedPacks, setSelectedPacks] = useState([]);
-  const [personaId, setPersonaId] = useState("neutral");
+  const [personaId, setPersonaId] = useState(() => getDefaultPersonaId());
+  const [selectedPacks, setSelectedPacks] = useState(() => findPersona(getDefaultPersonaId()).packIds);
   const [seedViolation, setSeedViolation] = useState(false);
   const [recordCall, setRecordCall] = useState(false);
   const [recordingUrl, setRecordingUrl] = useState(null);
@@ -656,6 +657,7 @@ export default function Dashboard({ navigate, path }) {
   // pack(s) that match its domain - the user can still uncheck any above.
   const selectPersona = (id) => {
     setPersonaId(id);
+    setDefaultPersonaId(id);
     setSeedViolation(false);
     setSelectedPacks(findPersona(id).packIds);
   };

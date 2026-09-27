@@ -3,14 +3,14 @@ import assert from "node:assert/strict";
 import { PRODUCT_NAV, PRODUCT_NAV_ALL, productNav } from "./chromeNav.js";
 
 describe("PRODUCT_NAV", () => {
-  it("is Home, Voice Compliance, Qualitative Evals for a non-operator", () => {
+  it("is Home, Voice Compliance, Qualitative Evals, and Settings for a non-operator", () => {
     assert.deepEqual(
       PRODUCT_NAV.map((item) => item.label),
-      ["Home", "Voice Compliance", "Qualitative Evals"]
+      ["Home", "Voice Compliance", "Qualitative Evals", "Settings"]
     );
   });
 
-  it("adds Settings for an operator", () => {
+  it("shows the same nav for an operator", () => {
     assert.deepEqual(
       productNav({ isOperator: true }).map((item) => item.label),
       ["Home", "Voice Compliance", "Qualitative Evals", "Settings"]

@@ -21,9 +21,7 @@ export const PRODUCT_NAV_ALL = [
     label: "Qualitative Evals",
     match: (path) => path === "/qualeval" || path.startsWith("/qualeval/"),
   },
-  // Only shown to QualEval operators (server/qualeval/operatorAccess.js) - the
-  // server's 403 on /v1/qualeval/demo-agent/* is the real gate.
-  { href: "/settings", label: "Settings", match: (path) => path === "/settings", operatorOnly: true },
+  { href: "/settings", label: "Settings", match: (path) => path === "/settings" },
 ];
 
 // Visible left-rail entries only.
