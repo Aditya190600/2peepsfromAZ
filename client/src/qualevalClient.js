@@ -27,10 +27,10 @@ export async function getEvaluation(id) {
   return json(await fetch(`/v1/qualeval/evaluations/${encodeURIComponent(id)}`));
 }
 
-export async function listInboundCalls(evaluationId) {
-  return json(
-    await fetch(`/v1/qualeval/evaluations/${encodeURIComponent(evaluationId)}/inbound-calls`),
-  ).then((body) => body.calls);
+// Phone Evals: operator-only list of calls that dialed the agent number
+// directly, outside any QualEval scenario run.
+export async function listPhoneEvalCalls() {
+  return json(await fetch("/v1/qualeval/phone-evals")).then((body) => body.calls);
 }
 
 export async function updateEvaluation(id, fields) {

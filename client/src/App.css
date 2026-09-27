@@ -2952,6 +2952,7 @@ button.site-nav-link {
   border-radius: 999px;
   border: 1px solid var(--line-strong);
   background: var(--panel);
+  color: var(--ink);
   font-weight: 600;
   cursor: pointer;
 }
@@ -3591,4 +3592,47 @@ button.site-nav-link {
   border-radius: var(--qe-radius-sm);
   padding: 10px 14px;
   font-size: 14px;
+}
+
+/* --- Phone Evals (client/src/PhoneEvals.jsx) --- */
+.phone-evals-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.phone-evals-section-head h2 {
+  margin: 0;
+}
+
+.phone-evals-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.phone-evals-call {
+  border: 1px solid var(--line);
+  border-radius: var(--qe-radius);
+  background: var(--panel);
+  padding: 16px;
+}
+
+.phone-evals-call-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-bottom: 12px;
+}
+
+.phone-evals-meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.phone-evals-call-head .qe-eval-when {
+  margin-left: auto;
 }

@@ -45,7 +45,6 @@ function callRow(row) {
     agentId: row.agent_id,
     audioRef: row.audio_ref,
     qualevalRunId: row.qualeval_run_id,
-    evaluationId: row.evaluation_id,
     evaluationStatus: row.evaluation_status,
     verdict: row.verdict,
     assessment: row.assessment,
@@ -57,7 +56,7 @@ function callRow(row) {
 }
 
 const RETURNING =
-  "id, twilio_call_sid, direction, from_number, to_number, caller_name, started_at, ended_at, end_reason, transcript, variant_key, agent_id, audio_ref, qualeval_run_id, evaluation_id, evaluation_status, verdict, assessment, criterion_results, evidence_quotes, evaluation_error, created_at";
+  "id, twilio_call_sid, direction, from_number, to_number, caller_name, started_at, ended_at, end_reason, transcript, variant_key, agent_id, audio_ref, qualeval_run_id, evaluation_status, verdict, assessment, criterion_results, evidence_quotes, evaluation_error, created_at";
 
 export async function recordProductionCall(fields, env = process.env, pool = getPool(env)) {
   if (!pool || !fields?.twilioCallSid) return null;
@@ -88,15 +87,16 @@ export async function finishProductionCall(fields, env = process.env, pool = get
   const transcript = fields.transcript == null ? null : JSON.stringify(fields.transcript);
   const { rows } = await pool.query(
     `insert into production_calls
-       (twilio_call_sid, direction, transcript, end_reason, ended_at, variant_key, agent_id, audio_ref)
-     values ($1, $2, $3::jsonb, $4, now(), $5, $6, $7)
+       (twilio_call_sid, direction, transcript, end_reason, ended_at, variant_key, agent_id, audio_ref, qualeval_run_id)
+     values ($1, $2, $3::jsonb, $4, now(), $5, $6, $7, $8)
      on conflict (twilio_call_sid) do update set
        transcript = excluded.transcript,
        end_reason = excluded.end_reason,
        ended_at = now(),
        variant_key = coalesce(excluded.variant_key, production_calls.variant_key),
        agent_id = coalesce(excluded.agent_id, production_calls.agent_id),
-       audio_ref = coalesce(excluded.audio_ref, production_calls.audio_ref)
+       audio_ref = coalesce(excluded.audio_ref, production_calls.audio_ref),
+       qualeval_run_id = coalesce(excluded.qualeval_run_id, production_calls.qualeval_run_id)
      returning ${RETURNING}`,
     [
       fields.twilioCallSid,
@@ -106,6 +106,7 @@ export async function finishProductionCall(fields, env = process.env, pool = get
       fields.variantKey ?? null,
       fields.agentId ?? null,
       fields.audioRef ?? null,
+      fields.qualevalRunId ?? null,
     ],
   );
   return callRow(rows[0]);
@@ -124,19 +125,17 @@ export async function recordProductionCallEvaluation(fields, env = process.env, 
   if (!pool || !fields?.twilioCallSid) return null;
   const { rows } = await pool.query(
     `update production_calls set
-       evaluation_id = $2,
-       evaluation_status = $3,
-       verdict = $4,
-       assessment = $5,
-       criterion_results = $6::jsonb,
-       evidence_quotes = $7::jsonb,
-       evaluation_error = $8,
-       qualeval_run_id = coalesce($9, qualeval_run_id)
+       evaluation_status = $2,
+       verdict = $3,
+       assessment = $4,
+       criterion_results = $5::jsonb,
+       evidence_quotes = $6::jsonb,
+       evaluation_error = $7,
+       qualeval_run_id = coalesce($8, qualeval_run_id)
      where twilio_call_sid = $1
      returning ${RETURNING}`,
     [
       fields.twilioCallSid,
-      fields.evaluationId ?? null,
       fields.evaluationStatus ?? null,
       fields.verdict ?? null,
       fields.assessment ?? null,
@@ -155,22 +154,6 @@ function transcriptForClient(value) {
   return value ?? null;
 }
 
-export async function listProductionCallsForEvaluation(evaluationId, env = process.env, pool = getPool(env)) {
-  if (!pool || !evaluationId) return [];
-  const { rows } = await pool.query(
-    `select ${RETURNING} from production_calls
-     where evaluation_id = $1
-     order by started_at desc
-     limit 50`,
-    [evaluationId],
-  );
-  return rows.map((row) => {
-    const call = callRow(row);
-    call.transcript = transcriptForClient(call.transcript);
-    return call;
-  });
-}
-
 // Last 10 digits so +1 (312) 800-3792 matches +13128003792.
 export function phoneDigits(value) {
   const digits = String(value ?? "").replace(/\D/g, "");
@@ -178,23 +161,32 @@ export function phoneDigits(value) {
   return digits.slice(-10);
 }
 
-export async function findEvaluationByPhone(toNumber, env = process.env, pool = getPool(env)) {
-  if (!pool || !phoneDigits(toNumber)) return null;
-  const want = phoneDigits(toNumber);
+export function isPersonaNumber(value, env = process.env) {
+  const persona = phoneDigits(env.QUALEVAL_PERSONA_NUMBER);
+  return persona !== "" && phoneDigits(value) === persona;
+}
+
+// Phone Evals (client/src/PhoneEvals.jsx): calls that reached the agent
+// number directly. Legs of a QualEval scenario run belong to that run
+// instead, so they never appear here: they carry qualeval_run_id once the
+// bridge claims the run, and they always come from QUALEVAL_PERSONA_NUMBER,
+// which also covers the window before the claim lands (or a claim that never
+// does).
+export function isPhoneEvalCall(call, env = process.env) {
+  return call?.direction === "inbound" && !call.qualevalRunId && !isPersonaNumber(call.fromNumber, env);
+}
+
+export async function listPhoneEvalCalls(env = process.env, pool = getPool(env)) {
+  if (!pool) return [];
   const { rows } = await pool.query(
-    `select id, name, agent_phone_number, description, requirements, created_at
-     from qualeval_evaluations
-     where agent_phone_number is not null
-     order by created_at desc`,
+    `select ${RETURNING} from production_calls
+     where direction = 'inbound'
+       and qualeval_run_id is null
+     order by started_at desc
+     limit 50`,
   );
-  const match = rows.find((row) => phoneDigits(row.agent_phone_number) === want);
-  if (!match) return null;
-  return {
-    id: match.id,
-    name: match.name,
-    agentPhoneNumber: match.agent_phone_number,
-    description: match.description,
-    requirements: match.requirements,
-    createdAt: match.created_at,
-  };
+  return rows
+    .map(callRow)
+    .filter((call) => isPhoneEvalCall(call, env))
+    .map((call) => ({ ...call, transcript: transcriptForClient(call.transcript) }));
 }

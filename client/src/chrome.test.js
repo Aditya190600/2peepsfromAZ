@@ -10,10 +10,10 @@ describe("PRODUCT_NAV", () => {
     );
   });
 
-  it("shows the same nav for an operator", () => {
+  it("adds Phone Evals for an operator", () => {
     assert.deepEqual(
       productNav({ isOperator: true }).map((item) => item.label),
-      ["Voice Compliance", "Qualitative Evals", "Settings"]
+      ["Voice Compliance", "Qualitative Evals", "Phone Evals", "Settings"]
     );
   });
 
