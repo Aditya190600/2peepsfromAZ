@@ -54,7 +54,7 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  const route = matchRoute(path, window.location.search);
+  const route = matchRoute(path);
 
   useEffect(() => {
     if (!route.redirect || route.redirect === path) return;
