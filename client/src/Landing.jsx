@@ -9,6 +9,7 @@ export default function Landing({ onGetStarted, navigate, path }) {
     <div className="page styled-page">
       <Nav path={path} navigate={navigate} />
       <header className="masthead">
+        <p className="brand-tagline">The independent trust layer for voice agents</p>
         <p className="tagline">Know what your AI voice agent actually does.</p>
         <p className="tagline-subhead">
           Compliance checks on every completed call, and real test calls that prove an agent behaves the way you expect.

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { SignedIn, SignedOut, SignInButton } from "@clerk/clerk-react";
 import Landing from "./Landing";
-import Home from "./Home";
 import Try from "./Try";
 import Examples from "./Examples";
 import History from "./History";
@@ -66,13 +65,6 @@ export default function App() {
   const viewPath = route.redirect ?? path;
   const view = route.redirect ? matchRoute(route.redirect) : route;
 
-  if (view.name === "home") {
-    return (
-      <RequireVisitor>
-        <Home navigate={navigate} path={viewPath} />
-      </RequireVisitor>
-    );
-  }
   if (view.name === "try") {
     return (
       <RequireVisitor>

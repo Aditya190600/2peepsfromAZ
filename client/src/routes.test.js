@@ -8,7 +8,6 @@ test("landing is the default", () => {
 });
 
 test("named product routes", () => {
-  assert.deepEqual(matchRoute("/home"), { name: "home" });
   assert.deepEqual(matchRoute("/try"), { name: "try" });
   assert.deepEqual(matchRoute("/sessions"), { name: "sessions" });
   assert.deepEqual(matchRoute("/sessions/"), { name: "sessions" });
@@ -36,6 +35,10 @@ test("session id is decoded after the sessions prefix", () => {
 
 test("legacy dashboard lands on try", () => {
   assert.deepEqual(matchRoute("/dashboard"), { name: "try", redirect: "/try" });
+});
+
+test("removed home page lands on try", () => {
+  assert.deepEqual(matchRoute("/home"), { name: "try", redirect: "/try" });
 });
 
 test("legacy history lands on sessions", () => {

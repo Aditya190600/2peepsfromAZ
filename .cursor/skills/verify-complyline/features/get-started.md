@@ -10,7 +10,7 @@ Get started takes a judge from the landing page to `/try`, the Voice Compliance 
 ## How to get to it (user POV)
 
 - Choose **Get started** (Clerk on) or **Run this sample yourself** on the landing page.
-- Signed in, choose **Go to app** in the landing page's top-right nav.
+- Signed in, choose **Get started** in the landing page's top-right nav.
 
 ## Driving it with cursor-ide-browser
 
@@ -25,6 +25,6 @@ Preconditions:
 
 ## Gotchas
 
-- `/home` (Northstar 12-session summary) is hidden from the nav rail and no longer the Get started target. It still loads by typed URL.
+- `/home` is removed and redirects to `/try`.
 - `App.jsx` reads the path after `pushState`. A snapshot taken before the SPA finishes can still show Landing.
 - Do not click **Start call** during this recipe.

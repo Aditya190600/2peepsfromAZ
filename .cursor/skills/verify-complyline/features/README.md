@@ -14,7 +14,7 @@ This directory is the maintained source for verifying user-facing ComplyLine beh
 
 - Start every recipe from `/` unless its preconditions say otherwise.
 - Prefer accessible names (`Get started`, `Voice Compliance`, `Start call`, `Clean call — everything passes`) over CSS selectors.
-- Use in-page `navigate()` clicks for SPA routes. Use `browser_navigate` for typed deep links (`/sessions/...`, `/home`).
+- Use in-page `navigate()` clicks for SPA routes. Use `browser_navigate` for typed deep links (`/sessions/...`).
 - Restore History after a mutation if the recipe created entries. Keep proof artifacts.
 
 ## Proof and skip reporting
