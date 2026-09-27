@@ -428,3 +428,37 @@ test("AssemblyAI session.error also closes the Twilio leg, not just the Assembly
 
   assert.equal(twilioWs.readyState, twilioWs.CLOSED);
 });
+
+test("live-listening taps: onTurn fires per transcript turn and onOutgoingAudioCleared on barge-in", async () => {
+  const twilioWs = new FakeSocket();
+  const aaiWs = new FakeSocket();
+  const liveTurns = [];
+  let cleared = 0;
+  createBridgeSession({
+    twilioWs,
+    token: "tok",
+    WebSocketImpl: fakeWebSocketImpl(aaiWs),
+    systemPrompt: "be a caller",
+    silenceTimeoutMs: 0,
+    onTurn: (turn) => liveTurns.push(turn),
+    onOutgoingAudioCleared: () => cleared++,
+  });
+  aaiWs.emit("open");
+  twilioWs.emit("message", JSON.stringify({ event: "start", start: { streamSid: "MZ1", callSid: "CA1" } }));
+  aaiWs.emit("message", JSON.stringify({ type: "session.ready" }));
+  aaiWs.emit("message", JSON.stringify({ type: "transcript.user", text: "Thanks for calling." }));
+  aaiWs.emit("message", JSON.stringify({ type: "transcript.agent", text: "Hi, I need help." }));
+  aaiWs.emit("message", JSON.stringify({ type: "reply.done", status: "completed" }));
+  assert.equal(cleared, 0);
+  aaiWs.emit("message", JSON.stringify({ type: "reply.done", status: "interrupted" }));
+  assert.equal(cleared, 1);
+
+  assert.deepEqual(
+    liveTurns.map(({ role, text }) => ({ role, text })),
+    [
+      { role: "agent", text: "Thanks for calling." },
+      { role: "user", text: "Hi, I need help." },
+    ],
+  );
+  aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
+});

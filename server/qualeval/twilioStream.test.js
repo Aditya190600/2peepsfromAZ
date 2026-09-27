@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { attachTwilioStreamServer } from "./twilioStream.js";
 import * as broker from "./callBridgeBroker.js";
+import * as liveCallHub from "./liveCallHub.js";
 
 class FakeSocket extends EventEmitter {
   constructor() {
@@ -83,4 +84,45 @@ test("closes the stream instead of hanging when the start event carries no runId
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.equal(twilioWs.readyState, twilioWs.CLOSED);
+});
+
+test("publishes both sides' audio and each turn to live listeners, and ends the live call when the bridge finishes", async () => {
+  const twilioWs = new FakeSocket();
+  const httpServer = new EventEmitter();
+  let sessionArgs;
+  const wss = attachTwilioStreamServer(httpServer, {
+    getRun: async () => ({ id: "run_live", scenarioId: "scn_1" }),
+    getScenario: async () => ({ id: "scn_1", name: "test" }),
+    mintToken: async () => "tok",
+    createSession: (args) => {
+      sessionArgs = args;
+      return {};
+    },
+    markRunError: async () => {},
+    finishCall: async () => {},
+  });
+  connect(wss, twilioWs);
+  twilioWs.emit(
+    "message",
+    JSON.stringify({ event: "start", start: { streamSid: "MZ1", callSid: "CA1", customParameters: { runId: "run_live" } } }),
+  );
+  for (let i = 0; i < 3; i++) await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(sessionArgs);
+
+  const events = [];
+  liveCallHub.subscribe("run_live", (e) => events.push(e));
+  sessionArgs.onIncomingAudio("targetVoice", 20);
+  sessionArgs.onOutgoingAudio("callerVoice", 40);
+  sessionArgs.onOutgoingAudioCleared();
+  sessionArgs.onTurn({ role: "agent", text: "Hello", tMs: 60 });
+  await sessionArgs.onError("bridge failed");
+
+  assert.deepEqual(events, [
+    { type: "audio", track: "agent", payload: "targetVoice", tMs: 20 },
+    { type: "audio", track: "caller", payload: "callerVoice", tMs: 40 },
+    { type: "clear", track: "caller" },
+    { type: "turn", turn: { role: "agent", text: "Hello", tMs: 60 } },
+    { type: "end" },
+  ]);
+  assert.equal(liveCallHub.isLive("run_live"), false);
 });
