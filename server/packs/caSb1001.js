@@ -16,6 +16,7 @@ export const caSb1001Pack = {
     "Cal. Bus. & Prof. Code §§17940-17942 (SB 1001, operative 2019-07-01) — unlawful to use a bot to communicate with a person with intent to mislead about its artificial identity, when done to incentivize a commercial transaction or influence a vote, unless the bot use is disclosed clearly, conspicuously, and in a manner reasonably designed to inform.",
   asserts:
     "Detects whether the agent self-identified as a bot/AI/automated system anywhere in the call - the statute names no fixed disclosure window, unlike the always-on ai_disclosure check's 10s CA AB 2905-style window. Not a determination of intent to mislead or of commercial-transaction/election purpose, which are separate statutory elements this check does not evaluate.",
+  detectionSummary: "Bot/AI self-identification anywhere in call",
   alwaysOn: false,
   patterns: [],
   check: (session) => caSb1001BotDisclosureCheck(session),

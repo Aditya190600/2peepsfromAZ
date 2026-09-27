@@ -9,6 +9,7 @@ export const tcpaPack = {
   citation: "Telephone Consumer Protection Act, 47 U.S.C. §227(b)(3).",
   asserts:
     "Surfaces the always-on consent-event check (was a valid consent event logged before this call). Not a TCPA compliance determination - TCPA also covers prior express written consent for marketing, called-party identity, and call-time restrictions this check does not evaluate.",
+  detectionSummary: "Consent event logged before call",
   alwaysOn: false,
   statutoryDamage: {
     range: "$500 per violation, up to $1,500 for willful/knowing violations",
