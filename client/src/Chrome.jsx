@@ -136,7 +136,6 @@ export function Nav({ path, navigate }) {
   return (
     <nav className="site-nav">
       <a className="brand" href="/" onClick={(e) => go(navigate, "/", e)}>
-        <span className="brand-mark" aria-hidden="true" />
         <h1>ComplyLine</h1>
       </a>
       <div className="site-nav-links">
@@ -197,7 +196,6 @@ export function AppShell({ path, navigate, title, actions, rail, children }) {
     <div className={`app-shell ${rail ? "has-rail" : ""}`}>
       <header className="app-topbar">
         <a className="app-brand" href="/" onClick={(e) => go(navigate, "/", e)}>
-          <span className="brand-mark" aria-hidden="true" />
           <span>ComplyLine</span>
         </a>
         <div className="site-nav-links">

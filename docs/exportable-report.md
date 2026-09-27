@@ -16,7 +16,7 @@ fed into another system.
   - A dedicated `@media print` stylesheet in `client/src/App.css` reformats
     the page for print output:
     - The session panel, masthead, and the toolbar buttons are hidden.
-    - A letterhead block (ComplyLine brand mark, session id, generated
+    - A letterhead block (ComplyLine wordmark, session id, generated
       timestamp) is shown in place of the on-screen header — this block only
       renders under `@media print` (`.print-letterhead`).
     - Each finding gets `break-inside: avoid` so a card isn't split across a
