@@ -242,6 +242,10 @@ function IntroSteps() {
   );
 }
 
+function progressFillClass(percent) {
+  return percent < 50 ? "app-progress-fill is-low" : "app-progress-fill";
+}
+
 function FleetSummary({ results, progress }) {
   const { total, passed, flagged, erroredOnly, complianceRate, perCheck } = summarizeFleet(results);
   const tiles = monitorTiles(perCheck);
@@ -263,7 +267,7 @@ function FleetSummary({ results, progress }) {
           <span className="fleet-rate-number">{complianceRate}%</span>
         </p>
         <div className="app-progress-track" aria-hidden="true">
-          <div className="app-progress-fill" style={{ width: `${complianceRate}%` }} />
+          <div className={progressFillClass(complianceRate)} style={{ width: `${complianceRate}%` }} />
         </div>
         <p className="fleet-headline">
           <strong>{passed}</strong> of <strong>{total}</strong> calls passed every check ·{" "}
@@ -278,29 +282,27 @@ function FleetSummary({ results, progress }) {
       </section>
       <h3 className="monitor-heading">Monitoring</h3>
       <ul className="monitor-grid">
-        {tiles.map((tile) => (
-          <li key={tile.check} className="monitor-card">
-            <p className="monitor-kicker">{tile.label}</p>
-            <p className="monitor-attention">{tile.flag > 0 ? "Needs attention" : "Clear"}</p>
-            <p className="monitor-count">{tile.flag}</p>
-            <div className="app-progress-track" aria-hidden="true">
-              <div
-                className="app-progress-fill"
-                style={{
-                  width: tile.total
-                    ? `${Math.round(((tile.total - tile.flag) / tile.total) * 100)}%`
-                    : "0%",
-                }}
-              />
-            </div>
-            <p className="monitor-meta">
-              {tile.pass} pass
-              {tile.na > 0 ? ` · ${tile.na} n/a` : ""}
-              {tile.error > 0 ? ` · ${tile.error} unable to run` : ""}
-              {` · ${tile.total} total`}
-            </p>
-          </li>
-        ))}
+        {tiles.map((tile) => {
+          const passRate = tile.total
+            ? Math.round(((tile.total - tile.flag) / tile.total) * 100)
+            : 0;
+          return (
+            <li key={tile.check} className="monitor-card">
+              <p className="monitor-kicker">{tile.label}</p>
+              <p className="monitor-attention">{tile.flag > 0 ? "Needs attention" : "Clear"}</p>
+              <p className="monitor-count">{tile.flag}</p>
+              <div className="app-progress-track" aria-hidden="true">
+                <div className={progressFillClass(passRate)} style={{ width: `${passRate}%` }} />
+              </div>
+              <p className="monitor-meta">
+                {tile.pass} pass
+                {tile.na > 0 ? ` · ${tile.na} n/a` : ""}
+                {tile.error > 0 ? ` · ${tile.error} unable to run` : ""}
+                {` · ${tile.total} total`}
+              </p>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
