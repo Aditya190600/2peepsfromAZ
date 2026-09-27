@@ -56,7 +56,7 @@ export function claimPendingRunForTarget() {
 // attempt usually finds nothing yet for a genuine QualEval call. Retries
 // briefly before giving up and treating the connection as a real external
 // caller with no run to cross-wire to.
-export async function waitForClaimableRun({ attempts = 10, intervalMs = 250 } = {}) {
+export async function waitForClaimableRun({ attempts = 40, intervalMs = 250 } = {}) {
   for (let i = 0; i < attempts; i += 1) {
     const runId = claimPendingRunForTarget();
     if (runId) return runId;

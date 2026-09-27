@@ -113,10 +113,18 @@ export function attachTwilioStreamServer(
       try {
         await markRunAwaitingEvaluation(runId, { turns });
         await saveRecording();
-        await dispatch(runId);
-        console.log(`QualEval call bridge: run ${runId} ended (${reason}) with ${turns.length} transcript turns - evaluated`);
+        try {
+          await dispatch(runId);
+          console.log(
+            `QualEval call bridge: run ${runId} ended (${reason}) with ${turns.length} transcript turns - evaluated`,
+          );
+        } catch (evalErr) {
+          console.error(`QualEval call bridge: evaluation failed for run ${runId}: ${evalErr.message}`);
+          await markRunError(runId, `Evaluation failed: ${evalErr.message}`).catch(() => {});
+        }
       } catch (err) {
         console.error(`QualEval call bridge: post-call processing failed for run ${runId}: ${err.message}`);
+        await markRunError(runId, `Post-call processing failed: ${err.message}`).catch(() => {});
       }
     }
 
@@ -131,6 +139,11 @@ export function attachTwilioStreamServer(
       twilioWs.close(1008, "missing runId");
       return;
     }
+
+    // Register immediately so the target-agent leg's waitForClaimableRun finds
+    // this run while getRun/scenario/token lookups run below. injectAudio is
+    // wired once createBridgeSession returns.
+    broker.registerPersonaLeg(runId, () => {});
 
     try {
       const run = await getRun(runId, null);
@@ -153,7 +166,7 @@ export function attachTwilioStreamServer(
       });
       // Registered as soon as the bridge session exists (not waiting on
       // session.ready) so the target-agent side's claim (server/qualeval/
-      // callBridgeBroker.js's waitForClaimableRun, polling for up to ~2.5s)
+      // callBridgeBroker.js's waitForClaimableRun, polling for up to ~10s)
       // finds this run as early as possible - see bridgeSession.js's header
       // comment for why this cross-wiring exists at all.
       broker.registerPersonaLeg(runId, session.injectAudio);

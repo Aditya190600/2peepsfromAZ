@@ -91,6 +91,27 @@ test("reply.audio arriving before Twilio's 'start' event is buffered and flushed
   aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
 });
 
+test("max-duration cap finishes from twilio start even when AssemblyAI never reaches session.ready", async () => {
+  const twilioWs = new FakeSocket();
+  const aaiWs = new FakeSocket();
+  let finished = null;
+  createBridgeSession({
+    twilioWs,
+    token: "tok",
+    WebSocketImpl: fakeWebSocketImpl(aaiWs),
+    systemPrompt: "be a caller",
+    maxDurationMs: 40,
+    onFinished: (payload) => {
+      finished = payload;
+    },
+  });
+  aaiWs.emit("open");
+  twilioWs.emit("message", JSON.stringify({ event: "start", start: { streamSid: "MZ1", callSid: "CA1" } }));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.ok(finished);
+  assert.equal(finished.reason, "max_duration");
+});
+
 test("swaps AssemblyAI's user/agent roles into QualEval's caller/target transcript shape", async () => {
   const twilioWs = new FakeSocket();
   const aaiWs = new FakeSocket();
