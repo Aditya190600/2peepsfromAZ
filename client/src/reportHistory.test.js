@@ -15,6 +15,7 @@ import {
   loadHistory,
   clearHistory,
   findEntryBySessionId,
+  entryRanWithPacks,
   historyEntrySession,
 } from "./reportHistory.js";
 
@@ -222,4 +223,13 @@ test("pending live entry is saved before a report exists, then filled in place w
   assert.equal(history[0].verdictLabel, "Clear");
   assert.deepEqual(history[0].findings, FINDINGS);
   assert.equal(history[1].sessionId, "sess_old");
+});
+
+test("entryRanWithPacks only reuses a stored report run with the same pack set", () => {
+  const entry = { report: {}, patternPackIds: ["generic", "hipaa"] };
+  assert.equal(entryRanWithPacks(entry, ["hipaa", "generic"]), true);
+  assert.equal(entryRanWithPacks(entry, ["generic"]), false);
+  assert.equal(entryRanWithPacks(entry, ["generic", "hipaa", "finance"]), false);
+  // Entries saved before patternPackIds was recorded can't prove their packs.
+  assert.equal(entryRanWithPacks({ report: {} }, ["generic"]), false);
 });

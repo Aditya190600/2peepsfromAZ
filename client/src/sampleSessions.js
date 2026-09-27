@@ -116,7 +116,24 @@ export const SAMPLE_SESSIONS = {
   },
 };
 
-export const SCRIPTED_VIOLATION_DEMO_KEYS = ["hipaa-diagnosis-readback", "glba-account-disclosure"];
+// Each scripted demo's violation is only detectable by one industry pattern
+// pack (the always-on generic pack has no MRN/routing-number shapes), so the
+// pack travels with the demo: Examples.jsx selects it automatically instead
+// of relying on the visitor to tick the matching checkbox first. Without it
+// every scripted demo reports pass/N/A.
+export const SCRIPTED_VIOLATION_DEMO_PACKS = {
+  "hipaa-diagnosis-readback": ["hipaa"],
+  "glba-account-disclosure": ["finance"],
+};
+
+export const SCRIPTED_VIOLATION_DEMO_KEYS = Object.keys(SCRIPTED_VIOLATION_DEMO_PACKS);
+
+// The full patternPackIds a sample runs with: the always-on generic pack,
+// the visitor's selected industry packs, and (for a scripted demo) the pack
+// its violation targets.
+export function samplePatternPackIds(key, selectedPacks = []) {
+  return ["generic", ...new Set([...selectedPacks, ...(SCRIPTED_VIOLATION_DEMO_PACKS[key] ?? [])])];
+}
 
 // Only these six sessions have a recorded companion file in public/samples -
 // the "playable" set (see the file header comment). The two scripted

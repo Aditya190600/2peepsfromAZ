@@ -9,8 +9,14 @@ import {
   INDUSTRY_PACKS,
   sessionByKey,
 } from "./Dashboard";
-import { SAMPLE_SESSIONS, SAMPLE_AUDIO_URLS, SCRIPTED_VIOLATION_DEMO_KEYS } from "./sampleSessions";
-import { saveHistoryEntry, buildHistoryEntry, findEntryBySessionId } from "./reportHistory";
+import {
+  SAMPLE_SESSIONS,
+  SAMPLE_AUDIO_URLS,
+  SCRIPTED_VIOLATION_DEMO_KEYS,
+  SCRIPTED_VIOLATION_DEMO_PACKS,
+  samplePatternPackIds,
+} from "./sampleSessions";
+import { saveHistoryEntry, buildHistoryEntry, findEntryBySessionId, entryRanWithPacks } from "./reportHistory";
 import { seekAudio } from "./seek";
 import { headlineVerdict } from "./compliance";
 import { analyze, diarizeSample, mapWithConcurrency } from "./analyzeClient";
@@ -74,21 +80,21 @@ export function ExamplesPanels({ navigate, topTabBar = null, onShowLiveCall = nu
     setDiarizeError(null);
   };
 
-  const recordHistory = (label, report, session, opts = {}) => {
+  const recordHistory = (label, report, session, packIds, opts = {}) => {
     const verdict = headlineVerdict(report.findings);
-    saveHistoryEntry(buildHistoryEntry({ label, report, session, verdict, ...opts }));
+    saveHistoryEntry(buildHistoryEntry({ label, report, session, verdict, patternPackIds: packIds, ...opts }));
   };
 
-  const runSample = async (key) => {
+  const runSample = async (key, packIds) => {
     setFleetResults(null);
     clearErrors();
     setSampleLoadingKey(key);
     showAudio(SAMPLE_AUDIO_URLS[key] && PLAYABLE_SAMPLE_LABEL[key] ? SAMPLE_AUDIO_URLS[key] : null);
     try {
       const session = sessionByKey(key);
-      const nextReport = await analyze(session, patternPackIds);
+      const nextReport = await analyze(session, packIds);
       setReport(nextReport);
-      recordHistory(sampleLabel(key), nextReport, session, {
+      recordHistory(sampleLabel(key), nextReport, session, packIds, {
         audioKey: PLAYABLE_SAMPLE_LABEL[key] ? key : undefined,
       });
     } catch (err) {
@@ -99,10 +105,16 @@ export function ExamplesPanels({ navigate, topTabBar = null, onShowLiveCall = nu
     }
   };
 
+  // A scripted demo's violation is only visible to its target industry pack,
+  // so clicking one also ticks that pack (visible in the selector above)
+  // rather than silently running generic-only and reporting pass/N/A.
   const openStoredOrRunSample = (key) => {
+    const demoPacks = SCRIPTED_VIOLATION_DEMO_PACKS[key];
+    if (demoPacks) setSelectedPacks((prev) => [...new Set([...prev, ...demoPacks])]);
+    const packIds = samplePatternPackIds(key, selectedPacks);
     const entry = findEntryBySessionId(SAMPLE_SESSIONS[key]?.sessionId);
-    if (!entry?.report) {
-      runSample(key);
+    if (!entry?.report || !entryRanWithPacks(entry, packIds)) {
+      runSample(key, packIds);
       return;
     }
     setFleetResults(null);
@@ -126,7 +138,7 @@ export function ExamplesPanels({ navigate, topTabBar = null, onShowLiveCall = nu
       showAudio(url);
       const { session, report: nextReport } = await diarizeSample(key, patternPackIds);
       setReport(nextReport);
-      recordHistory(`${sampleLabel(key)} (speaker-split upload)`, nextReport, session, {
+      recordHistory(`${sampleLabel(key)} (speaker-split upload)`, nextReport, session, patternPackIds, {
         audioKey: key,
       });
       setDiarizeStatus("idle");
@@ -168,7 +180,7 @@ export function ExamplesPanels({ navigate, topTabBar = null, onShowLiveCall = nu
       const results = keys.map((key, i) => ({ key, report: reports[i] }));
       setFleetResults(results);
       for (const { key, report: r } of results) {
-        recordHistory(sampleLabel(key), r, sessionByKey(key), {
+        recordHistory(sampleLabel(key), r, sessionByKey(key), patternPackIds, {
           audioKey: PLAYABLE_SAMPLE_LABEL[key] ? key : undefined,
         });
       }
@@ -308,7 +320,7 @@ export function ExamplesPanels({ navigate, topTabBar = null, onShowLiveCall = nu
               <div className="section-block tab-panel">
                 <p className="pack-note">
                   Two concrete, scripted scenarios built to trip the HIPAA and GLBA pattern packs.
-                  Check the matching industry pack above, then Analyze.
+                  Running one selects its matching industry pack above automatically.
                 </p>
                 <div className="sample-buttons">
                   {SCRIPTED_VIOLATION_DEMO_KEYS.map((key) => (

@@ -94,6 +94,18 @@ export function findEntryBySessionId(sessionId) {
   return loadHistory().find((entry) => entry.sessionId === sessionId) ?? null;
 }
 
+// Whether a stored entry's report was produced with exactly this pack set.
+// A report is only as good as the packs it ran with (an HIPAA identifier is
+// invisible to the generic pack), so reopening a stored report for a
+// different selection would show stale pass/N/A results. Entries saved
+// without `patternPackIds` never match.
+export function entryRanWithPacks(entry, patternPackIds) {
+  const stored = entry?.patternPackIds;
+  if (!Array.isArray(stored) || !Array.isArray(patternPackIds)) return false;
+  const want = new Set(patternPackIds);
+  return new Set(stored).size === want.size && stored.every((id) => want.has(id));
+}
+
 export function clearHistory() {
   try {
     localStorage.removeItem(STORAGE_KEY);
