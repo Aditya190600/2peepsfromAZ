@@ -74,6 +74,16 @@ liability estimate per violation, not just a pass/fail.
 - [ ] Self-serve "connect your provider" flow for any platform beyond AssemblyAI -
       today every non-AssemblyAI integration is wired by hand.
 
+## Pre-alpha / pre-beta control scope
+
+The checklist above is today's ComplyLine surface. A separate note,
+[Pre-release compliance scope](compliance-pre-release-scope.md), records the
+detection taxonomy, verdict model, four engines, and runtime actions to
+consider before alpha and beta. That note is future scope. It is not a
+description of current product behavior, not legal advice, and not a reason
+to build it now. QualEval remains the active product direction; the
+ComplyLine checks stay in the repo as they are.
+
 ## Explicitly out of scope for now
 
 - Full audit-report product as the headline feature - reports stay as plumbing
