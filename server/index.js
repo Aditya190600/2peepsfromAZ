@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
-import { clerkMiddleware, requireAuth, getAuth } from "@clerk/express";
+import { clerkMiddleware, clerkClient, requireAuth, getAuth } from "@clerk/express";
 import { analyzeSession } from "./checks/analyze.js";
 import { packCatalog } from "./packs/index.js";
 import { parsePackEvalRequest } from "./evals/wire.js";
@@ -19,6 +19,7 @@ import { handleIngest } from "./webhooks/ingest.js";
 import { handleAssemblyAiWebhook } from "./webhooks/assemblyaiWebhook.js";
 import { recordingsRouter } from "./recordingsStore.js";
 import { qualevalRouter } from "./qualeval/router.js";
+import { createOperatorCheck, parseOperatorEmails } from "./qualeval/operatorAccess.js";
 import { twilioVoiceRoute } from "./qualeval/twilioVoice.js";
 import { demoAgentVoiceRoute } from "./qualeval/demoAgentVoice.js";
 import { ensureDemoAgentNumberConfigured } from "./qualeval/demoAgentProvision.js";
@@ -272,7 +273,18 @@ app.post(
   (req, res) => demoAgentVoiceRoute(req, res),
 );
 
-app.use("/v1/qualeval", requireVisitor, qualevalRouter({ visitorId }));
+const isQualevalOperator = createOperatorCheck({
+  allowlist: parseOperatorEmails(process.env.QUALEVAL_OPERATOR_EMAILS),
+  clerkEnabled: CLERK_ENABLED,
+  userIdOf: visitorId,
+  lookupEmails: async (userId) => {
+    const user = await clerkClient.users.getUser(userId);
+    return user.emailAddresses
+      .filter((address) => address.verification?.status === "verified")
+      .map((address) => address.emailAddress);
+  },
+});
+app.use("/v1/qualeval", requireVisitor, qualevalRouter({ visitorId, isOperator: isQualevalOperator }));
 
 const telephony = telephonyRouter();
 app.post("/v1/telephony/inbound", (req, res, next) => {

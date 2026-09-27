@@ -59,7 +59,8 @@ live greeting/prompt/voice, marks the live one, switches it with "Make live",
 and shows `QUALEVAL_AGENT_NUMBER` and `QUALEVAL_PERSONA_NUMBER` read-only.
 It is backed by `server/qualeval/router.js`:
 
-- `GET /v1/qualeval/config` - both phone numbers.
+- `GET /v1/qualeval/config` - `agentPhoneNumber` for every visitor, plus
+  `isOperator` and (operators only) `personaPhoneNumber`.
 - `GET /v1/qualeval/demo-agent/variants` - every catalog agent (with its live
   `systemPrompt`/`greeting`/`voice` read straight off AssemblyAI via
   `demoAgentConfig.getVariantWithAgent`, plus catalog `domain`/`kind`/
@@ -70,6 +71,20 @@ It is backed by `server/qualeval/router.js`:
 - `POST /v1/qualeval/demo-agent/active` with `{"variant": "<key>"}` -
   switches which agent answers the next call. Refuses an agent that has no
   `agent_id` yet, since that would leave the number unable to answer.
+
+### Operator-only access
+
+The live agent is shared by every caller of the number, and the demo is a
+public link, so Settings is restricted to an operator allowlist
+(`server/qualeval/operatorAccess.js`). Set `QUALEVAL_OPERATOR_EMAILS` to a
+comma-separated, case-insensitive list of emails; it is matched against the
+signed-in Clerk user's verified email addresses. Every
+`/v1/qualeval/demo-agent/*` route returns 403 to anyone else, `/config` omits
+`personaPhoneNumber` for them, and the client hides the Settings nav entry and
+shows no agents or controls on `/settings` (the server check is the real gate).
+Unset or empty means nobody is an operator. When Clerk isn't configured there
+is no identity to check, so access stays closed unless the list is `*`, which
+allows every visitor - use that only for local dev.
 
 ## The bridge
 

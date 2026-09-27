@@ -70,14 +70,15 @@ export default function Settings({ path, navigate }) {
 
   useEffect(() => {
     getQualevalConfig()
-      .then(setConfig)
-      .catch((err) => setError(err.message ?? "Could not load phone numbers."));
-    listDemoAgents()
       .then((body) => {
-        setAgents(body.variants);
-        setActiveKey(body.activeKey);
+        setConfig(body);
+        if (!body.isOperator) return;
+        return listDemoAgents().then((agentsBody) => {
+          setAgents(agentsBody.variants);
+          setActiveKey(agentsBody.activeKey);
+        });
       })
-      .catch((err) => setError(err.message ?? "Could not load target agents."));
+      .catch((err) => setError(err.message ?? "Could not load settings."));
   }, []);
 
   const onMakeLive = async (agent) => {
@@ -96,6 +97,16 @@ export default function Settings({ path, navigate }) {
 
   const agentNumber = config?.agentPhoneNumber;
   const liveAgent = agents?.find((a) => a.key === activeKey);
+
+  if (config && !config.isOperator) {
+    return (
+      <AppShell path={path} navigate={navigate} title="Settings">
+        <div className="qualeval-page">
+          <p className="app-lede">Settings are available to QualEval operators only.</p>
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell path={path} navigate={navigate} title="Settings">

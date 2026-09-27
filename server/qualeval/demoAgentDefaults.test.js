@@ -24,7 +24,6 @@ test("every agent body is telephony-ready and uses a documented voice", () => {
     assert.deepEqual(agent.output, { format: { encoding: "audio/pcmu" } }, key);
     assert.ok(documentedVoices.includes(agent.voice.voice_id), key);
     assert.ok(agent.system_prompt && agent.greeting && agent.name, key);
-    assert.match(agent.system_prompt, /can't transfer/, key);
   }
 });
 

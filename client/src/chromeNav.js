@@ -21,8 +21,14 @@ export const PRODUCT_NAV_ALL = [
     label: "Qualitative Evals",
     match: (path) => path === "/qualeval" || path.startsWith("/qualeval/"),
   },
-  { href: "/settings", label: "Settings", match: (path) => path === "/settings" },
+  // Only shown to QualEval operators (server/qualeval/operatorAccess.js) - the
+  // server's 403 on /v1/qualeval/demo-agent/* is the real gate.
+  { href: "/settings", label: "Settings", match: (path) => path === "/settings", operatorOnly: true },
 ];
 
 // Visible left-rail entries only.
-export const PRODUCT_NAV = PRODUCT_NAV_ALL.filter((item) => !item.hidden);
+export function productNav({ isOperator = false } = {}) {
+  return PRODUCT_NAV_ALL.filter((item) => !item.hidden && (isOperator || !item.operatorOnly));
+}
+
+export const PRODUCT_NAV = productNav();

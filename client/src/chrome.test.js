@@ -1,11 +1,18 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { PRODUCT_NAV, PRODUCT_NAV_ALL } from "./chromeNav.js";
+import { PRODUCT_NAV, PRODUCT_NAV_ALL, productNav } from "./chromeNav.js";
 
 describe("PRODUCT_NAV", () => {
-  it("is Home, Voice Compliance, Qualitative Evals, Settings", () => {
+  it("is Home, Voice Compliance, Qualitative Evals for a non-operator", () => {
     assert.deepEqual(
       PRODUCT_NAV.map((item) => item.label),
+      ["Home", "Voice Compliance", "Qualitative Evals"]
+    );
+  });
+
+  it("adds Settings for an operator", () => {
+    assert.deepEqual(
+      productNav({ isOperator: true }).map((item) => item.label),
       ["Home", "Voice Compliance", "Qualitative Evals", "Settings"]
     );
   });
