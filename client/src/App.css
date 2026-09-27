@@ -142,9 +142,13 @@ body {
   color: var(--muted);
 }
 
+.app-tenant-name {
+  display: block;
+  margin-bottom: 4px;
+}
+
 .app-tenant-mail {
   display: block;
-  margin-top: 4px;
   font-family: var(--mono);
   text-transform: none;
   letter-spacing: 0;
