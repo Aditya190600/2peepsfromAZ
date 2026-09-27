@@ -122,6 +122,14 @@ function drawDualWaveform(canvas, dualPeaks, progress) {
   ctx.stroke();
 }
 
+// Role and start time are the only turn fields that change speaker tracks.
+// A new array with the same intervals (QualEval's poll rebuilds run objects)
+// must not count as a waveform input change.
+function speakerTurnsKey(turns) {
+  if (!turns?.length) return "";
+  return turns.map((turn) => `${turn.role}:${turn.tMs}`).join("|");
+}
+
 // One shared, styled compact player replacing raw browser <audio controls>
 // widgets throughout the app - see judging-criteria-and-enterprise-gap-assessment.md
 // item 7 (seven stacked default grey pills read as a debug scaffold).
@@ -145,6 +153,8 @@ export default function AudioPlayer({
   const [duration, setDuration] = useState(0);
   const [dualPeaks, setDualPeaks] = useState(null);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const [waveformBuffer, setWaveformBuffer] = useState(null);
+  const speakerKey = speakerTurnsKey(turns);
   const drawStateRef = useRef({ dualPeaks: null, current: 0, duration: 0 });
   drawStateRef.current = { dualPeaks, current, duration };
 
@@ -173,8 +183,8 @@ export default function AudioPlayer({
   }, [playbackRate, src, ref]);
 
   useEffect(() => {
-    setDualPeaks(null);
-    if (compact || !src) return;
+    setWaveformBuffer(null);
+    if (compact || !src) return undefined;
     let cancelled = false;
     let ctx = null;
     (async () => {
@@ -184,9 +194,9 @@ export default function AudioPlayer({
         const AudioContextImpl = window.AudioContext || window.webkitAudioContext;
         if (!AudioContextImpl) return;
         ctx = new AudioContextImpl();
-        const audioBuffer = await ctx.decodeAudioData(buf);
+        const decoded = await ctx.decodeAudioData(buf);
         if (cancelled) return;
-        setDualPeaks(computeDualPeaks(audioBuffer, turns, WAVEFORM_BUCKETS));
+        setWaveformBuffer(decoded);
       } catch (err) {
         console.error("Waveform decode failed:", err);
       } finally {
@@ -196,7 +206,21 @@ export default function AudioPlayer({
     return () => {
       cancelled = true;
     };
-  }, [src, compact, turns]);
+  }, [src, compact]);
+
+  // Speaker split is cheap and uses the already-decoded buffer. `speakerKey`
+  // (not the turns array) is the dependency so a new array with the same
+  // intervals does not blank or re-decode the waveform. `offsetMs` lines
+  // session-relative turns up with a recording that started late.
+  useEffect(() => {
+    if (!waveformBuffer) {
+      setDualPeaks(null);
+      return;
+    }
+    setDualPeaks(computeDualPeaks(waveformBuffer, turns, WAVEFORM_BUCKETS, undefined, offsetMs));
+    // `speakerKey` is the content of `turns` this effect should react to.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waveformBuffer, speakerKey, offsetMs]);
 
   useEffect(() => {
     if (compact) return;

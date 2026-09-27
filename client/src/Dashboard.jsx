@@ -784,8 +784,10 @@ export default function Dashboard({ navigate, path }) {
       const { sessionId, recordingOffsetMs } = lastSession;
       const bucketUrl =
         recordingUploadRef.current.sessionId === sessionId ? await recordingUploadRef.current.promise : null;
-      if (isCurrent()) showAudio(bucketUrl ?? getLiveAudioBlob(sessionId), recordingOffsetMs, sessionId);
-      setActiveTurns(lastSession.turns ?? null);
+      if (isCurrent()) {
+        showAudio(bucketUrl ?? getLiveAudioBlob(sessionId), recordingOffsetMs, sessionId);
+        setActiveTurns(lastSession.turns ?? null);
+      }
       const nextReport = await analyze(lastSession, patternPackIds, (event) => {
         if (isCurrent()) setAnalysisProgress((prev) => accumulateProgress(prev, event));
       });

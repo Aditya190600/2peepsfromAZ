@@ -35,7 +35,9 @@ function roleAtTime(turns, tMs) {
 
 // Splits mono peaks into agent/user tracks using turn intervals. Without turns,
 // agent gets the full mono waveform and user stays silent (dotted baseline only).
-export function computeDualPeaks(audioBuffer, turns, buckets = WAVEFORM_BUCKETS, durationSec) {
+// `offsetMs` maps session-relative turn times onto the file: a live recording
+// starts after connect, so buffer time 0 is session time `offsetMs`.
+export function computeDualPeaks(audioBuffer, turns, buckets = WAVEFORM_BUCKETS, durationSec, offsetMs = 0) {
   const mono = computePeaks(audioBuffer, buckets);
   const duration = durationSec ?? audioBuffer.duration;
   if (!turns?.length) {
@@ -45,9 +47,10 @@ export function computeDualPeaks(audioBuffer, turns, buckets = WAVEFORM_BUCKETS,
   const agent = new Array(buckets).fill(0);
   const user = new Array(buckets).fill(0);
   const bucketMs = (duration * 1000) / buckets;
+  const shift = Number.isFinite(offsetMs) ? offsetMs : 0;
 
   for (let b = 0; b < buckets; b++) {
-    const midMs = (b + 0.5) * bucketMs;
+    const midMs = (b + 0.5) * bucketMs + shift;
     const role = roleAtTime(turns, midMs);
     const peak = mono[b];
     if (role === "user") user[b] = peak;

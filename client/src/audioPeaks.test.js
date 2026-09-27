@@ -38,6 +38,20 @@ test("computeDualPeaks() routes peaks to the active speaker per turn interval", 
   assert.equal(agent[3], 0);
 });
 
+test("computeDualPeaks() shifts turn timestamps by the recording start offset", () => {
+  const buf = fakeBuffer({
+    channelFn: () => 0.9,
+  });
+  const turns = [
+    { role: "agent", text: "hi", tMs: 0 },
+    { role: "user", text: "hey", tMs: 1000 },
+  ];
+  // File starts 1s into the session, so every bucket is the user turn.
+  const { agent, user } = computeDualPeaks(buf, turns, 4, 2, 1000);
+  assert.ok(user.every((p) => p > 0));
+  assert.ok(agent.every((p) => p === 0));
+});
+
 test("computePeaks() normalizes peaks to 0..1", () => {
   const buf = fakeBuffer({ channelFn: () => 0.5 });
   const peaks = computePeaks(buf, 8);
