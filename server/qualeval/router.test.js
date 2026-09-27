@@ -61,12 +61,12 @@ test("dispatchCallPlacement swallows a markRunError failure instead of rejecting
   );
 });
 
-async function withRouter(isOperator, fn) {
+async function withRouter(isOperator, fn, options = {}) {
   const { default: express } = await import("express");
   const { qualevalRouter } = await import("./router.js");
   const app = express();
   app.use(express.json());
-  app.use(qualevalRouter({ isOperator: async () => isOperator }));
+  app.use(qualevalRouter({ isOperator: async () => isOperator, ...options }));
   const server = app.listen(0);
   await new Promise((resolve) => server.once("listening", resolve));
   try {
@@ -116,7 +116,7 @@ test("non-operators get 403 from every demo-agent route and no persona number fr
   }
 });
 
-test("Phone Evals and its call recordings are operator-only, and evaluations have no inbound-call feed", async () => {
+test("Phone Evals calls and their recordings are operator-only, and evaluations have no inbound-call feed", async () => {
   await withRouter(false, async (base) => {
     assert.equal((await fetch(`${base}/phone-evals`)).status, 403);
     assert.equal((await fetch(`${base}/production-calls/CA0123456789abcdef0123456789abcdef/audio`)).status, 403);
@@ -149,4 +149,37 @@ test("reconcileStaleRuns never throws, so a reconciliation failure can't fail th
       throw new Error("connection terminated unexpectedly");
     },
   });
+});
+
+test("an operator can re-run a finished Phone Evals call's analyses", async () => {
+  const sid = "CA0123456789abcdef0123456789abcdef";
+  const calls = {
+    [sid]: { twilioCallSid: sid, direction: "inbound", fromNumber: "+13128003792", endedAt: "2026-09-27T20:00:00Z" },
+    CAffffffffffffffffffffffffffffffff: { twilioCallSid: "CAffffffffffffffffffffffffffffffff", direction: "inbound" },
+    CAeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee: {
+      twilioCallSid: "CAeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      direction: "inbound",
+      qualevalRunId: "run_1",
+      endedAt: "2026-09-27T20:00:00Z",
+    },
+  };
+  const analyzed = [];
+  const options = {
+    getProductionCall: async (callSid) => calls[callSid] ?? null,
+    analyzeCall: async (call) => analyzed.push(call.twilioCallSid),
+  };
+  const rerun = (base, callSid) => fetch(`${base}/phone-evals/${callSid}/analyze`, { method: "POST" });
+
+  await withRouter(false, async (base) => {
+    assert.equal((await rerun(base, sid)).status, 403);
+  }, options);
+  await withRouter(true, async (base) => {
+    assert.equal((await rerun(base, "not-a-sid")).status, 400);
+    assert.equal((await rerun(base, "CA00000000000000000000000000000000")).status, 404);
+    // A scenario-run leg is not a Phone Evals call.
+    assert.equal((await rerun(base, "CAeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")).status, 404);
+    assert.equal((await rerun(base, "CAffffffffffffffffffffffffffffffff")).status, 409);
+    assert.equal((await rerun(base, sid)).status, 202);
+  }, options);
+  assert.deepEqual(analyzed, [sid]);
 });

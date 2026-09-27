@@ -33,6 +33,12 @@ export async function listPhoneEvalCalls() {
   return json(await fetch("/v1/qualeval/phone-evals")).then((body) => body.calls);
 }
 
+export async function rerunPhoneEvalAnalysis(callSid) {
+  return json(
+    await fetch(`/v1/qualeval/phone-evals/${encodeURIComponent(callSid)}/analyze`, { method: "POST" }),
+  );
+}
+
 export async function updateEvaluation(id, fields) {
   return json(
     await fetch(`/v1/qualeval/evaluations/${encodeURIComponent(id)}`, {

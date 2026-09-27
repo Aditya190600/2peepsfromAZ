@@ -9,7 +9,8 @@ import { placeCall, twilioConfigured } from "./callBridge.js";
 import { endCall } from "./twilioClient.js";
 import { getObjectByKey, sendRecording } from "../recordingsStore.js";
 import { qualevalCallAudioKey, productionCallAudioKey } from "./callRecorder.js";
-import { getProductionCallBySid, listPhoneEvalCalls } from "./productionCalls.js";
+import { getProductionCallBySid, isPhoneEvalCall, listPhoneEvalCalls } from "./productionCalls.js";
+import { analyzeFinishedCall } from "./postCallAnalysis.js";
 import * as liveCallHub from "./liveCallHub.js";
 import { buildScenariosWorkbook, scenariosExportFilename } from "./scenarioExport.js";
 
@@ -105,6 +106,8 @@ export function qualevalRouter({
   heartbeatMs = 15000,
   // Longest a listener waits for a ringing call to be answered and bridged.
   startWaitMs = 2 * 60 * 1000,
+  getProductionCall = getProductionCallBySid,
+  analyzeCall = analyzeFinishedCall,
 } = {}) {
   const router = Router();
 
@@ -154,7 +157,8 @@ export function qualevalRouter({
   );
 
   // Phone Evals (client/src/PhoneEvals.jsx): real calls that dialed
-  // QUALEVAL_AGENT_NUMBER directly, scored by phoneEvaluation.js. Kept apart
+  // QUALEVAL_AGENT_NUMBER directly, scored by phoneEvaluation.js (pass/fail) and
+  // phoneCompliance.js (compliance findings). Kept apart
   // from evaluations on purpose - only QualEval-placed scenario runs belong to
   // an evaluation. Operator-only: the number is shared, so every caller's
   // number and transcript would otherwise reach every signed-in visitor.
@@ -163,6 +167,26 @@ export function qualevalRouter({
     requireOperator,
     wrap(async (req, res) => {
       res.json({ calls: await listPhoneEvalCalls() });
+    }),
+  );
+
+  // Re-runs both post-call analyses from the stored transcript - the way back
+  // when the LLM Gateway's rate limit left a check unable to run. Answers 202
+  // at once; the page's poll picks the results up like it does at hangup.
+  router.post(
+    "/phone-evals/:callSid/analyze",
+    requireOperator,
+    wrap(async (req, res) => {
+      if (!TWILIO_CALL_SID.test(req.params.callSid)) {
+        return res.status(400).json({ error: "invalid call sid" });
+      }
+      const call = await getProductionCall(req.params.callSid);
+      if (!call || !isPhoneEvalCall(call)) return res.status(404).json({ error: "Call not found" });
+      if (!call.endedAt) return res.status(409).json({ error: "The call is still in progress." });
+      analyzeCall(call).catch((err) => {
+        console.error(`Phone Evals: re-run failed for ${call.twilioCallSid}: ${err.message}`);
+      });
+      res.status(202).json({ ok: true });
     }),
   );
 

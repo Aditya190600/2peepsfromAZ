@@ -5,7 +5,7 @@ import { mintAssemblyAiToken } from "./assemblyaiToken.js";
 import * as demoAgentConfig from "./demoAgentConfig.js";
 import * as broker from "./callBridgeBroker.js";
 import { finishProductionCall } from "./productionCalls.js";
-import { evaluatePhoneCall } from "./phoneEvaluation.js";
+import { analyzeFinishedCall } from "./postCallAnalysis.js";
 import { recordingsConfigured, uploadObject } from "../recordingsStore.js";
 
 const STREAM_PATH = "/v1/qualeval/target-agent-stream";
@@ -53,7 +53,7 @@ export function attachTargetAgentStreamServer(
     waitForClaimableRun = broker.waitForClaimableRun,
     releaseRun = broker.releaseRun,
     finishCall = finishProductionCall,
-    evaluateCall = evaluatePhoneCall,
+    analyzeCall = analyzeFinishedCall,
     createRecorder = () => createCallRecorder(DEFAULT_MAX_DURATION_MS),
     recordingsReady = recordingsConfigured,
     uploadRecording = uploadObject,
@@ -105,12 +105,13 @@ export function attachTargetAgentStreamServer(
         audioRef,
         qualevalRunId: claimedRunId,
       });
-      await evaluateCall({
+      await analyzeCall({
         twilioCallSid: callSid,
         variantKey: activeVariant?.key ?? null,
         transcript: turns,
         qualevalRunId: claimedRunId,
         fromNumber: finished?.fromNumber ?? null,
+        startedAt: finished?.startedAt ?? null,
       });
     }
     function onError(message) {
