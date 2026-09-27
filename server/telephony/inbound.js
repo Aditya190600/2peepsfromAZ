@@ -42,7 +42,7 @@ export function sessionFromInbound(body) {
   };
 }
 
-export async function ingestInbound(body, { analyze = analyzeSession, store }) {
+export async function ingestInbound(body, { analyze = analyzeSession, store, ownerId }) {
   const session = sessionFromInbound(body);
   const report = await analyze(
     {
@@ -71,6 +71,5 @@ export async function ingestInbound(body, { analyze = analyzeSession, store }) {
     e164: session.e164,
     provider: session.provider,
   };
-  await store.saveSession(entry);
-  return entry;
+  return store.saveSession(ownerId, entry);
 }

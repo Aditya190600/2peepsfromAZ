@@ -13,6 +13,8 @@ const SLOT_ORDER = ["transcriber", "model", "voice"];
 // to AssemblyAI with no key required. Swapping a slot asks for a BYO key
 // inline, stored only on the server - this panel never displays a saved key
 // back, only whether one is on file. See .claude/epics/provider-swaps/52.md.
+// The selection is one server-wide setting only an operator may change, so
+// the panel renders only when the server reports canEdit.
 export default function ProviderSettings() {
   const [catalog, setCatalog] = useState(null);
   const [config, setConfig] = useState(null);
@@ -74,7 +76,7 @@ export default function ProviderSettings() {
       </div>
     );
   }
-  if (!catalog || !config) return null;
+  if (!catalog || !config?.canEdit) return null;
 
   return (
     <div className="section-block provider-settings">

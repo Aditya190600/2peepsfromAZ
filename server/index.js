@@ -32,6 +32,7 @@ import {
   SAMPLE_SESSIONS,
 } from "../client/src/sampleSessions.js";
 import * as providers from "./providers/registry.js";
+import { providersRouter } from "./providers/router.js";
 import { llmParsePastedSession } from "./checks/sessionPasteParse.js";
 import { LlmGatewayRateLimitError } from "./checks/llmGateway.js";
 
@@ -132,45 +133,21 @@ app.get("/v1/token", requireVisitor, async (_req, res) => {
   res.status(status).json(body);
 });
 
-// Provider slots (transcriber/model/voice) - Vapi-style BYO-key swapping.
-// See .claude/prds/provider-swaps.md. GET/list routes never return secrets.
-app.get("/v1/providers", (_req, res) => {
-  res.json(providers.listCatalog());
+// The operator allowlist (server/qualeval/operatorAccess.js) gates every
+// shared, process-wide control: QualEval's demo-agent settings and the
+// provider registry below.
+const isOperator = createOperatorCheck({
+  allowlist: parseOperatorEmails(process.env.QUALEVAL_OPERATOR_EMAILS),
+  clerkEnabled: CLERK_ENABLED,
+  userIdOf: visitorId,
+  lookupEmails: async (userId) => {
+    const user = await clerkClient.users.getUser(userId);
+    return user.emailAddresses
+      .filter((address) => address.verification?.status === "verified")
+      .map((address) => address.emailAddress);
+  },
 });
-
-app.get("/v1/providers/config", (_req, res) => {
-  res.json(providers.getConfig());
-});
-
-app.put("/v1/providers/config", (req, res) => {
-  const { slot, providerId } = req.body ?? {};
-  if (!slot || !providerId) {
-    return res.status(400).json({ error: "slot and providerId are required" });
-  }
-  try {
-    const updated = providers.setSelection(slot, providerId);
-    res.json({ slot, ...updated });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-app.put("/v1/providers/credentials", (req, res) => {
-  const { providerId, apiKey, baseUrl, model } = req.body ?? {};
-  if (!providerId) {
-    return res.status(400).json({ error: "providerId is required" });
-  }
-  try {
-    providers.setCredential(providerId, {
-      apiKey,
-      ...(baseUrl ? { baseUrl } : {}),
-      ...(model ? { model } : {}),
-    });
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
+app.use("/v1/providers", providersRouter({ requireVisitor, isOperator }));
 
 app.get("/v1/packs", requireVisitor, (_req, res) => {
   res.json({ packs: packCatalog() });
@@ -271,26 +248,19 @@ app.post(
   (req, res) => demoAgentVoiceRoute(req, res),
 );
 
-const isQualevalOperator = createOperatorCheck({
-  allowlist: parseOperatorEmails(process.env.QUALEVAL_OPERATOR_EMAILS),
-  clerkEnabled: CLERK_ENABLED,
-  userIdOf: visitorId,
-  lookupEmails: async (userId) => {
-    const user = await clerkClient.users.getUser(userId);
-    return user.emailAddresses
-      .filter((address) => address.verification?.status === "verified")
-      .map((address) => address.emailAddress);
-  },
-});
-app.use("/v1/qualeval", requireVisitor, qualevalRouter({ visitorId, isOperator: isQualevalOperator }));
+app.use("/v1/qualeval", requireVisitor, qualevalRouter({ visitorId, isOperator }));
 
-const telephony = telephonyRouter();
+// Numbers, trunks, and inbound sessions are scoped to the signed-in visitor
+// (server/telephony/store.js). A carrier webhook carrying
+// TELEPHONY_WEBHOOK_SECRET has no visitor, so its call lands with whoever
+// registered the dialed number.
+const telephony = telephonyRouter({ ownerOf: visitorId });
 app.post("/v1/telephony/inbound", (req, res, next) => {
   const expected = process.env.TELEPHONY_WEBHOOK_SECRET;
   if (expected && req.get("x-complyline-hook-secret") === expected) {
-    return telephony.inbound(req, res, next);
+    return telephony.hookInbound(req, res, next);
   }
-  return requireVisitor(req, res, () => telephony.inbound(req, res, next));
+  next();
 });
 app.use("/v1/telephony", requireVisitor, telephony);
 
