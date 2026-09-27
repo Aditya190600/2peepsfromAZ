@@ -11,7 +11,6 @@ import {
   listEvaluations,
   createEvaluation,
   getEvaluation,
-  listInboundCalls,
   updateEvaluation,
   deleteEvaluation,
   generateScenarios,
@@ -94,7 +93,7 @@ const WORKFLOW_STEPS = [
   "Qualitative Evals places a real call for each approved scenario and judges the transcript pass/fail with evidence.",
 ];
 
-function formatWhen(iso) {
+export function formatWhen(iso) {
   if (!iso) return "-";
   try {
     return new Date(iso).toLocaleString();
@@ -342,7 +341,7 @@ function VerdictPill({ run }) {
   );
 }
 
-function RunResult({ run }) {
+export function RunResult({ run }) {
   const audioRef = useRef(null);
   const turns = run?.transcript?.turns ?? [];
   const criterionResults = run?.criterionResults ?? [];
@@ -784,55 +783,8 @@ function EditEvaluationForm({ evaluation, onSaved, onCancel }) {
   );
 }
 
-function inboundStatusText(call) {
-  if (call.evaluationStatus === "skipped_run") return "Scored on the scenario run for this call.";
-  if (call.evaluationStatus === "no_rubric") return "Add requirements to this evaluation to score inbound calls.";
-  if (call.evaluationStatus === "no_transcript") return "Call ended before any speech was captured.";
-  if (call.evaluationStatus === "error") return call.evaluationError || "Evaluation failed.";
-  if (!call.evaluationStatus) return "Evaluation has not finished.";
-  return null;
-}
-
-function InboundCallList({ calls }) {
-  if (!calls || calls.length === 0) {
-    return <p className="pack-note">No inbound calls to this number yet.</p>;
-  }
-  return (
-    <div className="qe-inbound-calls">
-      {calls.map((call) => {
-        const note = inboundStatusText(call);
-        const scored = call.verdict === "pass" || call.verdict === "fail";
-        return (
-          <article key={call.id ?? call.twilioCallSid} className="qe-inbound-call">
-            <header className="qe-inbound-call-head">
-              <strong>{call.callerName || call.fromNumber || "Unknown caller"}</strong>
-              {call.callerName && call.fromNumber && <span>{call.fromNumber}</span>}
-              <span className="qe-eval-when">{formatWhen(call.startedAt)}</span>
-            </header>
-            {scored ? (
-              <RunResult
-                run={{
-                  verdict: call.verdict,
-                  assessment: call.assessment,
-                  audioRef: call.audioRef,
-                  transcript: call.transcript,
-                  criterionResults: call.criterionResults,
-                  evidenceQuotes: call.evidenceQuotes,
-                }}
-              />
-            ) : (
-              note && <p className={call.evaluationStatus === "error" ? "error-banner" : "pack-note"}>{note}</p>
-            )}
-          </article>
-        );
-      })}
-    </div>
-  );
-}
-
 function EvaluationDetail({ evaluationId, navigate, path }) {
   const [evaluation, setEvaluation] = useState(null);
-  const [inboundCalls, setInboundCalls] = useState([]);
   const [loadError, setLoadError] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState(() => createTimeGenErrors.get(evaluationId) ?? null);
@@ -858,11 +810,6 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
       const loaded = await getEvaluation(evaluationId);
       setEvaluation(loaded);
       setLoadError(null);
-      try {
-        setInboundCalls(await listInboundCalls(evaluationId));
-      } catch {
-        // The evaluation itself loaded. Inbound scores can appear on refresh.
-      }
     } catch (err) {
       setLoadError(err.message ?? "Could not load this evaluation.");
     }
@@ -1118,15 +1065,6 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
             )}
           </ul>
         )}
-
-        <section className="qe-inbound-section">
-          <h2>Inbound calls ({inboundCalls.length})</h2>
-          <p className="pack-note">
-            Real calls to this evaluation&apos;s phone number are scored against its requirements. Scenario
-            runs are still judged on the scenario below.
-          </p>
-          <InboundCallList calls={inboundCalls} />
-        </section>
 
         <div className="qualeval-review">
           <div className="qualeval-review-scenarios">

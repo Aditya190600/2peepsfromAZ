@@ -5,7 +5,7 @@ import { mintAssemblyAiToken } from "./assemblyaiToken.js";
 import * as demoAgentConfig from "./demoAgentConfig.js";
 import * as broker from "./callBridgeBroker.js";
 import { finishProductionCall } from "./productionCalls.js";
-import { evaluateInboundCall } from "./inboundEvaluation.js";
+import { evaluatePhoneCall } from "./phoneEvaluation.js";
 import { recordingsConfigured, uploadObject } from "../recordingsStore.js";
 
 const STREAM_PATH = "/v1/qualeval/target-agent-stream";
@@ -53,7 +53,7 @@ export function attachTargetAgentStreamServer(
     waitForClaimableRun = broker.waitForClaimableRun,
     releaseRun = broker.releaseRun,
     finishCall = finishProductionCall,
-    evaluateCall = evaluateInboundCall,
+    evaluateCall = evaluatePhoneCall,
     createRecorder = () => createCallRecorder(DEFAULT_MAX_DURATION_MS),
     recordingsReady = recordingsConfigured,
     uploadRecording = uploadObject,
@@ -95,7 +95,7 @@ export function attachTargetAgentStreamServer(
           console.error(`QualEval target-agent bridge: inbound recording upload failed for ${callSid}: ${err.message}`);
         }
       }
-      const saved = await finishCall({
+      await finishCall({
         twilioCallSid: callSid,
         direction: "inbound",
         transcript: turns,
@@ -107,7 +107,7 @@ export function attachTargetAgentStreamServer(
       });
       await evaluateCall({
         twilioCallSid: callSid,
-        toNumber: saved?.toNumber ?? null,
+        variantKey: activeVariant?.key ?? null,
         transcript: turns,
         qualevalRunId: claimedRunId,
       });

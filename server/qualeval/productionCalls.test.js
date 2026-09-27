@@ -5,6 +5,7 @@ import {
   productionCallFromTwilioBody,
   recordProductionCall,
   finishProductionCall,
+  listPhoneEvalCalls,
 } from "./productionCalls.js";
 
 test("reads Twilio CNAM, and a quoted SIP display name when CNAM is absent", () => {
@@ -163,4 +164,21 @@ test("does nothing when Postgres or the Call SID is missing", async () => {
   assert.equal(await recordProductionCall({ twilioCallSid: "CA1", direction: "inbound" }, {}, null), null);
   assert.equal(await recordProductionCall({ direction: "inbound" }, {}, memoryPool()), null);
   assert.equal(await finishProductionCall({ transcript: [] }, {}, memoryPool()), null);
+});
+
+test("listPhoneEvalCalls asks only for direct inbound calls, excluding QualEval run legs", async () => {
+  let seen;
+  const pool = {
+    async query(sql, params) {
+      seen = { sql: sql.replace(/\s+/g, " "), params };
+      return { rows: [{ twilio_call_sid: "CA1", direction: "inbound", transcript: [{ role: "user", text: "hi" }] }] };
+    },
+  };
+  const calls = await listPhoneEvalCalls({ QUALEVAL_PERSONA_NUMBER: "+1 (555) 000-0002" }, pool);
+  assert.match(seen.sql, /direction = 'inbound'/);
+  assert.match(seen.sql, /qualeval_run_id is null/);
+  assert.doesNotMatch(seen.sql, /evaluation_id/);
+  assert.deepEqual(seen.params, ["5550000002"]);
+  assert.deepEqual(calls[0].transcript, { turns: [{ role: "user", text: "hi" }] });
+  assert.deepEqual(await listPhoneEvalCalls({}, null), []);
 });

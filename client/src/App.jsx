@@ -11,6 +11,7 @@ import Evals from "./Evals";
 import PhoneNumbers from "./PhoneNumbers";
 import QualEval from "./QualEval";
 import Settings from "./Settings";
+import PhoneEvals from "./PhoneEvals";
 import { matchRoute } from "./routes";
 import "./App.css";
 
@@ -124,6 +125,13 @@ export default function App() {
     return (
       <RequireVisitor>
         <Settings navigate={navigate} path={viewPath} />
+      </RequireVisitor>
+    );
+  }
+  if (view.name === "phone-evals") {
+    return (
+      <RequireVisitor>
+        <PhoneEvals navigate={navigate} path={viewPath} />
       </RequireVisitor>
     );
   }

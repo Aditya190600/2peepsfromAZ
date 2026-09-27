@@ -116,6 +116,20 @@ test("non-operators get 403 from every demo-agent route and no persona number fr
   }
 });
 
+test("Phone Evals and its call recordings are operator-only, and evaluations have no inbound-call feed", async () => {
+  await withRouter(false, async (base) => {
+    assert.equal((await fetch(`${base}/phone-evals`)).status, 403);
+    assert.equal((await fetch(`${base}/production-calls/CA0123456789abcdef0123456789abcdef/audio`)).status, 403);
+    assert.equal((await fetch(`${base}/evaluations/eval_1/inbound-calls`)).status, 404);
+  });
+  // No DATABASE_URL in tests: an operator gets an empty list, not an error.
+  await withRouter(true, async (base) => {
+    const resp = await fetch(`${base}/phone-evals`);
+    assert.equal(resp.status, 200);
+    assert.deepEqual(await resp.json(), { calls: [] });
+  });
+});
+
 test("reconcileStaleRuns passes includePending through to expireStaleRuns", async () => {
   let options;
   await reconcileStaleRuns({

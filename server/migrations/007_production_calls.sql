@@ -29,11 +29,9 @@ create index if not exists production_calls_qualeval_run_id_idx on production_ca
 -- create table above (this migration is replayed on every boot) still gains
 -- the recording pointer.
 alter table production_calls add column if not exists audio_ref text;
-alter table production_calls add column if not exists evaluation_id uuid references qualeval_evaluations (id) on delete set null;
 alter table production_calls add column if not exists evaluation_status text;
 alter table production_calls add column if not exists verdict text;
 alter table production_calls add column if not exists assessment text;
 alter table production_calls add column if not exists criterion_results jsonb;
 alter table production_calls add column if not exists evidence_quotes jsonb;
 alter table production_calls add column if not exists evaluation_error text;
-create index if not exists production_calls_evaluation_id_idx on production_calls (evaluation_id);
