@@ -6,6 +6,7 @@ import { mintAssemblyAiToken } from "./assemblyaiToken.js";
 import * as store from "./store.js";
 import { dispatchEvaluation } from "./router.js";
 import * as broker from "./callBridgeBroker.js";
+import * as liveCallHub from "./liveCallHub.js";
 import { finishProductionCall } from "./productionCalls.js";
 import { recordingsConfigured, uploadObject } from "../recordingsStore.js";
 
@@ -97,6 +98,7 @@ export function attachTwilioStreamServer(
 
     async function onFinished({ turns, callSid, reason }) {
       broker.releaseRun(runId);
+      liveCallHub.endCall(runId);
       await finishCall({
         twilioCallSid: callSid,
         direction: "outbound",
@@ -130,6 +132,7 @@ export function attachTwilioStreamServer(
 
     async function onError(message) {
       broker.releaseRun(runId);
+      liveCallHub.endCall(runId);
       console.error(`QualEval call bridge: run ${runId} failed: ${message}`);
       await markRunError(runId, message).catch(() => {});
     }
@@ -152,6 +155,7 @@ export function attachTwilioStreamServer(
       const scenario = await getScenario(run.scenarioId, null);
       if (!scenario) throw new Error("Scenario not found for run");
       const token = await mintToken();
+      liveCallHub.startCall(runId);
       console.log(`QualEval call bridge: run ${runId} - AssemblyAI token minted, opening bridge session`);
 
       twilioWs.off("message", bufferMessage);
@@ -159,8 +163,19 @@ export function attachTwilioStreamServer(
         twilioWs,
         token,
         systemPrompt: buildCallerSystemPrompt(scenario),
-        onIncomingAudio: (audio, tMs) => recorder.addFrame(audio, tMs),
-        onOutgoingAudio: (audio, tMs) => recorder.addFrame(audio, tMs),
+        // This leg carries both sides of the call: incoming is the target
+        // agent over the phone, outgoing is our simulated caller. Each frame
+        // goes to the recorder and to any live listener (liveCallHub.js).
+        onIncomingAudio: (audio, tMs) => {
+          recorder.addFrame(audio, tMs);
+          liveCallHub.publishAudio(runId, "agent", audio, tMs);
+        },
+        onOutgoingAudio: (audio, tMs) => {
+          recorder.addFrame(audio, tMs);
+          liveCallHub.publishAudio(runId, "caller", audio, tMs);
+        },
+        onOutgoingAudioCleared: () => liveCallHub.publishClear(runId, "caller"),
+        onTurn: (turn) => liveCallHub.publishTurn(runId, turn),
         onFinished,
         onError,
       });

@@ -88,6 +88,11 @@ export function createBridgeSession({
   // (unlike the Try page's browser MediaRecorder).
   onIncomingAudio,
   onOutgoingAudio,
+  // Live-listening taps (server/qualeval/liveCallHub.js): each transcript
+  // turn as soon as it lands, and a barge-in "clear" of this session's own
+  // outgoing audio. Observers only - neither feeds anything back into a leg.
+  onTurn,
+  onOutgoingAudioCleared,
   maxDurationMs = DEFAULT_MAX_DURATION_MS,
   silenceTimeoutMs = DEFAULT_SILENCE_TIMEOUT_MS,
   // Bounded grace window given to AssemblyAI to flush a final transcript/
@@ -126,6 +131,12 @@ export function createBridgeSession({
   // into which leg closed first and why.
   function log(...args) {
     console.log(`QualEval bridge [${callSid ?? "no-call-sid"}]:`, ...args);
+  }
+
+  function addTurn(role, text) {
+    const turn = { role, text: text ?? "", tMs: startedAtMs ? Date.now() - startedAtMs : 0 };
+    turns.push(turn);
+    onTurn?.({ ...turn });
   }
 
   function closeSockets() {
@@ -243,10 +254,10 @@ export function createBridgeSession({
         armMaxDurationCap();
         break;
       case "transcript.user":
-        turns.push({ role: transcriptUserRole, text: msg.text ?? "", tMs: startedAtMs ? Date.now() - startedAtMs : 0 });
+        addTurn(transcriptUserRole, msg.text);
         break;
       case "transcript.agent":
-        turns.push({ role: transcriptAgentRole, text: msg.text ?? "", tMs: startedAtMs ? Date.now() - startedAtMs : 0 });
+        addTurn(transcriptAgentRole, msg.text);
         break;
       case "reply.audio":
         noteAudioActivity(msg.data);
@@ -275,6 +286,7 @@ export function createBridgeSession({
           if (streamSid && twilioWs.readyState === twilioWs.OPEN) {
             twilioWs.send(JSON.stringify({ event: "clear", streamSid }));
           }
+          onOutgoingAudioCleared?.();
         }
         break;
       case "session.ended":

@@ -776,6 +776,22 @@ button.site-nav-link {
   flex-wrap: wrap;
 }
 
+.qe-scenarios-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.qe-live-toggle {
+  align-items: center;
+  font-size: 13px;
+}
+
+.qe-live-toggle input {
+  margin-top: 0;
+}
+
 .qualeval-review-feedback {
   position: sticky;
   top: 24px;
@@ -3216,6 +3232,68 @@ button.site-nav-link {
 
 .qe-run-audio {
   margin-bottom: 14px;
+}
+
+.qe-live-call {
+  margin-top: 14px;
+}
+
+.qe-live-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.qe-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--flag-soft);
+  color: var(--flag);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.qe-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: qe-live-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes qe-live-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qe-live-dot {
+    animation: none;
+  }
+}
+
+.qe-live-status {
+  font-size: 13px;
+  color: var(--muted);
+  margin-right: auto;
+}
+
+.qe-live-transcript {
+  margin-top: 12px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.qe-live-transcript .hint {
+  margin: 0;
 }
 
 .qe-turn-time {
