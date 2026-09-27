@@ -939,7 +939,7 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
     try {
       await endRun(run.id);
     } catch (err) {
-      setActionError(err.message ?? "Could not end the call.");
+      if (err.status !== 409) setActionError(err.message ?? "Could not end the call.");
     } finally {
       // Refresh either way: a failed end usually means the call already
       // finished and this page was showing an outdated state.

@@ -344,12 +344,15 @@ export async function markRunError(id, message, env = process.env, pool = getPoo
 //   createRun and reaches Twilio within seconds.
 // - in_progress: Twilio ringing (up to ~60s), the Media Stream connecting,
 //   and bridgeSession.js's DEFAULT_MAX_DURATION_MS (5 min) call cap.
-// - awaiting_evaluation: the LLM Gateway evaluator, including its 429
-//   retry/backoff loop.
+// - awaiting_evaluation: the LLM Gateway evaluator. llmGateway.js serializes
+//   every Gateway caller behind one process-wide mutex, so an evaluation can
+//   queue behind others (e.g. the boot-time warmCache right after a deploy)
+//   before its own retry budget (up to 7 x 25s timeouts plus 429 backoff,
+//   roughly 4 min) even starts.
 export const STALE_RUN_AFTER_MS = {
   pending: 2 * 60 * 1000,
   in_progress: 8 * 60 * 1000,
-  awaiting_evaluation: 5 * 60 * 1000,
+  awaiting_evaluation: 20 * 60 * 1000,
 };
 
 const STALE_RUN_ERRORS = {
