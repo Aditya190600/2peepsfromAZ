@@ -3613,7 +3613,13 @@ a.sample-report-cta {
   }
 }
 
-/* QualEvalExample.jsx: the "Example" notice above the static evaluation. */
+/* QualEval.jsx's ExampleScorecard: the evaluation name (Examples tab only)
+   and the "Example" notice above the static evaluation. */
+.qe-example-name {
+  margin: 4px 0 10px;
+  font-size: 20px;
+}
+
 .example-notice {
   display: flex;
   align-items: center;
