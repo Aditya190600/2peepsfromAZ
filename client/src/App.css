@@ -2366,7 +2366,7 @@ button.site-nav-link {
   list-style: none;
 }
 
-.qe-eval-summary li {
+.qe-eval-summary > li {
   position: relative;
   padding-left: 18px;
   margin-bottom: 6px;
@@ -2374,7 +2374,7 @@ button.site-nav-link {
   line-height: 1.5;
 }
 
-.qe-eval-summary li::before {
+.qe-eval-summary > li::before {
   content: "-";
   position: absolute;
   left: 0;
@@ -2384,6 +2384,36 @@ button.site-nav-link {
 .qe-eval-summary strong {
   font-weight: 600;
   margin-right: 4px;
+}
+
+.qe-markdown {
+  margin-top: 4px;
+}
+
+.qe-markdown > :first-child {
+  margin-top: 0;
+}
+
+.qe-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.qe-markdown p {
+  margin: 0 0 8px;
+}
+
+.qe-markdown ul,
+.qe-markdown ol {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+
+.qe-markdown ul {
+  list-style: disc;
+}
+
+.qe-markdown li {
+  margin-bottom: 4px;
 }
 
 .qe-eval-header-actions {
