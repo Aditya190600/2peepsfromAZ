@@ -104,7 +104,7 @@ Compliance Examples folded into the Try page as a tab (2026-09-25): `client/src/
 
 ## Shared visual language across pages
 
-Home, Try (Compliance Lab, including its Compliance Examples tab), the standalone Examples page, and the splash page (`Landing.jsx`) opt into QualEval's visual language (Space Grotesk headings, elevated/gradient cards with hover lift) via a shared `.styled-page` wrapper class, scoped alongside `.qualeval-page` in `client/src/App.css` (search `--- Shared visual-consistency pass ---`). Pages not wrapped in it (Evals, ApiKeys, PhoneNumbers, SessionInspector, History) keep the original flat look - add the class to a new page's content wrapper rather than duplicating the rules if it should match.
+Try (Compliance Lab, including its Compliance Examples tab), the standalone Examples page, and the splash page (`Landing.jsx`) opt into QualEval's visual language (Space Grotesk headings, elevated/gradient cards with hover lift) via a shared `.styled-page` wrapper class, scoped alongside `.qualeval-page` in `client/src/App.css` (search `--- Shared visual-consistency pass ---`). Pages not wrapped in it (Evals, ApiKeys, PhoneNumbers, SessionInspector, History) keep the original flat look - add the class to a new page's content wrapper rather than duplicating the rules if it should match.
 
 ## Maintaining this file
 
