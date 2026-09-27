@@ -3371,6 +3371,264 @@ button.site-nav-link {
   background: linear-gradient(180deg, var(--panel-gradient-start), var(--panel-gradient-end));
 }
 
+/* --- Splash page workflow diagrams + example scorecard (Landing.jsx) ---
+   Each step's color says who does the work: input (you/your call), the
+   AssemblyAI leg, our own analysis, and the result. Arrows point right on
+   wide screens and down once the steps stack. */
+.workflow {
+  max-width: 1040px;
+  margin: 8px auto 0;
+  padding: 0 16px;
+}
+
+.workflow-caption {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+  margin-bottom: 14px;
+}
+
+.workflow-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--steps), minmax(0, 1fr));
+  gap: 30px;
+}
+
+.workflow-step {
+  --step: var(--accent);
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
+.workflow-step.is-assemblyai {
+  --step: var(--accent-2);
+}
+
+.workflow-step.is-analysis {
+  --step: var(--connecting);
+}
+
+.workflow-step.is-output {
+  --step: var(--pass);
+}
+
+/* Sits centered in the grid gap before its step. */
+.workflow-arrow {
+  position: absolute;
+  top: 50%;
+  left: -26px;
+  width: 22px;
+  height: 22px;
+  margin-top: -11px;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.workflow-card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 14px 16px;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--step);
+  border-radius: var(--qe-radius-sm);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--step) 10%, var(--panel-gradient-start)), var(--panel-gradient-end));
+}
+
+.workflow-tag {
+  align-self: flex-start;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--step);
+  background: color-mix(in srgb, var(--step) 14%, transparent);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.workflow-title {
+  font-family: var(--qe-heading);
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.workflow-detail {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.workflow-chips {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.workflow-chips li {
+  font-size: 11.5px;
+  line-height: 1.3;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--step) 40%, var(--line));
+  border-radius: 6px;
+  color: var(--ink);
+}
+
+@media (max-width: 860px) {
+  .workflow-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-arrow {
+    top: -26px;
+    left: 50%;
+    margin: 0 0 0 -11px;
+    transform: rotate(90deg);
+  }
+}
+
+.styled-page .sample-report-preview .report-panel {
+  min-height: 0;
+}
+
+a.sample-report-cta {
+  display: inline-block;
+  text-decoration: none;
+}
+
+.example-badge {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+  background: var(--accent-2-soft);
+  border: 1px solid color-mix(in srgb, var(--accent-2) 45%, transparent);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+
+.scorecard {
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--panel-gradient-start), var(--panel-gradient-end));
+}
+
+.scorecard-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.scorecard-verdict {
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.scorecard-verdict.is-fail {
+  color: var(--flag);
+  background: var(--flag-soft);
+}
+
+.panel .scorecard-title {
+  font-family: var(--qe-heading);
+  font-size: 18px;
+  color: var(--ink);
+  margin: 14px 0 12px;
+}
+
+.scorecard-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 14px;
+}
+
+.scorecard-meta dt {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.scorecard-meta dd {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.scorecard-excerpt {
+  margin: 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--flag);
+  background: var(--flag-soft);
+  border-radius: 0 var(--qe-radius-sm) var(--qe-radius-sm) 0;
+}
+
+.scorecard-excerpt figcaption {
+  font-size: 12.5px;
+  color: var(--flag);
+  margin-bottom: 6px;
+}
+
+.scorecard-excerpt blockquote {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.scorecard-speaker {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-right: 4px;
+}
+
+@media (max-width: 560px) {
+  .scorecard-meta {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* QualEvalExample.jsx: the "Example" notice above the static evaluation. */
+.example-notice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 18px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.example-list {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
 /* --- Voice Compliance (/try) page ---
    Larger body copy than the app-wide defaults (which read too small here),
    scoped to Dashboard.jsx's .try-page so other pages keep their sizes. */

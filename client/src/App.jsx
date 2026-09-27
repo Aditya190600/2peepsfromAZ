@@ -9,6 +9,7 @@ import ApiKeys from "./ApiKeys";
 import Evals from "./Evals";
 import PhoneNumbers from "./PhoneNumbers";
 import QualEval from "./QualEval";
+import QualEvalExample from "./QualEvalExample";
 import Settings from "./Settings";
 import PhoneEvals from "./PhoneEvals";
 import { matchRoute } from "./routes";
@@ -77,6 +78,11 @@ export default function App() {
     // must work with no sign-in, so this route is deliberately NOT wrapped
     // in RequireVisitor (unlike every other product screen below).
     return <Examples navigate={navigate} path={viewPath} />;
+  }
+  if (view.name === "qualeval-example") {
+    // Public for the same reason as /examples: the splash page links here,
+    // and it renders only static example data (qualevalExampleData.js).
+    return <QualEvalExample navigate={navigate} path={viewPath} />;
   }
   if (view.name === "sessions") {
     return (
