@@ -445,9 +445,14 @@ export function Report({
           <p className="report-meta">
             {report.sessionId ?? "no session id"} · generated {report.generatedAt}
           </p>
-          <span className={`report-verdict finding-status ${view.className}`}>
-            {verdict.label}
-          </span>
+          {/* The headline verdict is a status, not an action - the label
+              keeps a bare "Clear" from reading as a dead Clear button. */}
+          <p className="report-verdict-line">
+            Overall verdict:{" "}
+            <span className={`report-verdict finding-status ${view.className}`}>
+              {verdict.label}
+            </span>
+          </p>
         </div>
         <div className="report-toolbar-actions">
           <button className="btn btn-outline print-btn" onClick={() => window.print()}>
@@ -847,7 +852,7 @@ export default function Dashboard({ navigate, path }) {
     }
   };
 
-  const runUpload = async (file, { label = "Uploaded audio", consentEvent } = {}) => {
+  const runUpload = async (file, { label = "Uploaded audio" } = {}) => {
     if (!file) return;
     setReport(null);
     clearLabErrors();
@@ -856,15 +861,10 @@ export default function Dashboard({ navigate, path }) {
     showAudio(blobUrl);
     try {
       const session = await transcribeUpload(file);
-      // Optional consentEvent lets the "diarize this sample" path keep the
-      // fixture's TCPA consent flag while still going through real STT +
-      // speaker_labels. Raw drag-and-drop uploads leave it undefined → null.
-      const analyzedSession =
-        consentEvent !== undefined ? { ...session, consentEvent } : session;
-      const nextReport = await analyze(analyzedSession, patternPackIds);
+      const nextReport = await analyze(session, patternPackIds);
       setReport(nextReport);
-      registerLiveAudioBlob(analyzedSession.sessionId, blobUrl);
-      recordHistory(label, nextReport, analyzedSession);
+      registerLiveAudioBlob(session.sessionId, blobUrl);
+      recordHistory(label, nextReport, session);
       setUploadStatus("idle");
     } catch (err) {
       setUploadStatus("error");
