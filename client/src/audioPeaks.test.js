@@ -56,6 +56,31 @@ test("computeDualPeaks() uses stereo channels when present (ch0=user, ch1=agent)
   assert.ok(agent[3] > 0.9);
 });
 
+test("computeDualPeaks() splits a mixed stereo recording by turns, not by channel", () => {
+  const left = new Float32Array(400);
+  const right = new Float32Array(400);
+  for (let i = 0; i < 400; i++) {
+    left[i] = 0.9;
+    // Codec-sized difference, still the same upmixed signal on both channels.
+    right[i] = i % 2 === 0 ? 0.901 : 0.899;
+  }
+  const buf = {
+    duration: 2,
+    length: 400,
+    numberOfChannels: 2,
+    getChannelData: (c) => (c === 0 ? left : right),
+  };
+  const turns = [
+    { role: "agent", text: "hi", tMs: 0 },
+    { role: "user", text: "hey", tMs: 1000 },
+  ];
+  const { agent, user } = computeDualPeaks(buf, turns, 4, 2);
+  assert.ok(agent[0] > 0);
+  assert.equal(user[0], 0);
+  assert.ok(user[3] > 0);
+  assert.equal(agent[3], 0);
+});
+
 test("computeDualPeaks() shifts turn timestamps by the recording start offset", () => {
   const buf = fakeBuffer({
     channelFn: () => 0.9,

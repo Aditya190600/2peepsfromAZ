@@ -52,15 +52,40 @@ function roleAtTime(turns, tMs) {
   return null;
 }
 
+// Channels closer than this are one upmixed signal (a live-call MediaRecorder
+// blob or a typical stereo upload), not a speaker-separated recording.
+// QualEval/Phone Evals WAVs sit well above it: one channel is the caller and
+// the other is the agent, so they differ wherever only one side is speaking.
+const SAME_SIGNAL_DIFF_RATIO = 0.08;
+
+function channelsCarrySameSignal(audioBuffer) {
+  const left = audioBuffer.getChannelData(0);
+  const right = audioBuffer.getChannelData(1);
+  const length = Math.min(left.length, right.length);
+  if (!length) return true;
+  const step = Math.max(1, Math.floor(length / 4096));
+  let diff = 0;
+  let energy = 0;
+  for (let i = 0; i < length; i += step) {
+    const l = left[i];
+    const r = right[i];
+    diff += Math.abs(l - r);
+    energy += Math.abs(l) + Math.abs(r);
+  }
+  if (energy < 1e-6) return true;
+  return diff / energy < SAME_SIGNAL_DIFF_RATIO;
+}
+
 // Splits mono peaks into agent/user tracks using turn intervals. Without turns,
 // agent gets the full mono waveform and user stays silent (dotted baseline only).
 // `offsetMs` maps session-relative turn times onto the file: a live recording
 // starts after connect, so buffer time 0 is session time `offsetMs`.
 export function computeDualPeaks(audioBuffer, turns, buckets = WAVEFORM_BUCKETS, durationSec, offsetMs = 0) {
-  // QualEval/Phone Evals stereo recordings: channel 0 = caller/user,
-  // channel 1 = agent. Mono uploads and live-call blobs fall back to turn
-  // intervals below.
-  if (audioBuffer.numberOfChannels >= 2) {
+  // QualEval/Phone Evals recordings are speaker-separated stereo: channel 0 =
+  // caller/user, channel 1 = agent. Live-call blobs and mixed uploads are also
+  // stereo, with the same mix copied onto both channels, so only trust the
+  // split when the two channels actually differ.
+  if (audioBuffer.numberOfChannels >= 2 && !channelsCarrySameSignal(audioBuffer)) {
     return {
       user: peaksForChannel(audioBuffer, 0, buckets),
       agent: peaksForChannel(audioBuffer, 1, buckets),
