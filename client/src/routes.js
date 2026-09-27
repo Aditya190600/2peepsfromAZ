@@ -1,6 +1,4 @@
-export function matchRoute(pathname, search = "") {
-  const query = new URLSearchParams(search);
-
+export function matchRoute(pathname) {
   if (pathname === "/home") return { name: "home" };
   if (pathname === "/try") return { name: "try" };
   if (pathname === "/examples") return { name: "examples" };
@@ -18,10 +16,7 @@ export function matchRoute(pathname, search = "") {
     return { name: "sessions" };
   }
   if (pathname === "/history") return { name: "sessions", redirect: "/sessions" };
-  if (pathname === "/dashboard") {
-    if (query.get("view") === "summary") return { name: "home", redirect: "/home" };
-    return { name: "try", redirect: "/try" };
-  }
+  if (pathname === "/dashboard") return { name: "try", redirect: "/try" };
   if (pathname.startsWith("/sessions/")) {
     const sessionId = decodeURIComponent(pathname.slice("/sessions/".length));
     if (!sessionId) return { name: "sessions", redirect: "/sessions" };

@@ -13,7 +13,7 @@ This directory is the maintained source for verifying user-facing ComplyLine beh
 ## Driving conventions
 
 - Start every recipe from `/` unless its preconditions say otherwise.
-- Prefer accessible names (`Get started`, `Home`, `Sessions`, `Try`, `Start call`, `Clean call — everything passes`) over CSS selectors.
+- Prefer accessible names (`Get started`, `Voice Compliance`, `Start call`, `Clean call — everything passes`) over CSS selectors.
 - Use in-page `navigate()` clicks for SPA routes. Use `browser_navigate` for typed deep links (`/sessions/...`, `/home`).
 - Restore History after a mutation if the recipe created entries. Keep proof artifacts.
 
@@ -36,7 +36,7 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 
 ## Features
 
-- [Get started](./get-started.md) covers Landing CTA to `/home` and the Northstar 12-session summary with no mic prompt.
+- [Get started](./get-started.md) covers Landing CTA to `/try` with no mic prompt until Start call.
 - [History](./history.md) covers empty Sessions, a stored row, and reopen without re-analysis.
 - [Playable sample](./playable-sample.md) covers Analyze on a canned sample and the resulting report.
 - [Session deep link](./session-deep-link.md) covers `/sessions/:sessionId` empty state and a stored-report reopen.
