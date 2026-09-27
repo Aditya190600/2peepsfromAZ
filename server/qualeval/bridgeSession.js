@@ -1,9 +1,11 @@
 import WS from "ws";
+import { peakPcmuAmplitude, SILENCE_AMPLITUDE_THRESHOLD } from "./pcmuAudio.js";
 
 // Shared with server/qualeval/twilioStream.js so its call recorder
 // (server/qualeval/callRecorder.js) preallocates to the same cap this bridge
 // enforces via maxDurationTimer below.
 export const DEFAULT_MAX_DURATION_MS = 5 * 60 * 1000;
+export const DEFAULT_SILENCE_TIMEOUT_MS = 30 * 1000;
 
 // Bridges one Twilio Media Streams WebSocket connection (already accepted -
 // see server/qualeval/twilioStream.js) with a new server-side AssemblyAI
@@ -90,6 +92,7 @@ export function createBridgeSession({
   onIncomingAudio,
   onOutgoingAudio,
   maxDurationMs = DEFAULT_MAX_DURATION_MS,
+  silenceTimeoutMs = DEFAULT_SILENCE_TIMEOUT_MS,
   // Bounded grace window given to AssemblyAI to flush a final transcript/
   // session.ended after we've sent it session.end - see the "stop" case
   // below for why this exists at all.
@@ -103,6 +106,7 @@ export function createBridgeSession({
   const turns = [];
   let maxDurationTimer = null;
   let stopGraceTimer = null;
+  let silenceTimer = null;
   // AssemblyAI's session.ready/reply.audio and Twilio's Media Streams "start"
   // event arrive over two independent sockets with no ordering guarantee -
   // confirmed live 2026-09-26 against a real inbound call (Twilio Voice
@@ -147,6 +151,8 @@ export function createBridgeSession({
     finished = true;
     clearTimeout(maxDurationTimer);
     clearTimeout(stopGraceTimer);
+    clearTimeout(silenceTimer);
+    silenceTimer = null;
     closeSockets();
     onFinished?.({ turns: [...turns], callSid, reason });
   }
@@ -156,8 +162,41 @@ export function createBridgeSession({
     finished = true;
     clearTimeout(maxDurationTimer);
     clearTimeout(stopGraceTimer);
+    clearTimeout(silenceTimer);
+    silenceTimer = null;
     closeSockets();
     onError?.(message);
+  }
+
+  function endForSilenceTimeout() {
+    if (aaiReady && aaiWs.readyState === aaiWs.OPEN) {
+      aaiWs.send(JSON.stringify({ type: "session.end" }));
+      clearTimeout(stopGraceTimer);
+      stopGraceTimer = setTimeout(() => finish("silence_timeout_grace"), stopGraceMs);
+    } else {
+      finish("silence_timeout");
+    }
+  }
+
+  function resetSilenceTimer() {
+    clearTimeout(silenceTimer);
+    if (!silenceTimeoutMs || finished) return;
+    silenceTimer = setTimeout(() => {
+      silenceTimer = null;
+      endForSilenceTimeout();
+    }, silenceTimeoutMs);
+  }
+
+  function noteAudioActivity(base64Payload) {
+    if (!base64Payload) return;
+    if (peakPcmuAmplitude(base64Payload) >= SILENCE_AMPLITUDE_THRESHOLD) {
+      resetSilenceTimer();
+    }
+  }
+
+  function armSilenceWatchdog() {
+    if (silenceTimer || !silenceTimeoutMs) return;
+    resetSilenceTimer();
   }
 
   function armMaxDurationCap() {
@@ -213,6 +252,7 @@ export function createBridgeSession({
         turns.push({ role: transcriptAgentRole, text: msg.text ?? "", tMs: startedAtMs ? Date.now() - startedAtMs : 0 });
         break;
       case "reply.audio":
+        noteAudioActivity(msg.data);
         if (streamSid) {
           if (twilioWs.readyState === twilioWs.OPEN) {
             twilioWs.send(JSON.stringify({ event: "media", streamSid, media: { payload: msg.data } }));
@@ -257,6 +297,7 @@ export function createBridgeSession({
         callSid = msg.start?.callSid ?? null;
         startedAtMs = Date.now();
         armMaxDurationCap();
+        armSilenceWatchdog();
         if (streamSid && twilioWs.readyState === twilioWs.OPEN) {
           for (const payload of pendingReplyAudio) {
             twilioWs.send(JSON.stringify({ event: "media", streamSid, media: { payload } }));
@@ -265,6 +306,7 @@ export function createBridgeSession({
         pendingReplyAudio.length = 0;
         break;
       case "media":
+        noteAudioActivity(msg.media?.payload);
         // Bidirectional streams only forward the "inbound" track (the far
         // end's voice) to us - our own outbound audio never echoes back.
         if (aaiReady && aaiWs.readyState === aaiWs.OPEN) {
@@ -328,6 +370,7 @@ export function createBridgeSession({
     // OTHER leg's synthesized speech. Silently dropped before session.ready,
     // same gating as real Twilio media (see the "media" case above).
     injectAudio: (audio) => {
+      noteAudioActivity(audio);
       if (aaiReady && aaiWs.readyState === aaiWs.OPEN) {
         aaiWs.send(JSON.stringify({ type: "input.audio", audio }));
       }

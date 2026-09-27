@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { createBridgeSession } from "./bridgeSession.js";
+import { peakPcmuAmplitude, SILENCE_AMPLITUDE_THRESHOLD } from "./pcmuAudio.js";
 
 class FakeSocket extends EventEmitter {
   constructor() {
@@ -29,7 +30,7 @@ function fakeWebSocketImpl(aaiWs) {
 test("bridges Twilio media to AssemblyAI input.audio only after session.ready, and back for reply.audio", async () => {
   const twilioWs = new FakeSocket();
   const aaiWs = new FakeSocket();
-  createBridgeSession({ twilioWs, token: "tok", WebSocketImpl: fakeWebSocketImpl(aaiWs), systemPrompt: "be a caller" });
+  createBridgeSession({ twilioWs, token: "tok", WebSocketImpl: fakeWebSocketImpl(aaiWs), systemPrompt: "be a caller", silenceTimeoutMs: 0 });
   aaiWs.emit("open");
 
   // session.update sent on open, before session.ready
@@ -65,7 +66,7 @@ test("bridges Twilio media to AssemblyAI input.audio only after session.ready, a
 test("reply.audio arriving before Twilio's 'start' event is buffered and flushed once streamSid is known, not dropped", async () => {
   const twilioWs = new FakeSocket();
   const aaiWs = new FakeSocket();
-  createBridgeSession({ twilioWs, token: "tok", WebSocketImpl: fakeWebSocketImpl(aaiWs), systemPrompt: "be a caller" });
+  createBridgeSession({ twilioWs, token: "tok", WebSocketImpl: fakeWebSocketImpl(aaiWs), systemPrompt: "be a caller", silenceTimeoutMs: 0 });
   aaiWs.emit("open");
 
   // AssemblyAI's session.ready/reply.audio can win the race against Twilio's
@@ -91,6 +92,75 @@ test("reply.audio arriving before Twilio's 'start' event is buffered and flushed
   aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
 });
 
+function loudPcmuPayload() {
+  // 0x00 is the peak negative mu-law sample (~32124) on the shared decode
+  // table. 0x7F and 0xFF decode to amplitude 0, so noteAudioActivity ignores
+  // them and the watchdog is never reset.
+  return Buffer.alloc(160, 0x00).toString("base64");
+}
+
+test("silence timeout ends the call when neither leg carries audible audio", async () => {
+  const twilioWs = new FakeSocket();
+  const aaiWs = new FakeSocket();
+  let finished = null;
+  createBridgeSession({
+    twilioWs,
+    token: "tok",
+    WebSocketImpl: fakeWebSocketImpl(aaiWs),
+    systemPrompt: "be a caller",
+    maxDurationMs: 60_000,
+    silenceTimeoutMs: 50,
+    stopGraceMs: 10,
+    onFinished: (payload) => {
+      finished = payload;
+    },
+  });
+  aaiWs.emit("open");
+  twilioWs.emit("message", JSON.stringify({ event: "start", start: { streamSid: "MZ1", callSid: "CA1" } }));
+  aaiWs.emit("message", JSON.stringify({ type: "session.ready" }));
+  await new Promise((resolve) => setTimeout(resolve, 70));
+  assert.ok(finished);
+  assert.equal(finished.reason, "silence_timeout_grace");
+});
+
+test("audible media on either leg resets the silence watchdog", (t) => {
+  // Mocked timers: a real 100ms wait plus the default 2000ms grace leaves
+  // `finished` null even when the 80ms watchdog already fired.
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const twilioWs = new FakeSocket();
+  const aaiWs = new FakeSocket();
+  let finished = null;
+  const payload = loudPcmuPayload();
+  assert.ok(peakPcmuAmplitude(payload) >= SILENCE_AMPLITUDE_THRESHOLD);
+  const bridge = createBridgeSession({
+    twilioWs,
+    token: "tok",
+    WebSocketImpl: fakeWebSocketImpl(aaiWs),
+    systemPrompt: "be a caller",
+    maxDurationMs: 60_000,
+    silenceTimeoutMs: 80,
+    stopGraceMs: 10,
+    onFinished: (result) => {
+      finished = result;
+    },
+  });
+  aaiWs.emit("open");
+  twilioWs.emit("message", JSON.stringify({ event: "start", start: { streamSid: "MZ1", callSid: "CA1" } }));
+  aaiWs.emit("message", JSON.stringify({ type: "session.ready" }));
+
+  t.mock.timers.tick(79);
+  twilioWs.emit("message", JSON.stringify({ event: "media", media: { payload } }));
+  // Cross the original 80ms deadline, then one more tick. A grace timer
+  // scheduled when that deadline fires does not run inside the same tick.
+  t.mock.timers.tick(20);
+  t.mock.timers.tick(10);
+  assert.equal(finished, null);
+  assert.equal(aaiWs.sent.some((msg) => msg.type === "session.end"), false);
+
+  bridge.stop();
+  assert.equal(finished.reason, "manual_stop");
+});
+
 test("max-duration cap finishes from twilio start even when AssemblyAI never reaches session.ready", async () => {
   const twilioWs = new FakeSocket();
   const aaiWs = new FakeSocket();
@@ -100,6 +170,7 @@ test("max-duration cap finishes from twilio start even when AssemblyAI never rea
     token: "tok",
     WebSocketImpl: fakeWebSocketImpl(aaiWs),
     systemPrompt: "be a caller",
+    silenceTimeoutMs: 0,
     maxDurationMs: 40,
     onFinished: (payload) => {
       finished = payload;
@@ -121,6 +192,7 @@ test("swaps AssemblyAI's user/agent roles into QualEval's caller/target transcri
     token: "tok",
     WebSocketImpl: fakeWebSocketImpl(aaiWs),
     systemPrompt: "be a caller",
+    silenceTimeoutMs: 0,
     onFinished: (result) => (finished = result),
   });
 
@@ -156,6 +228,7 @@ test("target-agent side: binds by agent_id (mutually exclusive with inline field
     agentId: "agent_flawed",
     transcriptUserRole: "user",
     transcriptAgentRole: "agent",
+    silenceTimeoutMs: 0,
     onFinished: (result) => (finished = result),
   });
   aaiWs.emit("open");
@@ -189,6 +262,7 @@ test("a Twilio hangup with no session.ended still finishes the bridge with whate
     token: "tok",
     WebSocketImpl: fakeWebSocketImpl(aaiWs),
     systemPrompt: "be a caller",
+    silenceTimeoutMs: 0,
     onFinished: (result) => (finished = result),
   });
   twilioWs.emit("message", JSON.stringify({ event: "start", start: { streamSid: "MZ1", callSid: "CA1" } }));
@@ -211,6 +285,7 @@ test("Twilio 'stop' finishes the bridge after a grace window even if neither soc
     token: "tok",
     WebSocketImpl: fakeWebSocketImpl(aaiWs),
     systemPrompt: "be a caller",
+    silenceTimeoutMs: 0,
     stopGraceMs: 10,
     onFinished: (result) => (finished = result),
   });
@@ -240,6 +315,7 @@ test("AssemblyAI's session.ended arriving during the stop grace window finishes 
     token: "tok",
     WebSocketImpl: fakeWebSocketImpl(aaiWs),
     systemPrompt: "be a caller",
+    silenceTimeoutMs: 0,
     stopGraceMs: 5000,
     onFinished: (result) => (finished = result),
   });
@@ -263,6 +339,7 @@ test("an AssemblyAI session.error calls onError instead of onFinished", async ()
     token: "tok",
     WebSocketImpl: fakeWebSocketImpl(aaiWs),
     systemPrompt: "be a caller",
+    silenceTimeoutMs: 0,
     onFinished: () => (finished = true),
     onError: (msg) => (error = msg),
   });
@@ -280,6 +357,7 @@ test("AssemblyAI session.ended closes the Twilio leg so the real PSTN call hangs
     token: "tok",
     WebSocketImpl: fakeWebSocketImpl(aaiWs),
     systemPrompt: "be a caller",
+    silenceTimeoutMs: 0,
   });
 
   aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
@@ -295,6 +373,7 @@ test("AssemblyAI session.error also closes the Twilio leg, not just the Assembly
     token: "tok",
     WebSocketImpl: fakeWebSocketImpl(aaiWs),
     systemPrompt: "be a caller",
+    silenceTimeoutMs: 0,
     onError: () => {},
   });
 
