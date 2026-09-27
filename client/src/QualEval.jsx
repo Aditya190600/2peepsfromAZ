@@ -1118,27 +1118,27 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
       [
         {
           ref: summaryRef,
-          title: "1. The agent under test",
+          title: "The agent under test",
           body: "The phone number QualEval calls, plus the description and requirements every scenario is generated from and judged against. Edit evaluation changes them.",
         },
         {
           ref: tabBarRef,
-          title: "2. Review scenarios",
+          title: "Review scenarios",
           body: "New scenarios land in Generated. Approve the ones worth running (they move to Accepted) and reject the rest - Approve all does a whole batch at once.",
         },
         {
           find: () => scenarioListRef.current?.querySelector(".qe-scenario-actions"),
-          title: "3. Approve, then run",
+          title: "Approve, then run",
           body: "Each card is one test call: a caller persona, a situation, and pass/fail criteria. Approve it, then Run places a real phone call to the agent.",
         },
         {
           find: () => scenarioListRef.current?.querySelector(".qe-run-result"),
-          title: "4. Read the verdict",
+          title: "Read the verdict",
           body: "When the call ends, the transcript is judged pass/fail per criterion, with the evidence for every failure. Play the recording and click a timestamp to jump to that moment.",
         },
         {
           ref: generatePanelRef,
-          title: "5. Generate more",
+          title: "Generate more",
           body: "Ask for a new batch here, optionally with feedback on what to cover. Accepted scenarios are kept; generated and rejected ones are replaced.",
         },
       ].filter(resolveTourTarget),
@@ -1392,32 +1392,32 @@ export default function QualEval({ navigate, path, evaluationId }) {
       [
         {
           ref: tourRefs.templates,
-          title: "1. Start from a template",
+          title: "Start from a template",
           body: "Pick a sample agent to prefill the form, or skip this and describe your own agent from scratch.",
         },
         {
           ref: tourRefs.target,
-          title: "2. Name it and set the target",
+          title: "Name it and set the target",
           body: "Give the evaluation a name and enter the phone number of the voice agent under test - QualEval reaches it only by calling that number.",
         },
         {
           ref: tourRefs.details,
-          title: "3. Describe the agent",
+          title: "Describe the agent",
           body: "Say what the agent does and what it must always or never do. Scenarios are generated from this, and every call is judged against it.",
         },
         {
           ref: tourRefs.count,
-          title: "4. Choose how many scenarios",
+          title: "Choose how many scenarios",
           body: "Each scenario is one test call - a caller persona, a situation, and pass/fail criteria. You can generate more later.",
         },
         {
           ref: tourRefs.submit,
-          title: "5. Create the evaluation",
+          title: "Create the evaluation",
           body: "Creates the evaluation, generates the first batch of scenarios, and opens it so you can review, approve, and run them.",
         },
         {
           ref: tourRefs.evaluations,
-          title: "6. Open an evaluation",
+          title: "Open an evaluation",
           body: "Your evaluations live here. Open one to review its scenarios, place calls, and read each pass/fail verdict with evidence.",
         },
       ].filter(resolveTourTarget),
