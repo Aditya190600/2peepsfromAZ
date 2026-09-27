@@ -818,11 +818,7 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
   const [inboundCalls, setInboundCalls] = useState([]);
   const [loadError, setLoadError] = useState(null);
   const [generating, setGenerating] = useState(false);
-  const [genError, setGenError] = useState(() => {
-    const error = createTimeGenErrors.get(evaluationId) ?? null;
-    createTimeGenErrors.delete(evaluationId);
-    return error;
-  });
+  const [genError, setGenError] = useState(() => createTimeGenErrors.get(evaluationId) ?? null);
   const [feedback, setFeedback] = useState("");
   const [scenarioCount, setScenarioCount] = useState(DEFAULT_SCENARIO_COUNT);
   const [actionError, setActionError] = useState(null);
@@ -834,6 +830,10 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
   const [confirmingDeleteAllTab, setConfirmingDeleteAllTab] = useState(false);
   const [deletingAllTab, setDeletingAllTab] = useState(false);
   const [approvingAllTab, setApprovingAllTab] = useState(false);
+
+  useEffect(() => {
+    createTimeGenErrors.delete(evaluationId);
+  }, [evaluationId]);
 
   const load = async () => {
     try {
