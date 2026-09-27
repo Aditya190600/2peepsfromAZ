@@ -19,7 +19,7 @@ const NAV_OVERVIEW = [
     label: "Compliance Examples",
     what: "Playable sample calls and scripted violation demos - no sign-in, API key, or live call needed.",
     click:
-      "Pick a sample (a clean call, a TCPA violation, a late AI disclosure, etc.) to see a full compliance report instantly, or auto-split an uploaded recording by speaker to see the same pipeline on your own audio.",
+      "Pick a sample (a clean call, a TCPA violation, a late AI disclosure, etc.) and click Analyze to see its full compliance report instantly, or click Analyze fleet to run every sample together.",
     screenshot: examplesScreenshot,
   },
   {

@@ -122,7 +122,7 @@ export function reportView({ report, loading = false, error = null, progress = n
       label: "No report yet",
       className: "is-idle",
       message:
-        "No report yet. Run a live call, upload audio, or pick a sample to generate one.",
+        "No report yet. Run a live call or pick a sample in Compliance Examples to generate one.",
     };
   }
   const verdict = headlineVerdict(report.findings ?? []);

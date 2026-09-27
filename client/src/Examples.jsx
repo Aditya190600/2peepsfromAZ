@@ -19,7 +19,7 @@ import {
 import { saveHistoryEntry, buildHistoryEntry, findEntryBySessionId, entryRanWithPacks } from "./reportHistory";
 import { seekAudio } from "./seek";
 import { headlineVerdict } from "./compliance";
-import { analyze, diarizeSample, mapWithConcurrency } from "./analyzeClient";
+import { analyze, mapWithConcurrency } from "./analyzeClient";
 import { listIndustryPacks } from "./evalsClient";
 import PatternPackSelect from "./PatternPackSelect";
 import "./App.css";
@@ -45,9 +45,7 @@ export function ExamplesPanels({ navigate, topTabBar = null, onShowLiveCall = nu
   const [activeAudioUrl, setActiveAudioUrl] = useState(null);
   const [sampleLoadingKey, setSampleLoadingKey] = useState(null);
   const [sampleError, setSampleError] = useState(null);
-  const [diarizeStatus, setDiarizeStatus] = useState("idle"); // idle | uploading | error
-  const [diarizeError, setDiarizeError] = useState(null);
-  const [sampleTab, setSampleTab] = useState("samples"); // samples | scripted | fleet
+  const [sampleTab, setSampleTab] = useState("samples"); // samples | scripted
   const audioRef = useRef(null);
 
   const patternPackIds = ["generic", ...selectedPacks];
@@ -76,8 +74,6 @@ export function ExamplesPanels({ navigate, topTabBar = null, onShowLiveCall = nu
   const clearErrors = () => {
     setSampleError(null);
     setFleetError(null);
-    setDiarizeStatus("idle");
-    setDiarizeError(null);
   };
 
   const recordHistory = (label, report, session, packIds, opts = {}) => {
@@ -121,33 +117,6 @@ export function ExamplesPanels({ navigate, topTabBar = null, onShowLiveCall = nu
     clearErrors();
     showAudio(entry.audioKey ? SAMPLE_AUDIO_URLS[entry.audioKey] ?? null : null);
     setReport(entry.report);
-  };
-
-  // Runs a playable sample's MP3 through the real diarization pipeline (not
-  // the canned SAMPLE_SESSIONS text path) via the unauthenticated
-  // /v1/examples/diarize/:key route, so the demo can prove speaker_labels
-  // produces multi-turn timestamps with zero setup.
-  const runDiarizedSample = async (key) => {
-    const url = SAMPLE_AUDIO_URLS[key];
-    if (!url) return;
-    setFleetResults(null);
-    clearErrors();
-    setSampleLoadingKey(key);
-    setDiarizeStatus("uploading");
-    try {
-      showAudio(url);
-      const { session, report: nextReport } = await diarizeSample(key, patternPackIds);
-      setReport(nextReport);
-      recordHistory(`${sampleLabel(key)} (speaker-split upload)`, nextReport, session, patternPackIds, {
-        audioKey: key,
-      });
-      setDiarizeStatus("idle");
-    } catch (err) {
-      setDiarizeStatus("error");
-      setDiarizeError(err.message ?? "Something went wrong loading this sample.");
-    } finally {
-      setSampleLoadingKey(null);
-    }
   };
 
   const runFleetOn = async (keys) => {
@@ -194,7 +163,7 @@ export function ExamplesPanels({ navigate, topTabBar = null, onShowLiveCall = nu
   };
 
   const reportLoading = sampleLoadingKey != null || (fleetLoading && (!fleetResults || fleetResults.length === 0));
-  const reportError = sampleError || (diarizeStatus === "error" ? diarizeError : null) || fleetError;
+  const reportError = sampleError || fleetError;
   const fleetReady = Array.isArray(fleetResults) && fleetResults.length > 0;
 
   return (
@@ -266,53 +235,45 @@ export function ExamplesPanels({ navigate, topTabBar = null, onShowLiveCall = nu
               >
                 Scripted violation demos
               </button>
-              <button
-                type="button"
-                className={`tab-btn ${sampleTab === "fleet" ? "is-active" : ""}`}
-                onClick={() => setSampleTab("fleet")}
-              >
-                Analyze a fleet
-              </button>
             </div>
 
             {sampleTab === "samples" && (
               <div className="section-block tab-panel">
                 <p className="pack-note">
-                  Analyze uses the canned transcript. Auto-split speakers re-uploads the MP3 so the
-                  transcript shows who's talking (agent vs. caller) — use that to demo the upload
-                  path without bringing your own file.
+                  Analyze any call on its own, or use Analyze fleet at the bottom to run all{" "}
+                  {PLAYABLE_KEYS.length} together and roll them into one fleet-wide compliance report.
                 </p>
                 <div className="sample-buttons">
                   {PLAYABLE_KEYS.map((key) => (
-                    <div key={key} className="sample-row">
-                      <div className="sample-actions">
+                    <div key={key} className="sample-row sample-call">
+                      <div className="sample-call-head">
+                        <div className="sample-call-details">
+                          <p className="sample-call-title">{sampleLabel(key)}</p>
+                          <p className="sample-call-meta">
+                            {SAMPLE_SESSIONS[key].turns.length} turns · {SAMPLE_SESSIONS[key].sessionId}
+                          </p>
+                        </div>
                         <button
-                          className="btn btn-outline"
+                          className="btn btn-outline sample-call-analyze"
                           onClick={() => openStoredOrRunSample(key)}
-                          disabled={sampleLoadingKey === key || diarizeStatus === "uploading"}
+                          disabled={sampleLoadingKey === key || fleetLoading}
                         >
-                          {sampleLoadingKey === key && diarizeStatus !== "uploading"
-                            ? "Analyzing…"
-                            : sampleLabel(key)}
-                        </button>
-                        <button
-                          className="btn btn-outline sample-diarize-btn"
-                          onClick={() => runDiarizedSample(key)}
-                          disabled={sampleLoadingKey === key || diarizeStatus === "uploading"}
-                        >
-                          {sampleLoadingKey === key && diarizeStatus === "uploading"
-                            ? "Splitting speakers…"
-                            : "Auto-split speakers"}
+                          {sampleLoadingKey === key ? "Analyzing…" : "Analyze"}
                         </button>
                       </div>
-                      <AudioPlayer src={SAMPLE_AUDIO_URLS[key]} compact />
+                      <AudioPlayer src={SAMPLE_AUDIO_URLS[key]} />
                     </div>
                   ))}
                 </div>
                 {sampleError && <p className="error-banner">{sampleError}</p>}
-                {diarizeStatus === "error" && diarizeError && (
-                  <p className="error-banner">{diarizeError}</p>
-                )}
+                <button
+                  className="btn btn-primary generate-btn"
+                  onClick={() => runFleetOn(PLAYABLE_KEYS)}
+                  disabled={fleetLoading || sampleLoadingKey != null}
+                >
+                  {fleetLoading ? "Analyzing fleet…" : "Analyze fleet"}
+                </button>
+                {fleetError && <p className="error-banner">{fleetError}</p>}
               </div>
             )}
 
@@ -329,7 +290,7 @@ export function ExamplesPanels({ navigate, topTabBar = null, onShowLiveCall = nu
                         <button
                           className="btn btn-outline"
                           onClick={() => openStoredOrRunSample(key)}
-                          disabled={sampleLoadingKey === key || diarizeStatus === "uploading"}
+                          disabled={sampleLoadingKey === key || fleetLoading}
                         >
                           {sampleLoadingKey === key ? "Analyzing…" : sampleLabel(key)}
                         </button>
@@ -337,25 +298,6 @@ export function ExamplesPanels({ navigate, topTabBar = null, onShowLiveCall = nu
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-
-            {sampleTab === "fleet" && (
-              <div className="section-block tab-panel">
-                <p className="pack-note">
-                  Runs the same compliance analysis used above on all {PLAYABLE_KEYS.length} playable
-                  sample calls at once, then rolls the results into one fleet-wide compliance rate and
-                  a shared report - a quick way to see how a whole book of calls would score, instead
-                  of checking one call at a time.
-                </p>
-                <button
-                  className="btn btn-outline generate-btn"
-                  onClick={() => runFleetOn(PLAYABLE_KEYS)}
-                  disabled={fleetLoading}
-                >
-                  {fleetLoading ? "Analyzing…" : `Analyze ${PLAYABLE_KEYS.length} sample sessions`}
-                </button>
-                {fleetError && <p className="error-banner">{fleetError}</p>}
               </div>
             )}
           </div>
