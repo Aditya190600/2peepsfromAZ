@@ -3381,6 +3381,16 @@ button.site-nav-link {
   padding: 0 16px;
 }
 
+/* Each product section reads headline, then its diagram, then the copy. The
+   diagram is wider than .hero, so the hero is split around it. */
+.hero.hero-head .hero-headline {
+  margin-bottom: 24px;
+}
+
+.hero.hero-body {
+  margin-top: 40px;
+}
+
 .workflow-caption {
   font-family: var(--mono);
   font-size: 12px;
