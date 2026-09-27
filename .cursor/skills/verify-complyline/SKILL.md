@@ -54,7 +54,7 @@ Routes:
 | Path | Screen |
 |---|---|
 | `/` | Landing. `Get started` goes to `/try`. |
-| `/home` | Northstar program queue, hidden from the nav rail (direct URL only). Auto-runs the 12 sessions. No mic. |
+| `/home` | Removed - redirects to `/try`. |
 | `/sessions` | Report list from `localStorage`. |
 | `/sessions/:sessionId` | Stored report, or empty copy if missing. |
 | `/try` | Lab (live call, upload, playable samples). |

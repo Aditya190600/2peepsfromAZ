@@ -1,8 +1,6 @@
 // Full nav model, including entries hidden from the rail (kept here, not
 // deleted, so their routes/components stay reachable by direct URL).
 export const PRODUCT_NAV_ALL = [
-  // Hidden from the demo rail - the page still loads at /home by direct URL.
-  { href: "/home", label: "Home", match: (path) => path === "/home", hidden: true },
   { href: "/try", label: "Voice Compliance", match: (path) => path === "/try" },
   // Folded into the Try page as the "Compliance Examples" tab (Dashboard.jsx's
   // ExamplesPanels) - hidden, not deleted, since the standalone route still

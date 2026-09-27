@@ -25,6 +25,6 @@ Preconditions:
 
 ## Gotchas
 
-- `/home` (Northstar 12-session summary) is hidden from the nav rail and no longer the Get started target. It still loads by typed URL.
+- `/home` is removed and redirects to `/try`.
 - `App.jsx` reads the path after `pushState`. A snapshot taken before the SPA finishes can still show Landing.
 - Do not click **Start call** during this recipe.
