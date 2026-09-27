@@ -99,6 +99,53 @@ function loudPcmuPayload() {
   return Buffer.alloc(160, 0x00).toString("base64");
 }
 
+test("an interrupted reply clears Twilio's buffered playback so the cancelled speech stops", async () => {
+  const twilioWs = new FakeSocket();
+  const aaiWs = new FakeSocket();
+  createBridgeSession({ twilioWs, token: "tok", WebSocketImpl: fakeWebSocketImpl(aaiWs), systemPrompt: "be a caller", silenceTimeoutMs: 0 });
+  aaiWs.emit("open");
+  twilioWs.emit("message", JSON.stringify({ event: "start", start: { streamSid: "MZ1", callSid: "CA1" } }));
+  aaiWs.emit("message", JSON.stringify({ type: "session.ready" }));
+  aaiWs.emit("message", JSON.stringify({ type: "reply.started" }));
+  aaiWs.emit("message", JSON.stringify({ type: "reply.audio", data: "partOfReply" }));
+
+  // The far end barges in and AssemblyAI cancels the reply.
+  aaiWs.emit("message", JSON.stringify({ type: "reply.done", status: "interrupted" }));
+  assert.deepEqual(twilioWs.sent.at(-1), { event: "clear", streamSid: "MZ1" });
+
+  aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
+});
+
+test("a completed reply leaves Twilio's playback alone", async () => {
+  const twilioWs = new FakeSocket();
+  const aaiWs = new FakeSocket();
+  createBridgeSession({ twilioWs, token: "tok", WebSocketImpl: fakeWebSocketImpl(aaiWs), systemPrompt: "be a caller", silenceTimeoutMs: 0 });
+  aaiWs.emit("open");
+  twilioWs.emit("message", JSON.stringify({ event: "start", start: { streamSid: "MZ1", callSid: "CA1" } }));
+  aaiWs.emit("message", JSON.stringify({ type: "session.ready" }));
+  aaiWs.emit("message", JSON.stringify({ type: "reply.audio", data: "wholeReply" }));
+  aaiWs.emit("message", JSON.stringify({ type: "reply.done", status: "completed" }));
+
+  assert.equal(twilioWs.sent.some((msg) => msg.event === "clear"), false);
+
+  aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
+});
+
+test("an interrupted reply before Twilio's 'start' drops its buffered audio instead of playing it later", async () => {
+  const twilioWs = new FakeSocket();
+  const aaiWs = new FakeSocket();
+  createBridgeSession({ twilioWs, token: "tok", WebSocketImpl: fakeWebSocketImpl(aaiWs), systemPrompt: "be a caller", silenceTimeoutMs: 0 });
+  aaiWs.emit("open");
+  aaiWs.emit("message", JSON.stringify({ type: "session.ready" }));
+  aaiWs.emit("message", JSON.stringify({ type: "reply.audio", data: "cancelledGreeting" }));
+  aaiWs.emit("message", JSON.stringify({ type: "reply.done", status: "interrupted" }));
+
+  twilioWs.emit("message", JSON.stringify({ event: "start", start: { streamSid: "MZ1", callSid: "CA1" } }));
+  assert.equal(twilioWs.sent.some((msg) => msg.event === "media"), false);
+
+  aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
+});
+
 test("silence timeout ends the call when neither leg carries audible audio", async () => {
   const twilioWs = new FakeSocket();
   const aaiWs = new FakeSocket();

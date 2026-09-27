@@ -36,16 +36,14 @@ const STREAM_PATH = "/v1/qualeval/target-agent-stream";
 // "[no-call-sid]" through hangup and "twilio event start" was never logged),
 // "start" was lost, streamSid was never learned, and every reply.audio chunk
 // sat in pendingReplyAudio forever - real callers heard only silence even
-// though AssemblyAI heard them and replied. QualEval-placed test calls hid
-// this, since their target-agent audio reaches the persona leg through
-// callBridgeBroker.js's onReplyAudio, which never needs streamSid.
+// though AssemblyAI heard them and replied.
 //
 // The bridge session is created immediately regardless of whether this call
 // turns out to be a QualEval-placed run or a real external caller, so a real
-// caller's greeting is never delayed. Claiming a pending run for cross-wiring
-// (server/qualeval/callBridgeBroker.js - see bridgeSession.js's header
-// comment for why that's needed at all) happens concurrently and only wires
-// in extra audio hand-off if/when it resolves.
+// caller's greeting is never delayed. Claiming a pending QualEval run
+// (server/qualeval/callBridgeBroker.js) happens concurrently and only links
+// this call's production-call record and evaluation to that run - audio
+// always travels over the phone line itself.
 export function attachTargetAgentStreamServer(
   httpServer,
   {
@@ -53,9 +51,7 @@ export function attachTargetAgentStreamServer(
     getActiveVariant = demoAgentConfig.getActiveVariant,
     createSession = createBridgeSession,
     waitForClaimableRun = broker.waitForClaimableRun,
-    registerTargetLeg = broker.registerTargetLeg,
     releaseRun = broker.releaseRun,
-    forwardToPersona = broker.forwardToPersona,
     finishCall = finishProductionCall,
     evaluateCall = evaluateInboundCall,
     createRecorder = () => createCallRecorder(DEFAULT_MAX_DURATION_MS),
@@ -134,7 +130,7 @@ export function attachTargetAgentStreamServer(
       }
       twilioWs.off("message", bufferMessage);
       console.log(`QualEval target-agent bridge: bridging as variant "${variant.key}" (agent ${variant.agentId})`);
-      const session = createSession({
+      createSession({
         twilioWs,
         token,
         agentId: variant.agentId,
@@ -142,9 +138,6 @@ export function attachTargetAgentStreamServer(
         // comment for why the two directions map roles oppositely.
         transcriptUserRole: "user",
         transcriptAgentRole: "agent",
-        onReplyAudio: (audio) => {
-          if (claimedRunId) forwardToPersona(claimedRunId, audio);
-        },
         onIncomingAudio: (audio, tMs) => recorder.addFrame(audio, tMs),
         onOutgoingAudio: (audio, tMs) => recorder.addFrame(audio, tMs),
         onFinished,
@@ -158,8 +151,7 @@ export function attachTargetAgentStreamServer(
       const runId = await waitForClaimableRun();
       if (runId && !sessionFinished) {
         claimedRunId = runId;
-        registerTargetLeg(runId, session.injectAudio);
-        console.log(`QualEval target-agent bridge: cross-wired to persona leg for run ${runId}`);
+        console.log(`QualEval target-agent bridge: linked to QualEval run ${runId}`);
       } else if (runId) {
         // The session already ended while we were still waiting to claim -
         // release immediately so this run's entry doesn't leak.
