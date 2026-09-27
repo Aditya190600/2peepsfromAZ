@@ -1,10 +1,22 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "./Chrome";
 import { getQualevalConfig, listDemoAgents, setActiveDemoAgent } from "./qualevalClient";
-import { formatPhoneNumber, groupByDomain } from "./settingsView";
+import {
+  buildPhoneNumberOptions,
+  CUSTOM_PHONE_OPTION,
+  formatPhoneNumber,
+  groupByDomain,
+  resolvePhoneMenuSelection,
+} from "./settingsView";
 import PersonaPicker from "./PersonaPicker";
+import PhoneNumberMenu from "./PhoneNumberMenu";
 import { findPersona } from "./personas";
 import { getDefaultPersonaId, setDefaultPersonaId } from "./personaPreference";
+import {
+  getDefaultPhoneNumber,
+  isValidPhoneNumber,
+  setDefaultPhoneNumber,
+} from "./phoneNumberPreference";
 import "./App.css";
 
 function NumberCard({ title, number, children }) {
@@ -72,11 +84,34 @@ export default function Settings({ path, navigate }) {
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
   const [personaNotice, setPersonaNotice] = useState(null);
+  const [phoneOptions, setPhoneOptions] = useState([]);
+  const [phoneSelectedId, setPhoneSelectedId] = useState(CUSTOM_PHONE_OPTION);
+  const [phoneCustomValue, setPhoneCustomValue] = useState("");
+  const [phoneNotice, setPhoneNotice] = useState(null);
+  const [phoneError, setPhoneError] = useState(null);
 
   useEffect(() => {
     getQualevalConfig()
-      .then((body) => {
+      .then(async (body) => {
         setConfig(body);
+        let numbers = [];
+        if (body.isOperator) {
+          try {
+            const resp = await fetch("/v1/telephony/numbers");
+            if (resp.ok) numbers = await resp.json();
+          } catch {
+            // optional enrichment for the phone menu
+          }
+        }
+        const options = buildPhoneNumberOptions({
+          agentPhoneNumber: body.agentPhoneNumber,
+          personaPhoneNumber: body.personaPhoneNumber,
+          importedNumbers: numbers,
+        });
+        setPhoneOptions(options);
+        const selection = resolvePhoneMenuSelection(options, getDefaultPhoneNumber());
+        setPhoneSelectedId(selection.selectedId);
+        setPhoneCustomValue(selection.customValue);
         if (!body.isOperator) return;
         return listDemoAgents().then((agentsBody) => {
           setAgents(agentsBody.variants);
@@ -90,6 +125,41 @@ export default function Settings({ path, navigate }) {
     setPersonaId(id);
     setDefaultPersonaId(id);
     setPersonaNotice(`${findPersona(id).label} is now your default call persona on Voice Compliance.`);
+  };
+
+  const persistPhoneSelection = (selectedId, customValue) => {
+    setPhoneError(null);
+    const option = phoneOptions.find((entry) => entry.id === selectedId);
+    const nextNumber = selectedId === CUSTOM_PHONE_OPTION ? customValue : option?.number;
+    if (!isValidPhoneNumber(nextNumber)) {
+      setPhoneError("Enter a phone number in E.164 format, e.g. +18038245760.");
+      return;
+    }
+    setDefaultPhoneNumber(nextNumber);
+    setPhoneNotice(
+      `${formatPhoneNumber(nextNumber)} is now your default target number for new Qualitative Evals.`,
+    );
+  };
+
+  const onSelectPhone = (selectedId) => {
+    setPhoneSelectedId(selectedId);
+    if (selectedId === CUSTOM_PHONE_OPTION) return;
+    const option = phoneOptions.find((entry) => entry.id === selectedId);
+    if (option?.number) {
+      setPhoneCustomValue(option.number);
+      persistPhoneSelection(selectedId, option.number);
+    }
+  };
+
+  const onCustomPhoneChange = (value) => {
+    setPhoneCustomValue(value);
+    if (phoneSelectedId !== CUSTOM_PHONE_OPTION) return;
+    if (!value.trim()) {
+      setPhoneNotice(null);
+      setPhoneError(null);
+      return;
+    }
+    if (isValidPhoneNumber(value)) persistPhoneSelection(CUSTOM_PHONE_OPTION, value);
   };
 
   const onMakeLive = async (agent) => {
@@ -115,8 +185,8 @@ export default function Settings({ path, navigate }) {
     <AppShell path={path} navigate={navigate} title="Settings">
       <div className="qualeval-page">
         <p className="app-lede">
-          Choose your default Voice Compliance call persona here. QualEval operators can also switch which
-          target agent answers the demo phone number.
+          Choose your default Voice Compliance call persona and Qualitative Evals target phone number here.
+          Operators can also switch which target agent answers the demo phone number.
         </p>
 
         <section className="settings-section">
@@ -133,10 +203,35 @@ export default function Settings({ path, navigate }) {
           <PersonaPicker selectedId={personaId} onSelect={onSelectPersona} />
         </section>
 
+        <section className="settings-section">
+          <h2>Target phone number</h2>
+          <p className="pack-note">
+            Pre-fills the target agent phone number when you create a new Qualitative Evals evaluation.
+            Saved in this browser only.
+          </p>
+          {phoneOptions.length > 0 ? (
+            <PhoneNumberMenu
+              options={phoneOptions}
+              selectedId={phoneSelectedId}
+              customValue={phoneCustomValue}
+              onSelect={onSelectPhone}
+              onCustomChange={onCustomPhoneChange}
+            />
+          ) : (
+            <p className="pack-note">Loading phone number options…</p>
+          )}
+          {phoneError && <p className="error-banner">{phoneError}</p>}
+          {phoneNotice && (
+            <p className="settings-notice" role="status">
+              {phoneNotice}
+            </p>
+          )}
+        </section>
+
         {isOperator && (
           <>
             <section className="settings-section">
-              <h2>Phone numbers</h2>
+              <h2>Deployment phone numbers</h2>
               <div className="settings-number-grid">
                 <NumberCard title="Demo agent number" number={agentNumber}>
                   {liveAgent ? (
