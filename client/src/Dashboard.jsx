@@ -1064,7 +1064,18 @@ export default function Dashboard({ navigate, path }) {
                 {recordingUrl && (
                   <div className="section-block recording-block">
                     <h4>Recording</h4>
-                    <AudioPlayer src={recordingUrl} compact />
+                    <AudioPlayer
+                      src={recordingUrl}
+                      turns={lastSession?.turns ?? null}
+                      offsetMs={lastSession?.recordingOffsetMs ?? 0}
+                      markers={report ? findingsToMarkers(report.findings) : []}
+                      waveformBlob={recordedBlob}
+                    />
+                    <p className="hint">
+                      {report
+                        ? "Click a marker on the waveform to jump to a flagged finding (red marks a flagged finding)."
+                        : "Click the waveform to seek — agent speech is the upper track, your mic the lower track."}
+                    </p>
                     <div className="call-row">
                       <a className="btn btn-outline" href={recordingUrl} download={`complyline-call-${Date.now()}.webm`}>
                         Download recording
