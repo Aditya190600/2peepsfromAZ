@@ -138,9 +138,11 @@ export function createBridgeSession({
   let stopGraceTimer = null;
   let silenceTimer = null;
   // End-of-conversation hangup (endCallTool): null, then "requested" once
-  // the caller's agent calls END_CALL_TOOL, "playing" once that reply has
-  // finished generating and we're waiting for Twilio to finish playing it
-  // (the END_CALL_MARK echo), then "ending" once session.end is sent.
+  // the caller's agent calls END_CALL_TOOL, then either "playing" (that
+  // reply finished and we're waiting for Twilio to finish playing it - the
+  // END_CALL_MARK echo) or "farEndTalking" (the far end talked over it and
+  // we're waiting for its turn to end), then "ending" once session.end is
+  // sent.
   let hangup = null;
   let hangupTimer = null;
   // AssemblyAI's session.ready/reply.audio and Twilio's Media Streams "start"
@@ -362,6 +364,7 @@ export function createBridgeSession({
         break;
       case "transcript.user":
         addTurn(transcriptUserRole, msg.text);
+        if (hangup === "farEndTalking") endCallNow();
         break;
       case "transcript.agent":
         addTurn(transcriptAgentRole, msg.text);
@@ -391,14 +394,17 @@ export function createBridgeSession({
       case "reply.done":
         log("aai reply.done status", msg.status);
         if (hangup === "requested") {
-          // Interrupted means the far end started talking over the
-          // goodbye, so the conversation isn't over after all - drop the
-          // hangup (AssemblyAI's guidance is to discard a pending tool
-          // result on an interrupted reply) and let the call continue.
+          // Interrupted means the far end talked over our goodbye - on a
+          // real call that is almost always its own farewell ("thanks for
+          // calling, have a great day"), reproduced live 2026-09-27. An
+          // earlier version cancelled the hangup here; the caller's agent
+          // then answered the farewell without calling end_call again and
+          // the line sat open until a silence/duration backstop. Our side
+          // has already decided the call is over, so let the far end finish
+          // its turn and hang up then, rather than cutting it off mid-word.
           if (msg.status === "interrupted") {
-            log("end_call cancelled - reply interrupted");
-            hangup = null;
-            clearTimeout(hangupTimer);
+            log("end_call reply interrupted - hanging up once the far end finishes its turn");
+            hangup = "farEndTalking";
           } else {
             hangUpAfterPlayout();
           }

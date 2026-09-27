@@ -593,22 +593,31 @@ test("end_call hangs up only after Twilio has played the goodbye out, then ends 
   assert.equal(twilioWs.readyState, twilioWs.CLOSED);
 });
 
-test("an interrupted end_call reply cancels the hangup - the far end is still talking", (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  const { twilioWs, aaiWs, result } = startEndCallBridge({ hangupTimeoutMs: 1000 });
+test("an end_call reply interrupted by the far end's farewell hangs up once the far end finishes its turn", () => {
+  const { twilioWs, aaiWs, result } = startEndCallBridge();
   aaiWs.emit("message", JSON.stringify({ type: "tool.call", call_id: "c1", name: "end_call", arguments: {} }));
   aaiWs.emit("message", JSON.stringify({ type: "reply.done", status: "interrupted" }));
 
-  assert.equal(twilioWs.sent.some((msg) => msg.event === "mark"), false);
-  t.mock.timers.tick(5000);
-  assert.equal(result.finished, null);
+  // The far end is still mid-sentence - don't cut it off.
   assert.equal(aaiWs.sent.some((msg) => msg.type === "session.end"), false);
+  assert.equal(twilioWs.sent.some((msg) => msg.event === "mark"), false);
+  assert.equal(result.finished, null);
 
-  // A later, uninterrupted end_call still works.
-  aaiWs.emit("message", JSON.stringify({ type: "tool.call", call_id: "c2", name: "end_call", arguments: {} }));
-  aaiWs.emit("message", JSON.stringify({ type: "reply.done", status: "completed" }));
-  twilioWs.emit("message", JSON.stringify({ event: "mark", streamSid: "MZ1", mark: { name: "end_call" } }));
+  aaiWs.emit("message", JSON.stringify({ type: "transcript.user", text: "Thanks for calling, have a great day." }));
+  assert.deepEqual(aaiWs.sent.at(-1), { type: "session.end" });
   aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
+  assert.equal(result.finished.reason, "end_call");
+  assert.equal(result.finished.turns.at(-1).text, "Thanks for calling, have a great day.");
+});
+
+test("an interrupted end_call still hangs up on the timeout if the far end's turn never lands", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { aaiWs, result } = startEndCallBridge({ hangupTimeoutMs: 1000 });
+  aaiWs.emit("message", JSON.stringify({ type: "tool.call", call_id: "c1", name: "end_call", arguments: {} }));
+  aaiWs.emit("message", JSON.stringify({ type: "reply.done", status: "interrupted" }));
+  t.mock.timers.tick(1000);
+  assert.deepEqual(aaiWs.sent.at(-1), { type: "session.end" });
+  t.mock.timers.tick(10);
   assert.equal(result.finished.reason, "end_call");
 });
 
