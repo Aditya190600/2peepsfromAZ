@@ -51,12 +51,16 @@ function callRow(row) {
     criterionResults: row.criterion_results ?? [],
     evidenceQuotes: row.evidence_quotes ?? [],
     evaluationError: row.evaluation_error,
+    complianceStatus: row.compliance_status,
+    complianceReport: row.compliance_report,
+    complianceError: row.compliance_error,
+    analysisStartedAt: row.analysis_started_at,
     createdAt: row.created_at,
   };
 }
 
 const RETURNING =
-  "id, twilio_call_sid, direction, from_number, to_number, caller_name, started_at, ended_at, end_reason, transcript, variant_key, agent_id, audio_ref, qualeval_run_id, evaluation_status, verdict, assessment, criterion_results, evidence_quotes, evaluation_error, created_at";
+  "id, twilio_call_sid, direction, from_number, to_number, caller_name, started_at, ended_at, end_reason, transcript, variant_key, agent_id, audio_ref, qualeval_run_id, evaluation_status, verdict, assessment, criterion_results, evidence_quotes, evaluation_error, compliance_status, compliance_report, compliance_error, analysis_started_at, created_at";
 
 export async function recordProductionCall(fields, env = process.env, pool = getPool(env)) {
   if (!pool || !fields?.twilioCallSid) return null;
@@ -152,6 +156,48 @@ function transcriptForClient(value) {
   if (Array.isArray(value)) return { turns: value };
   if (value && Array.isArray(value.turns)) return value;
   return value ?? null;
+}
+
+export async function recordProductionCallCompliance(fields, env = process.env, pool = getPool(env)) {
+  if (!pool || !fields?.twilioCallSid) return null;
+  const { rows } = await pool.query(
+    `update production_calls set
+       compliance_status = $2,
+       compliance_report = $3::jsonb,
+       compliance_error = $4
+     where twilio_call_sid = $1
+     returning ${RETURNING}`,
+    [
+      fields.twilioCallSid,
+      fields.complianceStatus ?? null,
+      fields.complianceReport == null ? null : JSON.stringify(fields.complianceReport),
+      fields.complianceError ?? null,
+    ],
+  );
+  return callRow(rows[0]);
+}
+
+// Clears both post-call results and stamps when they (re)started, so the
+// Phone Evals page shows them as running rather than missing.
+export async function markProductionCallAnalysisStarted(twilioCallSid, env = process.env, pool = getPool(env)) {
+  if (!pool || !twilioCallSid) return null;
+  const { rows } = await pool.query(
+    `update production_calls set
+       analysis_started_at = now(),
+       evaluation_status = null,
+       verdict = null,
+       assessment = null,
+       criterion_results = null,
+       evidence_quotes = null,
+       evaluation_error = null,
+       compliance_status = null,
+       compliance_report = null,
+       compliance_error = null
+     where twilio_call_sid = $1
+     returning ${RETURNING}`,
+    [twilioCallSid],
+  );
+  return callRow(rows[0]);
 }
 
 // Last 10 digits so +1 (312) 800-3792 matches +13128003792.

@@ -3907,6 +3907,27 @@ a.sample-report-cta {
 }
 
 /* --- Phone Evals (client/src/PhoneEvals.jsx) --- */
+.phone-evals-steps {
+  margin: 0 0 16px;
+  padding-left: 20px;
+  max-width: 640px;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.phone-evals-steps li + li {
+  margin-top: 6px;
+}
+
+.phone-evals-steps strong {
+  color: var(--ink);
+}
+
+.phone-evals-section {
+  margin-top: 28px;
+}
+
 .phone-evals-section-head {
   display: flex;
   align-items: center;
@@ -3919,32 +3940,171 @@ a.sample-report-cta {
   margin: 0;
 }
 
-.phone-evals-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.phone-evals-call {
+/* Mail-client layout: call list on the left, the picked call's report on the right. */
+.phone-evals-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
   border: 1px solid var(--line);
   border-radius: var(--qe-radius);
   background: var(--panel);
-  padding: 16px;
+  overflow: hidden;
+  align-items: stretch;
 }
 
-.phone-evals-call-head {
+.phone-evals-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-right: 1px solid var(--line);
+  max-height: 78vh;
+  overflow-y: auto;
+}
+
+.phone-evals-list li + li {
+  border-top: 1px solid var(--line);
+}
+
+.phone-evals-item {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: 12px 14px 12px 12px;
+  border: none;
+  border-left: 3px solid transparent;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.phone-evals-item:hover {
+  background: var(--surface-hover);
+}
+
+.phone-evals-item.is-selected {
+  background: var(--accent-soft);
+  border-left-color: var(--accent);
+}
+
+.phone-evals-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.phone-evals-item-top {
+  display: flex;
   align-items: baseline;
-  gap: 4px 12px;
-  margin-bottom: 12px;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.phone-evals-item-caller {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phone-evals-item-when {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.phone-evals-item-agent {
+  color: var(--muted);
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phone-evals-item-status {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.phone-evals-item-status.is-flag {
+  color: var(--flag);
+}
+
+.phone-evals-item-status.is-pass {
+  color: var(--pass);
+}
+
+.phone-evals-item-status.is-pending {
+  color: var(--connecting);
+}
+
+.phone-evals-item-status.is-muted {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.phone-evals-detail {
+  min-width: 0;
+  padding: 18px 22px 22px;
+}
+
+.phone-evals-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.phone-evals-detail-head .btn-sm {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.phone-evals-detail-head h2 {
+  margin: 0 0 2px;
+  font-size: 20px;
 }
 
 .phone-evals-meta {
+  margin: 0;
   color: var(--muted);
   font-size: 13px;
 }
 
-.phone-evals-call-head .qe-eval-when {
-  margin-left: auto;
+.phone-evals-tabs {
+  margin: 0 0 16px;
+}
+
+/* RunResult's divider separates it from a QualEval scenario card; here the tab bar already does. */
+.phone-evals-detail .qe-run-result {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.phone-evals-tab-badge {
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+@media (max-width: 760px) {
+  .phone-evals-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .phone-evals-list {
+    max-height: 40vh;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .phone-evals-detail {
+    padding: 16px;
+  }
 }

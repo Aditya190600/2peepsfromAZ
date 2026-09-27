@@ -102,7 +102,7 @@ test("a claimed QualEval run is linked onto the production call and its evaluati
   const httpServer = new EventEmitter();
   let sessionArgs;
   let finished;
-  let evaluated;
+  let analyzed;
   const released = [];
   const wss = attachTargetAgentStreamServer(httpServer, {
     getActiveVariant: async () => ({ key: "compliant", agentId: "agent_compliant" }),
@@ -117,8 +117,8 @@ test("a claimed QualEval run is linked onto the production call and its evaluati
       finished = fields;
       return {};
     },
-    evaluateCall: async (fields) => {
-      evaluated = fields;
+    analyzeCall: async (fields) => {
+      analyzed = fields;
     },
     recordingsReady: () => false,
   });
@@ -128,7 +128,7 @@ test("a claimed QualEval run is linked onto the production call and its evaluati
 
   await sessionArgs.onFinished({ turns: [], callSid: "CA1", reason: "session.ended" });
   assert.equal(finished.qualevalRunId, "run_xyz");
-  assert.equal(evaluated.qualevalRunId, "run_xyz");
+  assert.equal(analyzed.qualevalRunId, "run_xyz");
   assert.deepEqual(released, ["run_xyz"]);
 });
 
@@ -208,7 +208,7 @@ test("writes the transcript onto the production call when the inbound bridge end
   const httpServer = new EventEmitter();
   let sessionArgs;
   let finished;
-  let evaluated;
+  let analyzed;
   const wss = attachTargetAgentStreamServer(httpServer, {
     getActiveVariant: async () => ({ key: "compliant", agentId: "agent_1" }),
     mintToken: async () => "tok",
@@ -219,10 +219,10 @@ test("writes the transcript onto the production call when the inbound bridge end
     waitForClaimableRun: async () => null,
     finishCall: async (fields) => {
       finished = fields;
-      return { toNumber: "+18038245760", fromNumber: "+13128003792" };
+      return { toNumber: "+18038245760", fromNumber: "+13128003792", startedAt: "2026-09-27T20:00:00.000Z" };
     },
-    evaluateCall: async (call) => {
-      evaluated = call;
+    analyzeCall: async (call) => {
+      analyzed = call;
     },
   });
   connect(wss, twilioWs);
@@ -238,14 +238,15 @@ test("writes the transcript onto the production call when the inbound bridge end
   assert.equal(finished.audioRef, null);
   assert.equal(finished.twilioCallSid, "CA999");
   assert.deepEqual(finished.transcript, [{ speaker: "user", text: "This is Rastopopulous" }]);
-  // A direct call is scored for Phone Evals against the answering agent, with
+  // A direct call is analyzed for Phone Evals against the answering agent, with
   // no dialed-number lookup that could attribute it to a QualEval evaluation.
-  assert.deepEqual(evaluated, {
+  assert.deepEqual(analyzed, {
     twilioCallSid: "CA999",
     variantKey: "compliant",
     transcript: [{ speaker: "user", text: "This is Rastopopulous" }],
     qualevalRunId: null,
     fromNumber: "+13128003792",
+    startedAt: "2026-09-27T20:00:00.000Z",
   });
 });
 
@@ -279,7 +280,7 @@ test("uploads a mixed WAV for an inbound call and stores its audio path", async 
       finished = fields;
       return { toNumber: "+18038245760" };
     },
-    evaluateCall: async () => {},
+    analyzeCall: async () => {},
   });
   connect(wss, twilioWs);
   await new Promise((resolve) => setImmediate(resolve));
