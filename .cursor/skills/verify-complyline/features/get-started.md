@@ -1,36 +1,30 @@
 # Get started
 
-Get started takes a judge from the landing page to `/home`, the Northstar Voice 12-session summary. It must not request the microphone.
+Get started takes a judge from the landing page to `/try`, the Voice Compliance page. It must not request the microphone until the judge clicks **Start call**.
 
 ## Sub-features
 
-- `get-started-cta` moves from `/` to `/home`.
-- `get-started-tenant` shows Northstar Voice tenant copy on arrival.
-- `get-started-no-mic` does not show Start call and does not prompt for `getUserMedia`.
-- `get-started-analyzing` starts the 12-session fleet on that view.
+- `get-started-cta` moves from `/` to `/try`. With Clerk on, the signed-out `Get started` nav button opens the sign-in modal, which redirects to `/try`. With Clerk off there is no `Get started` button; the landing page's `Run this sample yourself` CTA goes to `/try` instead.
+- `get-started-no-mic` does not prompt for `getUserMedia` on arrival.
 
 ## How to get to it (user POV)
 
-- Choose **Get started** on the landing page.
-- Type `/home` in the address bar.
+- Choose **Get started** (Clerk on) or **Run this sample yourself** on the landing page.
+- Signed in, choose **Go to app** in the landing page's top-right nav.
 
 ## Driving it with cursor-ide-browser
 
 Preconditions:
 
 - Doctor is green at `http://127.0.0.1:5173`.
-- You are not on a leftover `/try` tab from another run.
 
-- **Open landing.** Navigate to `http://127.0.0.1:5173/`. Snapshot shows heading `Know what your voice agent said before your lawyer finds out.` and a button `Get started`.
-- **Choose Get started.** Click `Get started`. URL becomes `/home`. The page shows `Reviewing sessions for Northstar Voice` and `legal@northstarvoice.com`.
-- **No mic.** There is no `Start call` control. No browser permission prompt.
-- **Fleet started.** The report panel shows `Analyzing…` with a session count, or a `Fleet compliance report` with a compliance rate. Capture before leaving.
-- **Typed URL.** In a fresh tab or after returning to `/`, navigate to `http://127.0.0.1:5173/home`. Same tenant copy and fleet behavior.
-- **Proof.** Save snapshot and screenshot to `artifacts/get-started/`. Both show ComplyLine, Northstar Voice, and either Analyzing or a numeric compliance rate. Record the URL in `artifacts/get-started/url.txt`.
+- **Open landing.** Navigate to `http://127.0.0.1:5173/`. Snapshot shows `Run this sample yourself` (and `Get started` when Clerk is on and signed out).
+- **Choose the CTA.** Click `Run this sample yourself`. URL becomes `/try`. The nav rail marks `Voice Compliance` active and the page shows a `Start call` control.
+- **No mic.** No browser permission prompt before **Start call** is clicked.
+- **Proof.** Save snapshot and screenshot to `artifacts/get-started/`. Record the URL in `artifacts/get-started/url.txt`.
 
 ## Gotchas
 
-- `/try` is the lab. Nav **Try** uses that path. Do not count it as Get started.
-- Auto-run of 12 sessions hits AssemblyAI LLM Gateway with a process-wide mutex. Waiting for `83%` can take minutes. Arrival + Analyzing is enough to prove navigation; waiting for the fleet headline is the full KPI proof.
+- `/home` (Northstar 12-session summary) is hidden from the nav rail and no longer the Get started target. It still loads by typed URL.
 - `App.jsx` reads the path after `pushState`. A snapshot taken before the SPA finishes can still show Landing.
-- Do not click **Start call** during this recipe. That control lives on `/try` only.
+- Do not click **Start call** during this recipe.

@@ -47,18 +47,18 @@ Pass means: `run/instance.json` PIDs are alive and `GET http://127.0.0.1:5173/` 
 
 ## Drive
 
-Use the Cursor browser MCP (`cursor-ide-browser`): `browser_navigate` → `browser_lock` → `browser_snapshot` / `browser_click` / `browser_take_screenshot` → `browser_lock` unlock when done. Prefer accessible names from the snapshot (`Get started`, `Home`, `Sessions`, `Try`, `Start call`, `Clear history`) over CSS or coordinates. The client is a hand-rolled router (`client/src/App.jsx`): clicks that call `navigate()` use `pushState`, so drive the in-page links, not a full reload, unless you are testing a deep link.
+Use the Cursor browser MCP (`cursor-ide-browser`): `browser_navigate` → `browser_lock` → `browser_snapshot` / `browser_click` / `browser_take_screenshot` → `browser_lock` unlock when done. Prefer accessible names from the snapshot (`Get started`, `Voice Compliance`, `Start call`, `Clear history`) over CSS or coordinates. The client is a hand-rolled router (`client/src/App.jsx`): clicks that call `navigate()` use `pushState`, so drive the in-page links, not a full reload, unless you are testing a deep link.
 
 Routes:
 
 | Path | Screen |
 |---|---|
-| `/` | Landing. `Get started` goes to `/home`. |
-| `/home` | Northstar program queue. Auto-runs the 12 sessions. No mic. |
+| `/` | Landing. `Get started` goes to `/try`. |
+| `/home` | Northstar program queue, hidden from the nav rail (direct URL only). Auto-runs the 12 sessions. No mic. |
 | `/sessions` | Report list from `localStorage`. |
 | `/sessions/:sessionId` | Stored report, or empty copy if missing. |
 | `/try` | Lab (live call, upload, playable samples). |
-| `/dashboard` | Redirects to `/try`. `?view=summary` redirects to `/home`. |
+| `/dashboard` | Redirects to `/try` (any query string). |
 | `/history` | Redirects to `/sessions`. |
 
 `getUserMedia` is requested only after **Start call**. Get started must not prompt for the mic.

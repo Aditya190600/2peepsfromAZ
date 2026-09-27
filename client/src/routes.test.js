@@ -33,14 +33,7 @@ test("session id is decoded after the sessions prefix", () => {
   });
 });
 
-test("legacy dashboard summary lands on home", () => {
-  assert.deepEqual(matchRoute("/dashboard", "?view=summary"), {
-    name: "home",
-    redirect: "/home",
-  });
-});
-
-test("legacy dashboard lab lands on try", () => {
+test("legacy dashboard lands on try", () => {
   assert.deepEqual(matchRoute("/dashboard"), { name: "try", redirect: "/try" });
 });
 

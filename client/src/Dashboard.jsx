@@ -98,6 +98,10 @@ export function sampleLabel(key) {
   return key;
 }
 
+// Packs whose "Verify" self-test is hidden from the Try page (not part of the
+// demo). The pack itself still runs in reports; only its verify entry is hidden.
+const PACK_EVALS_HIDDEN = new Set(["hipaa"]);
+
 export const INDUSTRY_PACKS = [
   {
     id: "hipaa",
@@ -1046,7 +1050,10 @@ export default function Dashboard({ navigate, path }) {
                 Pack catalog did not load. Checkboxes still work. Eval coverage copy may be stale.
               </p>
             )}
-            <PackEvals selectedPacks={selectedPacks} catalog={industryPacks} />
+            <PackEvals
+              selectedPacks={selectedPacks}
+              catalog={industryPacks.filter((pack) => !PACK_EVALS_HIDDEN.has(pack.id))}
+            />
           </div>
 
           <ProviderSettings />

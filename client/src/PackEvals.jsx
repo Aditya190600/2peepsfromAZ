@@ -14,6 +14,7 @@ export default function PackEvals({ selectedPacks, catalog }) {
   }, [selectedKey]);
 
   if (selected.length === 0) {
+    if (selectedPacks.length > 0) return null;
     return <p className="pack-note">Check a pack to verify its identifier evals.</p>;
   }
 
