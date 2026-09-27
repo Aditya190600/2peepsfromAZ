@@ -874,6 +874,7 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
   const hasUnfinishedRun = (evaluation?.scenarios ?? []).some((s) => runIsUnfinished(s.runs?.[0]));
   useEffect(() => {
     if (!hasUnfinishedRun) return undefined;
+    load();
     const timer = setInterval(load, RUN_POLL_INTERVAL_MS);
     return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
