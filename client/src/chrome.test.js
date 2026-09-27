@@ -17,16 +17,16 @@ describe("PRODUCT_NAV", () => {
     );
   });
 
-  it("keeps Home, Compliance Examples, Sessions, Numbers, API Keys, Evals present but hidden", () => {
+  it("keeps Compliance Examples, Sessions, Numbers, API Keys, Evals present but hidden", () => {
     const hiddenLabels = PRODUCT_NAV_ALL.filter((item) => item.hidden).map((item) => item.label);
-    assert.deepEqual(hiddenLabels, ["Home", "Compliance Examples", "Sessions", "Numbers", "API Keys", "Evals"]);
+    assert.deepEqual(hiddenLabels, ["Compliance Examples", "Sessions", "Numbers", "API Keys", "Evals"]);
   });
 
   it("marks Sessions active on a session report URL", () => {
     const sessions = PRODUCT_NAV_ALL.find((item) => item.href === "/sessions");
     assert.equal(sessions.match("/sessions"), true);
     assert.equal(sessions.match("/sessions/sess_tcpa_04"), true);
-    assert.equal(sessions.match("/home"), false);
+    assert.equal(sessions.match("/try"), false);
   });
 
   it("does not invent Login or Pattern packs", () => {

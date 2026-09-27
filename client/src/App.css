@@ -220,56 +220,6 @@ body {
   max-width: 62ch;
 }
 
-.home-overview-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 16px;
-  margin: 0 0 32px;
-}
-
-.home-overview-card {
-  display: block;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 16px 18px;
-  text-decoration: none;
-  color: inherit;
-}
-
-.home-overview-card:hover {
-  border-color: var(--line-strong);
-}
-
-.home-overview-shot {
-  display: block;
-  width: 100%;
-  max-width: 200px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  margin-bottom: 12px;
-}
-
-.home-overview-card h3 {
-  margin: 0 0 6px;
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.home-overview-what {
-  margin: 0 0 8px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--ink);
-}
-
-.home-overview-click {
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--muted);
-}
-
 .app-rail {
   background: var(--paper);
   border-left: 1px solid var(--line);
@@ -670,6 +620,17 @@ button.site-nav-link {
   font-family: var(--mono);
 }
 
+.brand-tagline {
+  font-family: var(--qe-heading);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  text-wrap: balance;
+  margin: 8px 0 0;
+}
+
 .tagline {
   font-size: 15px;
   line-height: 1.6;
@@ -724,6 +685,18 @@ button.site-nav-link {
   .layout,
   .app-shell .layout {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .site-nav {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .site-nav .site-nav-links {
+    flex-wrap: wrap;
+    gap: 8px 20px;
   }
 }
 
@@ -3360,27 +3333,12 @@ button.site-nav-link {
 
 /* --- Shared visual-consistency pass ---
    Brings QualEval's elevated-card / Space Grotesk look (see the block above)
-   to Home, Try (Compliance Lab, including its Compliance Examples tab), Compliance
+   to Try (Compliance Lab, including its Compliance Examples tab), Compliance
    Examples, and the splash page. Scoped to .styled-page so pages not part of
    this pass (SessionInspector, Evals, ApiKeys, PhoneNumbers, History) are
    untouched - only the shared class names below pick up the new look. */
 .styled-page .panel,
-.styled-page .home-overview-card,
 .styled-page .trust-strip-item {
-  border-radius: var(--qe-radius-sm);
-}
-
-.styled-page .home-overview-card {
-  background: linear-gradient(180deg, var(--panel-gradient-start), var(--panel-gradient-end));
-  transition: transform 0.15s, box-shadow 0.15s;
-}
-
-.styled-page .home-overview-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--qe-glow);
-}
-
-.styled-page .home-overview-shot {
   border-radius: var(--qe-radius-sm);
 }
 
