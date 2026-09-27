@@ -460,8 +460,8 @@ export function RunResult({ run }) {
             markers={runToAudioMarkers(run)}
           />
           <p className="hint">
-            Click a transcript timestamp or a waveform marker to seek. Red markers show evaluation
-            evidence for failed criteria.
+            Click a transcript timestamp or a waveform marker to seek. Red markers show why a
+            criterion failed.
           </p>
         </div>
       )}
