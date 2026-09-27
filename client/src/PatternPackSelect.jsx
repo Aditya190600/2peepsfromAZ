@@ -1,5 +1,5 @@
 /**
- * Shared industry pattern-pack checkboxes with hover/focus identifier tooltips.
+ * Shared industry pattern-pack checkboxes with hover-only identifier tooltips.
  * A checked pack shows its own `asserts` copy directly under its checkbox line.
  */
 
