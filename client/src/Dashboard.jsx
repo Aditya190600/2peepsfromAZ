@@ -855,6 +855,14 @@ export default function Dashboard({ navigate, path }) {
 
   const reportLoading = liveLoading || pasteLoading || uploadStatus === "uploading";
   const reportError = liveError || pasteError || (uploadStatus === "error" ? uploadError : null);
+  // This player always seeks with the live call's recordingOffsetMs and draws
+  // that call's turns. A page-level report only belongs on it once analysis
+  // has finished and the report is for this same session — a previous call's
+  // findings, or a file-relative transcription from "Analyze this recording",
+  // would shift, drop, or seek to the wrong place. While analysis is in
+  // flight, show none, same as reportView prefers loading over a stale report.
+  const recordingReport =
+    !reportLoading && report?.sessionId && report.sessionId === lastSession?.sessionId ? report : null;
 
   useEffect(() => {
     if (!reportLoading && !report) return;
@@ -1064,7 +1072,18 @@ export default function Dashboard({ navigate, path }) {
                 {recordingUrl && (
                   <div className="section-block recording-block">
                     <h4>Recording</h4>
-                    <AudioPlayer src={recordingUrl} compact />
+                    <AudioPlayer
+                      src={recordingUrl}
+                      turns={lastSession?.turns ?? null}
+                      offsetMs={lastSession?.recordingOffsetMs ?? 0}
+                      markers={recordingReport ? findingsToMarkers(recordingReport.findings) : []}
+                      waveformBlob={recordedBlob}
+                    />
+                    <p className="hint">
+                      {recordingReport
+                        ? "Click a marker on the waveform to jump to a flagged finding (red marks a flagged finding)."
+                        : "Click the waveform to seek — agent speech is the upper track, your mic the lower track."}
+                    </p>
                     <div className="call-row">
                       <a className="btn btn-outline" href={recordingUrl} download={`complyline-call-${Date.now()}.webm`}>
                         Download recording

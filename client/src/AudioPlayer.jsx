@@ -143,6 +143,9 @@ export default function AudioPlayer({
   markers = [],
   offsetMs = 0,
   turns = null,
+  // When src is a blob: URL, callers that still hold the Blob can pass it here
+  // so waveform decode reads bytes directly instead of fetch(blob:).
+  waveformBlob = null,
 }) {
   const internalRef = useRef(null);
   const ref = audioRef ?? internalRef;
@@ -189,8 +192,13 @@ export default function AudioPlayer({
     let ctx = null;
     (async () => {
       try {
-        const res = await fetch(src);
-        const buf = await res.arrayBuffer();
+        let buf;
+        if (waveformBlob) {
+          buf = await waveformBlob.arrayBuffer();
+        } else {
+          const res = await fetch(src);
+          buf = await res.arrayBuffer();
+        }
         const AudioContextImpl = window.AudioContext || window.webkitAudioContext;
         if (!AudioContextImpl) return;
         ctx = new AudioContextImpl();
@@ -206,7 +214,7 @@ export default function AudioPlayer({
     return () => {
       cancelled = true;
     };
-  }, [src, compact]);
+  }, [src, compact, waveformBlob]);
 
   // Speaker split is cheap and uses the already-decoded buffer. `speakerKey`
   // (not the turns array) is the dependency so a new array with the same
