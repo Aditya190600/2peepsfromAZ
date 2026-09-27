@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { dispatchCallPlacement } from "./router.js";
+import { dispatchCallPlacement, reconcileStaleRuns } from "./router.js";
 
 const run = { id: "run_1" };
 const scenario = { id: "scenario_1", evaluationId: "eval_1" };
@@ -114,4 +114,25 @@ test("non-operators get 403 from every demo-agent route and no persona number fr
       else process.env[key] = value;
     }
   }
+});
+
+test("reconcileStaleRuns passes includePending through to expireStaleRuns", async () => {
+  let options;
+  await reconcileStaleRuns({
+    includePending: false,
+    expireStaleRuns: async (opts) => {
+      options = opts;
+      return [];
+    },
+  });
+  assert.deepEqual(options, { includePending: false });
+});
+
+test("reconcileStaleRuns never throws, so a reconciliation failure can't fail the read it precedes", async () => {
+  await reconcileStaleRuns({
+    includePending: true,
+    expireStaleRuns: async () => {
+      throw new Error("connection terminated unexpectedly");
+    },
+  });
 });

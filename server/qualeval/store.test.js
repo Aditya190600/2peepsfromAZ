@@ -19,7 +19,8 @@ import {
   attachTranscript,
   markRunInProgress,
   markRunError,
-  markRunErrorIfStale,
+  expireStaleRuns,
+  STALE_RUN_AFTER_MS,
   markRunAwaitingEvaluation,
   recordVerdict,
   NOT_CONFIGURED_ERROR,
@@ -179,13 +180,19 @@ function fakePool() {
       row.twilio_call_sid = twilioCallSid;
       return { rows: [row] };
     }
-    if (sql.startsWith("update qualeval_runs") && sql.includes("set verdict = 'error'") && sql.includes("and verdict = 'in_progress'")) {
-      const [id, message] = params;
-      const row = rows.find((r) => r.id === id && r.verdict === "in_progress");
-      if (!row) return { rows: [] };
-      row.verdict = "error";
-      row.error = message;
-      return { rows: [row] };
+    if (sql.startsWith("update qualeval_runs") && sql.includes("case verdict")) {
+      const [pendingCutoff, inProgressCutoff, awaitingCutoff, pendingError, inProgressError, awaitingError] = params;
+      const expired = rows.filter(
+        (r) =>
+          (r.verdict === "pending" && pendingCutoff !== null && r.created_at < pendingCutoff) ||
+          (r.verdict === "in_progress" && r.created_at < inProgressCutoff) ||
+          (r.verdict === "awaiting_evaluation" && (r.call_timestamp ?? r.created_at) < awaitingCutoff),
+      );
+      for (const row of expired) {
+        row.error = { pending: pendingError, in_progress: inProgressError }[row.verdict] ?? awaitingError;
+        row.verdict = "error";
+      }
+      return { rows: expired };
     }
     if (sql.startsWith("update qualeval_runs") && sql.includes("set verdict = 'error'")) {
       const [id, message] = params;
@@ -483,31 +490,77 @@ test("markRunError records a call-placement failure without fabricating a verdic
   assert.equal(updated.error, "Twilio rejected the call");
 });
 
-test("markRunErrorIfStale marks a still-in_progress run as error (the watchdog's normal case)", async () => {
-  const pool = fakePool();
+async function runInState(pool, verdict) {
   const evaluation = await createEvaluation({ clerkUserId: "user_1", name: "Eval" }, {}, pool);
   const [scenario] = await insertScenarios(evaluation.id, [{ name: "S1", evaluationCriteria: [] }], {}, pool);
   const run = await createRun(scenario.id, {}, pool);
-  await markRunInProgress(run.id, "CA123", {}, pool);
+  if (verdict === "in_progress") await markRunInProgress(run.id, "CA123", {}, pool);
+  if (verdict === "awaiting_evaluation") {
+    await markRunInProgress(run.id, "CA123", {}, pool);
+    await markRunAwaitingEvaluation(run.id, { turns: [{ role: "agent", text: "Hi", tMs: 0 }] }, {}, pool);
+  }
+  if (verdict === "pass") {
+    await markRunInProgress(run.id, "CA123", {}, pool);
+    await recordVerdict(run.id, { verdict: "pass", assessment: "Handled well" }, {}, pool);
+  }
+  return run;
+}
 
-  const updated = await markRunErrorIfStale(run.id, "Call did not complete in time", {}, pool);
+const later = (state) => Date.now() + STALE_RUN_AFTER_MS[state] + 1000;
+
+test("expireStaleRuns errors an in_progress run whose call bridge is gone (e.g. server restarted mid-call)", async () => {
+  const pool = fakePool();
+  const run = await runInState(pool, "in_progress");
+
+  const expired = await expireStaleRuns({ now: later("in_progress") }, {}, pool);
+  assert.deepEqual(
+    expired.map((r) => r.id),
+    [run.id],
+  );
+  const updated = await getRun(run.id, null, {}, pool);
   assert.equal(updated.verdict, "error");
-  assert.equal(updated.error, "Call did not complete in time");
+  assert.match(updated.error, /Call did not finish/);
 });
 
-test("markRunErrorIfStale is a no-op once the run already moved past in_progress, never clobbering a real result", async () => {
+test("expireStaleRuns leaves an in_progress run alone while a real call could still be running", async () => {
   const pool = fakePool();
-  const evaluation = await createEvaluation({ clerkUserId: "user_1", name: "Eval" }, {}, pool);
-  const [scenario] = await insertScenarios(evaluation.id, [{ name: "S1", evaluationCriteria: [] }], {}, pool);
-  const run = await createRun(scenario.id, {}, pool);
-  await markRunInProgress(run.id, "CA123", {}, pool);
-  await recordVerdict(run.id, { verdict: "pass", assessment: "Handled well" }, {}, pool);
+  const run = await runInState(pool, "in_progress");
 
-  const result = await markRunErrorIfStale(run.id, "Call did not complete in time", {}, pool);
-  assert.equal(result, null);
+  const expired = await expireStaleRuns({ now: Date.now() + 5 * 60 * 1000 }, {}, pool);
+  assert.deepEqual(expired, []);
+  assert.equal((await getRun(run.id, null, {}, pool)).verdict, "in_progress");
+});
 
-  const stillPassing = await getRun(run.id, null, {}, pool);
-  assert.equal(stillPassing.verdict, "pass");
+test("expireStaleRuns errors a run stranded in awaiting_evaluation", async () => {
+  const pool = fakePool();
+  const run = await runInState(pool, "awaiting_evaluation");
+
+  await expireStaleRuns({ now: later("awaiting_evaluation") }, {}, pool);
+  const updated = await getRun(run.id, null, {}, pool);
+  assert.equal(updated.verdict, "error");
+  assert.match(updated.error, /Evaluation did not finish/);
+});
+
+test("expireStaleRuns errors a stale pending run only when includePending is set", async () => {
+  const pool = fakePool();
+  const run = await runInState(pool, "pending");
+
+  await expireStaleRuns({ includePending: false, now: later("pending") }, {}, pool);
+  assert.equal((await getRun(run.id, null, {}, pool)).verdict, "pending");
+
+  await expireStaleRuns({ includePending: true, now: later("pending") }, {}, pool);
+  const updated = await getRun(run.id, null, {}, pool);
+  assert.equal(updated.verdict, "error");
+  assert.match(updated.error, /Call was never placed/);
+});
+
+test("expireStaleRuns never touches a finished run", async () => {
+  const pool = fakePool();
+  const run = await runInState(pool, "pass");
+
+  const expired = await expireStaleRuns({ now: later("in_progress") }, {}, pool);
+  assert.deepEqual(expired, []);
+  assert.equal((await getRun(run.id, null, {}, pool)).verdict, "pass");
 });
 
 test("markRunAwaitingEvaluation attaches the transcript and moves the run to awaiting_evaluation, never straight to pass/fail", async () => {
