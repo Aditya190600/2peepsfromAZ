@@ -33,6 +33,7 @@ import { parseSessionPaste } from "./sessionPaste";
 import { PERSONAS, findPersona } from "./personas";
 import { getDefaultPersonaId, setDefaultPersonaId } from "./personaPreference";
 import { ExamplesPanels } from "./Examples";
+import { useTour } from "./TourOverlay";
 import "./App.css";
 
 // Folds one streamed check-progress event (see analyzeClient.js's
@@ -529,77 +530,6 @@ export function Report({
   );
 }
 
-// Lightweight step-through walkthrough: no target measurement library, just
-// getBoundingClientRect on the step's own ref plus scrollIntoView. Steps are
-// {ref, title, body} tuples supplied by the caller; the caller also owns
-// switching tabs so a step's target actually exists in the DOM before this
-// renders it.
-function TourOverlay({ steps, stepIndex, onNext, onPrev, onClose }) {
-  const [rect, setRect] = useState(null);
-  const step = steps[stepIndex];
-
-  useEffect(() => {
-    const node = step?.ref?.current;
-    if (!node) {
-      setRect(null);
-      return;
-    }
-    node.scrollIntoView({ behavior: "smooth", block: "center" });
-    const measure = () => setRect(node.getBoundingClientRect());
-    const t = setTimeout(measure, 260); // let the smooth scroll settle
-    window.addEventListener("resize", measure);
-    window.addEventListener("scroll", measure, true);
-    return () => {
-      clearTimeout(t);
-      window.removeEventListener("resize", measure);
-      window.removeEventListener("scroll", measure, true);
-    };
-  }, [step]);
-
-  if (!step) return null;
-
-  const tooltipTop = rect ? Math.min(rect.bottom + 12, window.innerHeight - 160) : window.innerHeight / 2;
-  const tooltipLeft = rect ? Math.min(Math.max(rect.left, 16), window.innerWidth - 316) : 16;
-
-  return (
-    <div className="tour-overlay" role="dialog" aria-label="Guided walkthrough">
-      {rect && (
-        <div
-          className="tour-spotlight"
-          style={{
-            top: rect.top - 6,
-            left: rect.left - 6,
-            width: rect.width + 12,
-            height: rect.height + 12,
-          }}
-        />
-      )}
-      <div className="tour-tooltip" style={{ top: tooltipTop, left: tooltipLeft }}>
-        <p className="tour-step-count">
-          Step {stepIndex + 1} of {steps.length}
-        </p>
-        <h4>{step.title}</h4>
-        <p>{step.body}</p>
-        <div className="tour-tooltip-actions">
-          <button type="button" className="btn btn-outline" onClick={onClose}>
-            Skip tour
-          </button>
-          <div className="tour-tooltip-nav">
-            {stepIndex > 0 && (
-              <button type="button" className="btn btn-outline" onClick={onPrev}>
-                Back
-              </button>
-            )}
-            <button type="button" className="btn btn-primary" onClick={onNext}>
-              {stepIndex === steps.length - 1 ? "Done" : "Next"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function Dashboard({ navigate, path }) {
   const {
     status,
@@ -635,7 +565,7 @@ export default function Dashboard({ navigate, path }) {
   const [industryPacks, setIndustryPacks] = useState(INDUSTRY_PACKS);
   const [packCatalogStale, setPackCatalogStale] = useState(false);
   const [sessionTab, setSessionTab] = useState("live"); // live | webhook | paste
-  const [tourStep, setTourStep] = useState(-1); // -1 = not running
+  const tour = useTour();
   const audioRef = useRef(null);
   const reportHeadingRef = useRef(null);
   const liveHistoryIdRef = useRef(null);
@@ -925,17 +855,8 @@ export default function Dashboard({ navigate, path }) {
 
   const startTour = () => {
     setSessionTab("live");
-    setTourStep(0);
+    tour.start(tourSteps);
   };
-  const closeTour = () => setTourStep(-1);
-  const nextTourStep = () => {
-    if (tourStep >= tourSteps.length - 1) {
-      closeTour();
-      return;
-    }
-    setTourStep((s) => s + 1);
-  };
-  const prevTourStep = () => setTourStep((s) => Math.max(0, s - 1));
 
   const reportLoading = liveLoading || pasteLoading || uploadStatus === "uploading";
   const reportError = liveError || pasteError || (uploadStatus === "error" ? uploadError : null);
@@ -1289,15 +1210,7 @@ export default function Dashboard({ navigate, path }) {
             )}
           </div>
 
-          {tourStep >= 0 && (
-            <TourOverlay
-              steps={tourSteps}
-              stepIndex={tourStep}
-              onNext={nextTourStep}
-              onPrev={prevTourStep}
-              onClose={closeTour}
-            />
-          )}
+          {tour.overlay}
 
           {reportLoading || reportError || report ? (
             <>
@@ -1321,7 +1234,7 @@ export default function Dashboard({ navigate, path }) {
           ) : (
             <>
               <IntroSteps />
-              <h2 className="report-heading">Compliance report</h2>
+              <h2 className="report-heading" ref={reportHeadingRef}>Compliance report</h2>
               <Report report={null} />
             </>
           )}

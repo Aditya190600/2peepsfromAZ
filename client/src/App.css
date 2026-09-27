@@ -2572,6 +2572,18 @@ button.site-nav-link {
   margin-bottom: 4px;
 }
 
+.qe-pagehead-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  align-items: center;
+}
+
+.qe-pagehead-actions .btn {
+  white-space: nowrap;
+}
+
 .qe-eval-header-actions {
   display: flex;
   gap: 8px;
