@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SignedIn, SignedOut, SignInButton, useClerk, useUser } from "@clerk/clerk-react";
-import { PRODUCT_NAV } from "./chromeNav.js";
+import { productNav } from "./chromeNav.js";
+import { getQualevalConfig } from "./qualevalClient.js";
 import ThemeToggle from "./ThemeToggle.jsx";
 
 const CLERK_ENABLED = Boolean(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
@@ -10,10 +11,36 @@ function go(navigate, href, event) {
   navigate(href);
 }
 
+let operatorPromise = null;
+
+// Whether the signed-in visitor may use the operator-only Settings page.
+// Cached per page load once known; a failure (e.g. signed out) counts as no
+// and is retried on the next mount.
+function useProductNav() {
+  const [isOperator, setIsOperator] = useState(false);
+  useEffect(() => {
+    operatorPromise ??= getQualevalConfig()
+      .then((config) => Boolean(config.isOperator))
+      .catch(() => {
+        operatorPromise = null;
+        return false;
+      });
+    let cancelled = false;
+    operatorPromise.then((value) => {
+      if (!cancelled) setIsOperator(value);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return productNav({ isOperator });
+}
+
 function ProductLinks({ path, navigate }) {
+  const nav = useProductNav();
   return (
     <>
-      {PRODUCT_NAV.map((item) => (
+      {nav.map((item) => (
         <a
           key={item.href}
           className={`site-nav-link ${item.match(path) ? "is-active" : ""}`}
@@ -158,6 +185,7 @@ function AppTenantIdentity() {
 }
 
 export function AppShell({ path, navigate, title, actions, rail, children }) {
+  const nav = useProductNav();
   return (
     <div className={`app-shell ${rail ? "has-rail" : ""}`}>
       <header className="app-topbar">
@@ -174,7 +202,7 @@ export function AppShell({ path, navigate, title, actions, rail, children }) {
         <aside className="app-sidebar">
           <AppTenantIdentity />
           <nav className="app-nav" aria-label="Product">
-            {PRODUCT_NAV.map((item) => (
+            {nav.map((item) => (
               <a
                 key={item.href}
                 className={`app-nav-link ${item.match(path) ? "is-active" : ""}`}
