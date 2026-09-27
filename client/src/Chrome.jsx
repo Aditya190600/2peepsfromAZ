@@ -161,11 +161,14 @@ export function Footer() {
   );
 }
 
-function TenantIdentity({ email }) {
+// Shows who is signed in, from the real Clerk user only. There is no org or
+// tenant concept in this app, so nothing renders without a signed-in user.
+function TenantIdentity({ name, email }) {
+  if (!email) return null;
   return (
     <p className="app-tenant">
-      Northstar Voice
-      <span className="app-tenant-mail">{email ?? "legal@northstarvoice.com"}</span>
+      {name}
+      <span className="app-tenant-mail">{email}</span>
     </p>
   );
 }
@@ -174,14 +177,18 @@ function TenantIdentity({ email }) {
 // renders in that case - keeps the hook call unconditional within it.
 function ClerkTenantIdentity() {
   const { user } = useUser();
-  return <TenantIdentity email={user?.primaryEmailAddress?.emailAddress} />;
+  return (
+    <TenantIdentity
+      name={user?.fullName}
+      email={user?.primaryEmailAddress?.emailAddress}
+    />
+  );
 }
 
-// Shows the signed-in Clerk user's email; falls back to the static
-// "Northstar Voice" demo tenant when Clerk isn't configured, matching the
-// no-Clerk default exactly.
+// Without Clerk every visitor is the same anonymous user, so there is no
+// identity to show.
 function AppTenantIdentity() {
-  return CLERK_ENABLED ? <ClerkTenantIdentity /> : <TenantIdentity />;
+  return CLERK_ENABLED ? <ClerkTenantIdentity /> : null;
 }
 
 export function AppShell({ path, navigate, title, actions, rail, children }) {

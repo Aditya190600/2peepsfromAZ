@@ -153,6 +153,10 @@ body {
   word-break: break-word;
 }
 
+.app-tenant-mail:first-child {
+  margin-top: 0;
+}
+
 .app-nav {
   display: flex;
   flex-direction: column;
