@@ -160,6 +160,19 @@ export function createBridgeSession({
     onError?.(message);
   }
 
+  function armMaxDurationCap() {
+    if (maxDurationTimer) return;
+    maxDurationTimer = setTimeout(() => {
+      if (aaiReady && aaiWs.readyState === aaiWs.OPEN) {
+        aaiWs.send(JSON.stringify({ type: "session.end" }));
+        clearTimeout(stopGraceTimer);
+        stopGraceTimer = setTimeout(() => finish("max_duration_grace"), stopGraceMs);
+      } else {
+        finish("max_duration");
+      }
+    }, maxDurationMs);
+  }
+
   aaiWs.on("open", () => {
     log("aai socket open");
     const session = agentId
@@ -191,9 +204,7 @@ export function createBridgeSession({
       case "session.ready":
         aaiReady = true;
         onReady?.();
-        maxDurationTimer = setTimeout(() => {
-          aaiWs.send(JSON.stringify({ type: "session.end" }));
-        }, maxDurationMs);
+        armMaxDurationCap();
         break;
       case "transcript.user":
         turns.push({ role: transcriptUserRole, text: msg.text ?? "", tMs: startedAtMs ? Date.now() - startedAtMs : 0 });
@@ -245,6 +256,7 @@ export function createBridgeSession({
         streamSid = msg.start?.streamSid ?? msg.streamSid;
         callSid = msg.start?.callSid ?? null;
         startedAtMs = Date.now();
+        armMaxDurationCap();
         if (streamSid && twilioWs.readyState === twilioWs.OPEN) {
           for (const payload of pendingReplyAudio) {
             twilioWs.send(JSON.stringify({ event: "media", streamSid, media: { payload } }));
