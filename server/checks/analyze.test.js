@@ -371,6 +371,27 @@ test("offline piiScan keeps a pattern-pack match and adds the offline sentence o
   assert.equal(clean.detail, "Offline pattern packs only. Free-form PII requires semantic analysis.");
 });
 
+test("piiScan's semantic-pass failure detail never claims 'found nothing' next to pattern matches", async () => {
+  const llmGateway = async () => {
+    throw new Error("LLM Gateway request failed: 401");
+  };
+
+  const matched = await piiScan(
+    { turns: [{ role: "user", text: "my SSN is 123-45-6789", tMs: 0 }] },
+    [genericPack],
+    { llmGateway },
+  );
+  assert.equal(matched.status, "flag");
+  assert.doesNotMatch(matched.detail, /found nothing/);
+  assert.match(matched.detail, /Pattern-pack matches are listed below/);
+
+  const clean = await piiScan({ turns: [{ role: "user", text: "Sure, go ahead.", tMs: 0 }] }, [genericPack], {
+    llmGateway,
+  });
+  assert.equal(clean.status, "error");
+  assert.match(clean.detail, /^Pattern-pack scan found nothing/);
+});
+
 test("a pack's own check function only runs when that pack is selected via patternPackIds", async () => {
   const llmGateway = async () => JSON.stringify({ disclosed: true, turnIndex: 0, quote: "AI assistant" });
 
