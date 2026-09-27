@@ -9,7 +9,7 @@ import { placeCall, twilioConfigured } from "./callBridge.js";
 import { endCall } from "./twilioClient.js";
 import { getObjectByKey, sendRecording } from "../recordingsStore.js";
 import { qualevalCallAudioKey, productionCallAudioKey } from "./callRecorder.js";
-import { getProductionCallBySid, listProductionCallsForEvaluation } from "./productionCalls.js";
+import { getProductionCallBySid, listPhoneEvalCalls } from "./productionCalls.js";
 import { buildScenariosWorkbook, scenariosExportFilename } from "./scenarioExport.js";
 
 const TWILIO_CALL_SID = /^CA[0-9a-f]{32}$/i;
@@ -145,13 +145,16 @@ export function qualevalRouter({ visitorId = () => "anon", isOperator = async ()
     }),
   );
 
+  // Phone Evals (client/src/PhoneEvals.jsx): real calls that dialed
+  // QUALEVAL_AGENT_NUMBER directly, scored by phoneEvaluation.js. Kept apart
+  // from evaluations on purpose - only QualEval-placed scenario runs belong to
+  // an evaluation. Operator-only: the number is shared, so every caller's
+  // number and transcript would otherwise reach every signed-in visitor.
   router.get(
-    "/evaluations/:id/inbound-calls",
+    "/phone-evals",
+    requireOperator,
     wrap(async (req, res) => {
-      const evaluation = await store.getEvaluation(req.params.id, visitorId(req));
-      if (!evaluation) return res.status(404).json({ error: "Evaluation not found" });
-      const calls = await listProductionCallsForEvaluation(evaluation.id);
-      res.json({ calls });
+      res.json({ calls: await listPhoneEvalCalls() });
     }),
   );
 
@@ -351,11 +354,12 @@ export function qualevalRouter({ visitorId = () => "anon", isOperator = async ()
     }),
   );
 
-  // Inbound call to QUALEVAL_AGENT_NUMBER. There is no per-visitor owner:
-  // the number is shared. The Call SID is unguessable, and this route sits
-  // behind the same requireVisitor gate as the rest of /v1/qualeval.
+  // Inbound call to QUALEVAL_AGENT_NUMBER, played on the Phone Evals page.
+  // There is no per-visitor owner (the number is shared), so it is
+  // operator-only like /phone-evals itself.
   router.get(
     "/production-calls/:callSid/audio",
+    requireOperator,
     wrap(async (req, res) => {
       if (!TWILIO_CALL_SID.test(req.params.callSid)) {
         return res.status(400).json({ error: "invalid call sid" });
