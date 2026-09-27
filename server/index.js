@@ -29,9 +29,7 @@ import {
   NORTHSTAR_SESSIONS,
   NORTHSTAR_SESSION_KEYS,
   SAMPLE_SESSIONS,
-  PLAYABLE_SAMPLE_KEYS,
 } from "../client/src/sampleSessions.js";
-import { readFile } from "node:fs/promises";
 import * as providers from "./providers/registry.js";
 import { llmParsePastedSession } from "./checks/sessionPasteParse.js";
 import { LlmGatewayRateLimitError } from "./checks/llmGateway.js";
@@ -421,44 +419,6 @@ app.post(
     }
   }
 );
-
-// Zero-setup counterpart to /v1/transcribe-upload + /v1/analyze-session for
-// the Examples page's "Auto-split speakers" demo: unlike those routes, this never
-// accepts client-uploaded content and never analyzes a client-supplied
-// session body - it only transcribes one of the fixed playable sample mp3s
-// (client/public/samples), read server-side by key, and analyzes the result
-// it produced itself, so a signed-out request can't smuggle arbitrary audio
-// or an arbitrary session past auth via this route.
-app.post("/v1/examples/diarize/:key", async (req, res) => {
-  const { key } = req.params;
-  if (!PLAYABLE_SAMPLE_KEYS.includes(key)) {
-    return res.status(404).json({ error: "Unknown sample key." });
-  }
-  const { patternPackIds = ["generic"] } = req.body ?? {};
-  try {
-    const samplesDir = existsSync(dist)
-      ? path.join(dist, "samples")
-      : path.join(__dirname, "..", "client", "public", "samples");
-    const audio = await readFile(path.join(samplesDir, `${key}.mp3`));
-    const turns = await providers.getTranscriber().transcribe(audio);
-    if (turns.length === 0) {
-      return res.status(422).json({ error: "No speech detected in the sample audio." });
-    }
-    const session = {
-      sessionId: `sess_upload_${Date.now()}`,
-      startedAt: new Date().toISOString(),
-      consentEvent: SAMPLE_SESSIONS[key]?.consentEvent ?? null,
-      turns,
-    };
-    const report = await analyzeSession(session, {
-      patternPackIds,
-      llmGateway: providers.getModel().complete,
-    });
-    res.json({ session, report });
-  } catch (err) {
-    res.status(502).json({ error: `Transcription failed: ${err.message}` });
-  }
-});
 
 app.use(recordingsRouter({ requireVisitor, visitorId }));
 

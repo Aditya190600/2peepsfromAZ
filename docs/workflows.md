@@ -34,7 +34,7 @@ What the user actually does in ComplyLine today, and why they'd bother. One prod
 
 ## 6. Analyze a fleet of sessions at once
 
-**What they do:** Click "Analyze N sample sessions" or "Analyze full library" to run every sample through the pipeline (rate-limited to 2 concurrent), then browse an aggregate compliance-rate view with per-check pass/flag counts and a per-session drill-down.
+**What they do:** Click "Analyze fleet" at the bottom of the Playable samples list to run every sample through the pipeline (rate-limited to 2 concurrent), then browse an aggregate compliance-rate view with per-check pass/flag counts and a per-session drill-down.
 
 **Value prop:** A single call's report answers "did this one call comply"; the fleet view answers the question an actual compliance team has - "how compliant is this whole program" - which is the more sellable framing for an enterprise buyer.
 

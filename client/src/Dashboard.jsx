@@ -27,7 +27,6 @@ import {
   llmParsePastedSession,
 } from "./analyzeClient";
 import { listIndustryPacks } from "./evalsClient";
-import PackEvals from "./PackEvals";
 import PatternPackSelect from "./PatternPackSelect";
 import { parseSessionPaste } from "./sessionPaste";
 import { PERSONAS, findPersona } from "./personas";
@@ -281,7 +280,7 @@ function FleetSummary({ results, progress }) {
         {tiles.map((tile) => (
           <li key={tile.check} className="monitor-card">
             <p className="monitor-kicker">{tile.label}</p>
-            <p className="monitor-attention">{tile.flag > 0 ? "Needs attention" : "Clear"}</p>
+            <p className="monitor-attention">{tile.flag > 0 ? "Needs attention" : tile.error > 0 ? "Needs review" : "Clear"}</p>
             <p className="monitor-count">{tile.flag}</p>
             <div className="app-progress-track" aria-hidden="true">
               <div
@@ -445,9 +444,14 @@ export function Report({
           <p className="report-meta">
             {report.sessionId ?? "no session id"} · generated {report.generatedAt}
           </p>
-          <span className={`report-verdict finding-status ${view.className}`}>
-            {verdict.label}
-          </span>
+          {/* The headline verdict is a status, not an action - the label
+              keeps a bare "Clear" from reading as a dead Clear button. */}
+          <p className="report-verdict-line">
+            Overall verdict:{" "}
+            <span className={`report-verdict finding-status ${view.className}`}>
+              {verdict.label}
+            </span>
+          </p>
         </div>
         <div className="report-toolbar-actions">
           <button className="btn btn-outline print-btn" onClick={() => window.print()}>
@@ -1031,10 +1035,9 @@ export default function Dashboard({ navigate, path }) {
             <p className="pack-note">Drop-in extensions over the generic scan — no core changes.</p>
             {packCatalogStale && (
               <p className="pack-note">
-                Pack catalog did not load. Checkboxes still work. Eval coverage copy may be stale.
+                Pack catalog did not load. Checkboxes still work. Pack descriptions may be stale.
               </p>
             )}
-            <PackEvals selectedPacks={selectedPacks} catalog={industryPacks} />
           </div>
 
           <ProviderSettings />
