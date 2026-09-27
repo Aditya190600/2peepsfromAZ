@@ -83,8 +83,11 @@ signed-in Clerk user's verified email addresses. Every
 `personaPhoneNumber` for them, and the client hides the Settings nav entry and
 shows no agents or controls on `/settings` (the server check is the real gate).
 Unset or empty means nobody is an operator. When Clerk isn't configured there
-is no identity to check, so access stays closed unless the list is `*`, which
-allows every visitor - use that only for local dev.
+is no identity to check, so access stays closed unless the value is exactly
+`*`, which allows every visitor - use that only for local dev or a deliberately
+open demo. A `*` mixed into an email list is ignored. The same gate covers the
+Phone Evals routes (`/v1/qualeval/phone-evals`, its `/:callSid/analyze` re-run,
+and `/v1/qualeval/production-calls/:callSid/audio`).
 
 ## The bridge
 

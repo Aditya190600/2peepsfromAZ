@@ -41,6 +41,17 @@ test("with Clerk off, fails closed even for a listed email, unless the list is *
   assert.deepEqual(await check("*", { clerkEnabled: false, userId: "anon" }), { result: true, lookups: 0 });
 });
 
+test("* on its own opens access to every signed-in visitor without a Clerk lookup", async () => {
+  assert.deepEqual(await check(" * ", { emails: ["stranger@example.com"] }), { result: true, lookups: 0 });
+});
+
+test("a * mixed into an email list is ignored rather than opening access", async () => {
+  for (const raw of ["captain@example.com,*", "*, captain@example.com", "*,*"]) {
+    assert.equal((await check(raw, { emails: ["stranger@example.com"] })).result, false, raw);
+  }
+  assert.equal((await check("*,captain@example.com")).result, true);
+});
+
 test("treats a failed email lookup as not an operator", async () => {
   const isOperator = createOperatorCheck({
     allowlist: parseOperatorEmails("captain@example.com"),
