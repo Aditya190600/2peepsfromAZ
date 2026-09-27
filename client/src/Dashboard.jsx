@@ -507,7 +507,6 @@ export function Report({
       )}
       <div className="print-letterhead">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true" />
           <h1>ComplyLine</h1>
         </div>
         <p>Post-call compliance report — {verdict.label}</p>
