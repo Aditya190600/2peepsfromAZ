@@ -167,14 +167,17 @@ export function attachTwilioStreamServer(
         // agent over the phone, outgoing is our simulated caller. Each frame
         // goes to the recorder and to any live listener (liveCallHub.js).
         onIncomingAudio: (audio, tMs) => {
-          recorder.addFrame(audio, tMs);
+          recorder.addIncomingFrame(audio, tMs);
           liveCallHub.publishAudio(runId, "agent", audio, tMs);
         },
         onOutgoingAudio: (audio, tMs) => {
-          recorder.addFrame(audio, tMs);
+          recorder.addOutgoingFrame(audio, tMs);
           liveCallHub.publishAudio(runId, "caller", audio, tMs);
         },
-        onOutgoingAudioCleared: () => liveCallHub.publishClear(runId, "caller"),
+        onOutgoingAudioCleared: (tMs) => {
+          recorder.clearOutgoingFrom(tMs);
+          liveCallHub.publishClear(runId, "caller");
+        },
         onTurn: (turn) => liveCallHub.publishTurn(runId, turn),
         onFinished,
         onError,

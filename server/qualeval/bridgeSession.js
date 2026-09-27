@@ -81,16 +81,17 @@ export function createBridgeSession({
   onFinished,
   onError,
   // Called with each raw base64 audio/pcmu chunk this bridge relays, plus
-  // its tMs offset since call start (same clock as the transcript turns
-  // above) - server/qualeval/twilioStream.js feeds both into a
-  // server/qualeval/callRecorder.js instance to build the run's playable
+  // its tMs position on the call timeline (see callClockMs below - the same
+  // clock as the transcript turns) - server/qualeval/twilioStream.js feeds
+  // both into a server/qualeval/callRecorder.js instance to build the run's playable
   // call recording, since audio capture has to happen server-side here
   // (unlike the Try page's browser MediaRecorder).
   onIncomingAudio,
   onOutgoingAudio,
   // Live-listening taps (server/qualeval/liveCallHub.js): each transcript
   // turn as soon as it lands, and a barge-in "clear" of this session's own
-  // outgoing audio. Observers only - neither feeds anything back into a leg.
+  // outgoing audio (with the call-timeline tMs it took effect at). Observers
+  // only - neither feeds anything back into a leg.
   onTurn,
   onOutgoingAudioCleared,
   maxDurationMs = DEFAULT_MAX_DURATION_MS,
@@ -122,6 +123,36 @@ export function createBridgeSession({
   // server/qualeval/twilioStream.js already does for its own async lookups.
   const pendingReplyAudio = [];
 
+  // Call timeline shared by the recorder/live-listening taps and the
+  // transcript turns: milliseconds on Twilio's own Media Stream clock
+  // (media.timestamp, 0 at stream start). Positioning audio by when a frame
+  // happened to reach this process instead made a played-back recording
+  // choppy - Twilio's 20 ms frames arrive with ~0.5 s of network jitter
+  // (measured on a real call 2026-09-27), and frames replayed after the
+  // twilioStream.js/targetAgentStream.js setup buffering all shared one
+  // arrival time. The offset keeps the smallest arrival-minus-timestamp
+  // seen, i.e. the least-delayed frame, so jitter and replays never drag
+  // the clock backwards.
+  let clockOffsetMs = null;
+  function callClockMs() {
+    if (clockOffsetMs !== null) return Math.max(0, Date.now() - clockOffsetMs);
+    return startedAtMs ? Date.now() - startedAtMs : 0;
+  }
+  // Twilio sends media.timestamp as a string of milliseconds.
+  function incomingFrameTimeMs(media) {
+    const timestampMs = media?.timestamp == null ? NaN : Number(media.timestamp);
+    if (!Number.isFinite(timestampMs)) return callClockMs();
+    const offsetMs = Date.now() - timestampMs;
+    if (clockOffsetMs === null || offsetMs < clockOffsetMs) clockOffsetMs = offsetMs;
+    return timestampMs;
+  }
+  // Where Twilio will finish playing the outgoing audio sent so far. Twilio
+  // plays our media frames back to back from its own buffer, and
+  // AssemblyAI delivers reply.audio slightly faster than real time, so each
+  // chunk is heard at max(now, end of the previous chunk), not when it
+  // arrived here. A barge-in "clear" drops Twilio's unplayed buffer.
+  let outgoingPlayoutEndMs = 0;
+
   const aaiWs = new WebSocketImpl(wsUrl);
 
   // Diagnostic-only tracing added while debugging real duration-0 outbound
@@ -134,7 +165,7 @@ export function createBridgeSession({
   }
 
   function addTurn(role, text) {
-    const turn = { role, text: text ?? "", tMs: startedAtMs ? Date.now() - startedAtMs : 0 };
+    const turn = { role, text: text ?? "", tMs: callClockMs() };
     turns.push(turn);
     onTurn?.({ ...turn });
   }
@@ -268,7 +299,12 @@ export function createBridgeSession({
         } else {
           pendingReplyAudio.push(msg.data);
         }
-        onOutgoingAudio?.(msg.data, startedAtMs ? Date.now() - startedAtMs : 0);
+        if (msg.data) {
+          const playAtMs = Math.max(callClockMs(), outgoingPlayoutEndMs);
+          // audio/pcmu: one byte per sample at 8 kHz.
+          outgoingPlayoutEndMs = playAtMs + Buffer.from(msg.data, "base64").length / 8;
+          onOutgoingAudio?.(msg.data, playAtMs);
+        }
         break;
       case "reply.done":
         log("aai reply.done status", msg.status);
@@ -286,7 +322,9 @@ export function createBridgeSession({
           if (streamSid && twilioWs.readyState === twilioWs.OPEN) {
             twilioWs.send(JSON.stringify({ event: "clear", streamSid }));
           }
-          onOutgoingAudioCleared?.();
+          const clearedAtMs = callClockMs();
+          outgoingPlayoutEndMs = clearedAtMs;
+          onOutgoingAudioCleared?.(clearedAtMs);
         }
         break;
       case "session.ended":
@@ -338,7 +376,7 @@ export function createBridgeSession({
         if (aaiReady && aaiWs.readyState === aaiWs.OPEN) {
           aaiWs.send(JSON.stringify({ type: "input.audio", audio: msg.media?.payload }));
         }
-        onIncomingAudio?.(msg.media?.payload, startedAtMs ? Date.now() - startedAtMs : 0);
+        onIncomingAudio?.(msg.media?.payload, incomingFrameTimeMs(msg.media));
         break;
       case "stop":
         if (aaiWs.readyState === aaiWs.OPEN) {

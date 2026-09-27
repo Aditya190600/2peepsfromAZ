@@ -146,7 +146,10 @@ test("an interrupted reply before Twilio's 'start' drops its buffered audio inst
   aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
 });
 
-test("silence timeout ends the call when neither leg carries audible audio", async () => {
+test("silence timeout ends the call when neither leg carries audible audio", (t) => {
+  // Mocked timers: a real-time wait only cleared the 60 ms of timers by
+  // ~10 ms and failed under a loaded full-suite run.
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   const twilioWs = new FakeSocket();
   const aaiWs = new FakeSocket();
   let finished = null;
@@ -165,7 +168,10 @@ test("silence timeout ends the call when neither leg carries audible audio", asy
   aaiWs.emit("open");
   twilioWs.emit("message", JSON.stringify({ event: "start", start: { streamSid: "MZ1", callSid: "CA1" } }));
   aaiWs.emit("message", JSON.stringify({ type: "session.ready" }));
-  await new Promise((resolve) => setTimeout(resolve, 70));
+  t.mock.timers.tick(50);
+  assert.equal(finished, null);
+  assert.deepEqual(aaiWs.sent.at(-1), { type: "session.end" });
+  t.mock.timers.tick(10);
   assert.ok(finished);
   assert.equal(finished.reason, "silence_timeout_grace");
 });
@@ -460,5 +466,66 @@ test("live-listening taps: onTurn fires per transcript turn and onOutgoingAudioC
       { role: "user", text: "Hi, I need help." },
     ],
   );
+  aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
+});
+
+test("reports incoming audio at Twilio's media.timestamp, not at its jittery arrival time", async () => {
+  const twilioWs = new FakeSocket();
+  const aaiWs = new FakeSocket();
+  const incoming = [];
+  createBridgeSession({
+    twilioWs,
+    token: "tok",
+    WebSocketImpl: fakeWebSocketImpl(aaiWs),
+    systemPrompt: "be a caller",
+    silenceTimeoutMs: 0,
+    onIncomingAudio: (payload, tMs) => incoming.push({ payload, tMs }),
+  });
+  twilioWs.emit("message", JSON.stringify({ event: "start", start: { streamSid: "MZ1", callSid: "CA1" } }));
+  // Three frames delivered back to back in one burst (network jitter, or the
+  // setup-time replay in twilioStream.js) still land 20 ms apart.
+  for (const timestamp of ["0", "20", "40"]) {
+    twilioWs.emit("message", JSON.stringify({ event: "media", media: { payload: `f${timestamp}`, timestamp } }));
+  }
+
+  assert.deepEqual(incoming, [
+    { payload: "f0", tMs: 0 },
+    { payload: "f20", tMs: 20 },
+    { payload: "f40", tMs: 40 },
+  ]);
+  aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
+});
+
+test("reports outgoing audio at its Twilio playout position: back to back, reset by a barge-in clear", async () => {
+  const twilioWs = new FakeSocket();
+  const aaiWs = new FakeSocket();
+  const outgoing = [];
+  const clears = [];
+  createBridgeSession({
+    twilioWs,
+    token: "tok",
+    WebSocketImpl: fakeWebSocketImpl(aaiWs),
+    systemPrompt: "be a caller",
+    silenceTimeoutMs: 0,
+    onOutgoingAudio: (payload, tMs) => outgoing.push(tMs),
+    onOutgoingAudioCleared: (tMs) => clears.push(tMs),
+  });
+  aaiWs.emit("open");
+  aaiWs.emit("message", JSON.stringify({ type: "session.ready" }));
+  twilioWs.emit("message", JSON.stringify({ event: "start", start: { streamSid: "MZ1", callSid: "CA1" } }));
+  // 300 bytes of audio/pcmu = 37.5 ms. AssemblyAI delivers a reply faster
+  // than real time, so these arrive together but play one after another.
+  const chunk = Buffer.alloc(300, 0xff).toString("base64");
+  for (let i = 0; i < 3; i++) aaiWs.emit("message", JSON.stringify({ type: "reply.audio", data: chunk }));
+  const [first, second, third] = outgoing;
+  assert.equal(second - first, 37.5);
+  assert.equal(third - second, 37.5);
+
+  aaiWs.emit("message", JSON.stringify({ type: "reply.done", status: "interrupted" }));
+  assert.equal(clears.length, 1);
+  assert.ok(clears[0] < third, "the clear lands before the queued audio would have finished playing");
+  aaiWs.emit("message", JSON.stringify({ type: "reply.audio", data: chunk }));
+  assert.ok(outgoing[3] >= clears[0]);
+  assert.ok(outgoing[3] < third + 37.5, "the next reply starts at the clear, not after the discarded audio");
   aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
 });

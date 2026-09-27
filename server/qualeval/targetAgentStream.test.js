@@ -265,7 +265,9 @@ test("uploads a mixed WAV for an inbound call and stores its audio path", async 
     },
     waitForClaimableRun: async () => null,
     createRecorder: () => ({
-      addFrame() {},
+      addIncomingFrame() {},
+      addOutgoingFrame() {},
+      clearOutgoingFrom() {},
       hasAudio: () => true,
       toWavBuffer: () => wav,
     }),
