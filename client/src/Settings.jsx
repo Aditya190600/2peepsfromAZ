@@ -183,7 +183,7 @@ export default function Settings({ path, navigate }) {
 
   return (
     <AppShell path={path} navigate={navigate} title="Settings">
-      <div className="qualeval-page">
+      <div className="qualeval-page settings-page">
         <p className="app-lede">
           Choose your default Voice Compliance call persona and Qualitative Evals target phone number here.
           Operators can also switch which target agent answers the demo phone number.

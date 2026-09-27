@@ -3367,7 +3367,9 @@ button.site-nav-link {
 
 /* --- Settings page (Settings.jsx) ---
    Reuses QualEval's card language (.qualeval-page wrapper, qe-* chips);
-   only the number and agent card layouts are new. */
+   only the number and agent card layouts are new. Non-heading copy shares
+   one 15px body size (same as the Try page) instead of each element's
+   app-wide default, which mixed 12-14px sizes on one screen. */
 .settings-section {
   margin-bottom: 32px;
 }
@@ -3376,12 +3378,37 @@ button.site-nav-link {
   margin-bottom: 6px;
 }
 
+.settings-page .app-lede,
+.settings-page .pack-note,
+.settings-page .settings-notice,
+.settings-page .error-banner,
+.settings-page .settings-phone-menu-label,
+.settings-page .settings-phone-menu-select,
+.settings-page .settings-phone-menu-custom,
+.settings-page .persona-picker-desc,
+.settings-page .persona-picker-packs,
+.settings-page .settings-agent-desc,
+.settings-page .settings-agent-greeting,
+.settings-page .settings-agent-prompt {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* Mono uppercase labels (number card titles, "Greeting") default to 10px. */
+.settings-page .qe-meta-k {
+  font-size: 12px;
+}
+
+/* Section description sits directly above the persona grid / phone menu. */
+.settings-section > .pack-note {
+  margin-bottom: 18px;
+}
+
 .settings-phone-menu {
   display: flex;
   flex-direction: column;
   gap: 8px;
   max-width: 420px;
-  margin-top: 12px;
 }
 
 .settings-phone-menu-label {
@@ -3548,7 +3575,7 @@ button.site-nav-link {
   text-align: left;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--qe-radius);
   cursor: pointer;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
@@ -3569,7 +3596,7 @@ button.site-nav-link {
 }
 
 .persona-picker-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--ink);
 }
