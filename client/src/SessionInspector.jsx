@@ -51,6 +51,7 @@ function CallTab({ entry, audioUrl, audioRef, onSeek }) {
             src={audioUrl}
             audioRef={audioRef}
             offsetMs={entry.recordingOffsetMs ?? 0}
+            turns={entry.turns}
             markers={callMarkers(entry)}
           />
         </div>

@@ -406,6 +406,7 @@ export function Report({
   audioUrl,
   audioRef,
   audioOffsetMs = 0,
+  turns = null,
   onSeek,
   loading = false,
   error = null,
@@ -495,6 +496,7 @@ export function Report({
             src={audioUrl}
             audioRef={audioRef}
             offsetMs={audioOffsetMs}
+            turns={turns}
             markers={audioMarkers}
           />
           <p className="hint">
@@ -616,6 +618,7 @@ export default function Dashboard({ navigate, path }) {
   const [report, setReport] = useState(null);
   const [activeAudioUrl, setActiveAudioUrl] = useState(null);
   const [activeAudioOffsetMs, setActiveAudioOffsetMs] = useState(0);
+  const [activeTurns, setActiveTurns] = useState(null);
   const [uploadStatus, setUploadStatus] = useState("idle"); // idle | uploading | error
   const [uploadError, setUploadError] = useState(null);
   const [dragActive, setDragActive] = useState(false);
@@ -781,7 +784,10 @@ export default function Dashboard({ navigate, path }) {
       const { sessionId, recordingOffsetMs } = lastSession;
       const bucketUrl =
         recordingUploadRef.current.sessionId === sessionId ? await recordingUploadRef.current.promise : null;
-      if (isCurrent()) showAudio(bucketUrl ?? getLiveAudioBlob(sessionId), recordingOffsetMs, sessionId);
+      if (isCurrent()) {
+        showAudio(bucketUrl ?? getLiveAudioBlob(sessionId), recordingOffsetMs, sessionId);
+        setActiveTurns(lastSession.turns ?? null);
+      }
       const nextReport = await analyze(lastSession, patternPackIds, (event) => {
         if (isCurrent()) setAnalysisProgress((prev) => accumulateProgress(prev, event));
       });
@@ -845,6 +851,7 @@ export default function Dashboard({ navigate, path }) {
     try {
       const strict = parseSessionPaste(pasteText);
       const session = strict.ok ? strict.session : await llmParsePastedSession(pasteText);
+      setActiveTurns(session.turns ?? null);
       const nextReport = await analyze(session, patternPackIds);
       setReport(nextReport);
       recordHistory(`Pasted session (${session.sessionId ?? "no session id"})`, nextReport, session);
@@ -865,6 +872,7 @@ export default function Dashboard({ navigate, path }) {
     showAudio(blobUrl);
     try {
       const session = await transcribeUpload(file);
+      setActiveTurns(session.turns ?? null);
       const nextReport = await analyze(session, patternPackIds);
       setReport(nextReport);
       registerLiveAudioBlob(session.sessionId, blobUrl);
@@ -1297,6 +1305,7 @@ export default function Dashboard({ navigate, path }) {
                 audioUrl={activeAudioUrl}
                 audioRef={audioRef}
                 audioOffsetMs={activeAudioOffsetMs}
+                turns={activeTurns}
                 onSeek={onSeek}
                 showStorageNote={Boolean(report) && !reportLoading && !reportError}
                 navigate={navigate}
