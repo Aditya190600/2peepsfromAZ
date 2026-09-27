@@ -28,14 +28,23 @@ function groupMarkersByTime(markers) {
       byTime.set(marker.tMs, {
         tMs: marker.tMs,
         kind: marker.kind,
-        labels: label ? [label] : [],
+        flagLabels: marker.kind === "flag" && label ? [label] : [],
+        turnLabels: marker.kind === "turn" && label ? [label] : [],
       });
       continue;
     }
-    if (label && !prev.labels.includes(label)) prev.labels.push(label);
-    if (marker.kind === "flag") prev.kind = "flag";
+    if (marker.kind === "flag") {
+      if (label && !prev.flagLabels.includes(label)) prev.flagLabels.push(label);
+      prev.kind = "flag";
+    } else if (label && !prev.turnLabels.includes(label)) {
+      prev.turnLabels.push(label);
+    }
   }
-  return [...byTime.values()];
+  return [...byTime.values()].map((group) => ({
+    tMs: group.tMs,
+    kind: group.kind,
+    labels: group.kind === "flag" ? group.flagLabels : group.turnLabels,
+  }));
 }
 
 function drawTrackBars(ctx, peaks, xStart, trackTop, trackHeight, color, dimColor, progressX, growUp) {
