@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import express from "express";
@@ -16,8 +16,14 @@ async function appFor(probe = async () => {}) {
   const fetchImpl = async () => ({ ok: true, status: 200 });
   const app = express();
   app.use(express.json());
-  app.use("/v1/telephony", telephonyRouter({ store, fetchImpl, probe }));
+  app.use("/v1/telephony", telephonyRouter({ store, fetchImpl, probe, ownerOf }));
   return { app, store };
+}
+
+// Stands in for index.js's visitorId(req): the signed-in user is whoever the
+// x-test-user header names, "anon" when it's absent.
+function ownerOf(req) {
+  return req.get("x-test-user") ?? "anon";
 }
 
 async function listen(app) {
@@ -29,10 +35,14 @@ async function listen(app) {
   return server;
 }
 
-async function request(server, url, { method = "GET", body } = {}) {
+async function request(server, url, { method = "GET", body, user, headers: extra = {} } = {}) {
   const response = await fetch(`http://127.0.0.1:${server.address().port}${url}`, {
     method,
-    headers: body === undefined ? {} : { "content-type": "application/json" },
+    headers: {
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
+      ...(user ? { "x-test-user": user } : {}),
+      ...extra,
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const text = await response.text();
@@ -89,6 +99,7 @@ test("unreachable SIP gateway fails loudly and Twilio rejection hides the token"
     store,
     fetchImpl,
     probe: async () => { throw new Error("connect ECONNREFUSED"); },
+    ownerOf,
   }));
   const server = await listen(app);
   t.after(() => new Promise((resolve) => server.close(resolve)));
@@ -186,6 +197,120 @@ test("inbound transcript becomes a History session and retries keep one id", asy
   const full = await request(server, "/v1/telephony/sessions/pstn_call_100");
   assert.equal(full.body.turns.length, 2);
   assert.equal(full.body.findings.some((f) => f.check === "consent" && f.status === "pass"), true);
+});
+
+const INBOUND = {
+  provider: "zadarma",
+  callId: "call_200",
+  e164: "+15551212002",
+  turns: [
+    { role: "agent", text: "Hi, this is an AI assistant.", tMs: 500 },
+    { role: "user", text: "My account number is 12345678.", tMs: 3200 },
+  ],
+};
+
+test("one user never sees or changes another user's numbers, trunks, or sessions", async (t) => {
+  const { app } = await appFor();
+  const server = await listen(app);
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const alice = (url, options = {}) => request(server, url, { ...options, user: "user_alice" });
+  const bob = (url, options = {}) => request(server, url, { ...options, user: "user_bob" });
+
+  const trunk = await alice("/v1/telephony/trunks", {
+    method: "POST",
+    body: { provider: "byo-sip-trunk", gateways: ["203.0.113.10"], password: TOKEN },
+  });
+  const number = await alice("/v1/telephony/numbers", {
+    method: "POST",
+    body: { provider: "byo-phone-number", e164: "+15551212002", credentialId: trunk.body.id },
+  });
+  assert.equal(number.status, 201);
+  assert.equal((await alice("/v1/telephony/inbound", { method: "POST", body: INBOUND })).status, 201);
+
+  assert.deepEqual((await bob("/v1/telephony/numbers")).body, []);
+  assert.deepEqual((await bob("/v1/telephony/trunks")).body, []);
+  assert.deepEqual((await bob("/v1/telephony/sessions")).body, []);
+  assert.equal((await bob("/v1/telephony/sessions/pstn_call_200")).status, 404);
+  assert.equal((await bob(`/v1/telephony/numbers/${number.body.id}`, {
+    method: "PATCH",
+    body: { label: "hijacked" },
+  })).status, 404);
+  assert.equal((await bob(`/v1/telephony/numbers/${number.body.id}`, { method: "DELETE" })).status, 404);
+  assert.equal((await bob(`/v1/telephony/trunks/${trunk.body.id}`, { method: "DELETE" })).status, 404);
+
+  // Bob can't hang his own number off Alice's trunk, at create or by PATCH.
+  assert.equal((await bob("/v1/telephony/numbers", {
+    method: "POST",
+    body: { provider: "byo-phone-number", e164: "+15551212003", credentialId: trunk.body.id },
+  })).status, 400);
+  const bobNumber = await bob("/v1/telephony/numbers", {
+    method: "POST",
+    body: { provider: "twilio", e164: "+15551212004" },
+  });
+  assert.equal(bobNumber.status, 201);
+  assert.equal((await bob(`/v1/telephony/numbers/${bobNumber.body.id}`, {
+    method: "PATCH",
+    body: { credentialId: trunk.body.id },
+  })).status, 400);
+
+  // Bob posting a call with Alice's callId gets his own session, not hers.
+  const bobCall = await bob("/v1/telephony/inbound", {
+    method: "POST",
+    body: { ...INBOUND, turns: [{ role: "agent", text: "Bob's call.", tMs: 0 }] },
+  });
+  assert.equal(bobCall.status, 201);
+  assert.equal((await bob("/v1/telephony/sessions")).body.length, 1);
+  assert.equal((await alice("/v1/telephony/sessions/pstn_call_200")).body.turns.length, 2);
+
+  const aliceNumbers = (await alice("/v1/telephony/numbers")).body;
+  assert.deepEqual(aliceNumbers.map((n) => n.label), ["+15551212002"]);
+  assert.equal((await alice("/v1/telephony/trunks")).body.length, 1);
+  assert.equal((await alice("/v1/telephony/sessions")).body.length, 1);
+});
+
+test("a webhook-authenticated inbound call lands with the owner of the dialed number", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "telephony-"));
+  const store = new TelephonyStore(path.join(root, "store.json"));
+  const router = telephonyRouter({ store, ownerOf });
+  const app = express();
+  app.use(express.json());
+  app.post("/hook/inbound", router.hookInbound);
+  app.use("/v1/telephony", router);
+  const server = await listen(app);
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  assert.equal((await request(server, "/v1/telephony/numbers", {
+    method: "POST",
+    user: "user_alice",
+    body: { provider: "twilio", e164: "+15551212002" },
+  })).status, 201);
+
+  const unregistered = await request(server, "/hook/inbound", {
+    method: "POST",
+    body: { ...INBOUND, e164: "+15559990000" },
+  });
+  assert.equal(unregistered.status, 404);
+
+  assert.equal((await request(server, "/hook/inbound", { method: "POST", body: INBOUND })).status, 201);
+  assert.equal((await request(server, "/v1/telephony/sessions", { user: "user_alice" })).body.length, 1);
+  assert.deepEqual((await request(server, "/v1/telephony/sessions", { user: "user_bob" })).body, []);
+});
+
+test("records saved before per-user scoping stay with the anonymous visitor", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "telephony-"));
+  const file = path.join(root, "store.json");
+  await writeFile(file, JSON.stringify({
+    credentials: [],
+    numbers: [{ id: "num_legacy", provider: "twilio", e164: "+15551212009", label: "Legacy", direction: "inbound" }],
+    sessions: [],
+  }));
+  const app = express();
+  app.use(express.json());
+  app.use("/v1/telephony", telephonyRouter({ store: new TelephonyStore(file), ownerOf }));
+  const server = await listen(app);
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  assert.equal((await request(server, "/v1/telephony/numbers")).body.length, 1);
+  assert.deepEqual((await request(server, "/v1/telephony/numbers", { user: "user_alice" })).body, []);
 });
 
 test("webhook secret is required only when configured", async () => {
