@@ -3170,3 +3170,149 @@ button.site-nav-link {
 .try-page .intro-steps {
   margin-bottom: 28px;
 }
+
+/* --- Settings page (Settings.jsx) ---
+   Reuses QualEval's card language (.qualeval-page wrapper, qe-* chips);
+   only the number and agent card layouts are new. */
+.settings-section {
+  margin-bottom: 32px;
+}
+
+.settings-section > h2 {
+  margin-bottom: 6px;
+}
+
+.settings-number-grid,
+.settings-agent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin: 14px 0;
+}
+
+.settings-number-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--qe-radius-sm);
+  padding: 18px;
+  background: linear-gradient(180deg, var(--panel-gradient-start), var(--panel-gradient-end));
+}
+
+.settings-number-card .pack-note {
+  margin: 0;
+}
+
+.settings-number {
+  font-family: var(--qe-heading);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.settings-number:hover {
+  color: var(--accent);
+}
+
+.settings-number.is-missing {
+  font-size: 16px;
+  color: var(--muted);
+}
+
+.settings-domain {
+  margin-top: 22px;
+}
+
+.settings-domain > h3 {
+  font-size: 17px;
+  margin: 0;
+}
+
+.settings-agent-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--qe-radius-sm);
+  padding: 18px 20px;
+  background: var(--panel);
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.settings-agent-card:hover {
+  box-shadow: var(--qe-glow);
+}
+
+.settings-agent-card.is-live {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.settings-live-chip {
+  font-size: 11px;
+  font-family: var(--mono);
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-weight: 600;
+  background: var(--accent);
+  color: var(--panel);
+}
+
+.settings-agent-desc {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+.settings-agent-greeting {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+.settings-agent-greeting .qe-meta-k {
+  margin-right: 6px;
+}
+
+.settings-agent-prompt {
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.settings-agent-prompt summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.settings-agent-prompt pre {
+  white-space: pre-wrap;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  background: var(--accent-soft);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 8px 0 0;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.settings-agent-actions {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+}
+
+.settings-agent-actions .pack-note {
+  margin: 0;
+}
+
+.settings-notice {
+  border: 1px solid var(--pass);
+  background: var(--pass-soft);
+  color: var(--ink);
+  border-radius: var(--qe-radius-sm);
+  padding: 10px 14px;
+  font-size: 14px;
+}

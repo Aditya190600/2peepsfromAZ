@@ -8,19 +8,33 @@ import {
   setActiveVariant,
   getActiveVariant,
   getVariantWithAgent,
+  ensureVariantRows,
   NOT_CONFIGURED_ERROR,
 } from "./demoAgentConfig.js";
+import { DEMO_AGENTS } from "./demoAgentDefaults.js";
 
 function fakePool() {
   const variants = [
     { key: "compliant", name: "Compliant support agent", agent_id: "agent_compliant", updated_at: "t0" },
     { key: "flawed", name: "Flawed support agent", agent_id: "agent_flawed", updated_at: "t0" },
+    { key: "healthcare-compliant", name: "Compliant clinic receptionist", agent_id: null, updated_at: "t0" },
+    { key: "retired-agent", name: "No longer in the catalog", agent_id: "agent_retired", updated_at: "t0" },
   ];
   let activeVariant = "compliant";
 
   return {
     async query(text, params = []) {
       const sql = text.trim().toLowerCase();
+
+      if (sql.startsWith("insert into qualeval_demo_agent_variants")) {
+        const [keys, names] = params;
+        keys.forEach((key, i) => {
+          if (!variants.some((v) => v.key === key)) {
+            variants.push({ key, name: names[i], agent_id: null, updated_at: "t0" });
+          }
+        });
+        return { rows: [] };
+      }
 
       if (sql.startsWith("select") && sql.includes("from qualeval_demo_agent_variants") && sql.includes("where key")) {
         const [key] = params;
@@ -59,13 +73,26 @@ function fakePool() {
   };
 }
 
-test("listVariants returns both variants sorted by key", async () => {
+test("listVariants returns catalog agents in catalog order, skipping keys no longer in the catalog", async () => {
   const rows = await listVariants({}, fakePool());
   assert.deepEqual(
     rows.map((r) => r.key),
-    ["compliant", "flawed"],
+    ["compliant", "flawed", "healthcare-compliant"],
   );
   assert.equal(rows[0].agentId, "agent_compliant");
+});
+
+test("ensureVariantRows adds a row for every catalog agent without touching existing ones", async () => {
+  const pool = fakePool();
+  await updateVariant("compliant", { name: "Operator-renamed" }, {}, pool);
+  await ensureVariantRows({}, pool);
+  const rows = await listVariants({}, pool);
+  assert.deepEqual(
+    rows.map((r) => r.key),
+    DEMO_AGENTS.map((a) => a.key),
+  );
+  assert.equal(rows[0].name, "Operator-renamed");
+  assert.equal(rows.find((r) => r.key === "flight-flawed").agentId, null);
 });
 
 test("getVariant rejects an invalid key", async () => {
@@ -105,6 +132,25 @@ test("getActiveVariantKey and setActiveVariant round-trip", async () => {
   assert.equal(await getActiveVariantKey({}, pool), "compliant");
   await setActiveVariant("flawed", {}, pool);
   assert.equal(await getActiveVariantKey({}, pool), "flawed");
+});
+
+test("setActiveVariant switches to any provisioned catalog agent", async () => {
+  const pool = fakePool();
+  await updateVariant("healthcare-compliant", { agentId: "agent_healthcare" }, {}, pool);
+  await setActiveVariant("healthcare-compliant", {}, pool);
+  const active = await getActiveVariant({}, pool);
+  assert.equal(active.key, "healthcare-compliant");
+  assert.equal(active.agentId, "agent_healthcare");
+});
+
+test("setActiveVariant refuses an agent that has not been provisioned yet", async () => {
+  const pool = fakePool();
+  await assert.rejects(setActiveVariant("healthcare-compliant", {}, pool), /hasn't been provisioned/);
+  assert.equal(await getActiveVariantKey({}, pool), "compliant");
+});
+
+test("setActiveVariant rejects a key outside the catalog", async () => {
+  await assert.rejects(setActiveVariant("retired-agent", {}, fakePool()), /must be one of/);
 });
 
 test("getActiveVariant resolves the full active variant row via the join", async () => {

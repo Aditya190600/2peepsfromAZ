@@ -511,11 +511,12 @@ if (dbConfigured()) {
   }
 }
 
-// Idempotently creates the two AssemblyAI stored agents (compliant/flawed)
-// behind QUALEVAL_AGENT_NUMBER's variants the first time each is missing an
-// agent_id - see server/qualeval/demoAgentAgentsProvision.js. Must run after
-// runMigrations() above, since it depends on migration 005's agent_id
-// column existing.
+// Idempotently creates the AssemblyAI stored agents in
+// server/qualeval/demoAgentDefaults.js's catalog behind QUALEVAL_AGENT_NUMBER
+// the first time each is missing an agent_id - see
+// server/qualeval/demoAgentAgentsProvision.js. Must run after runMigrations()
+// above, since it depends on migrations 005/008 (agent_id column, open key
+// set) having run.
 ensureDemoAgentsProvisioned().catch((err) => {
   console.error(`QualEval: demo-agent AssemblyAI agent provisioning failed: ${err.message}`);
 });

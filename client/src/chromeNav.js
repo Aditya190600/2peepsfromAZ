@@ -21,6 +21,7 @@ export const PRODUCT_NAV_ALL = [
     label: "Qualitative Evals",
     match: (path) => path === "/qualeval" || path.startsWith("/qualeval/"),
   },
+  { href: "/settings", label: "Settings", match: (path) => path === "/settings" },
 ];
 
 // Visible left-rail entries only.

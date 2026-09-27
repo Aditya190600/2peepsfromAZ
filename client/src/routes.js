@@ -8,6 +8,7 @@ export function matchRoute(pathname, search = "") {
   if (pathname === "/evals") return { name: "evals" };
   if (pathname === "/numbers") return { name: "numbers" };
   if (pathname === "/qualeval") return { name: "qualeval" };
+  if (pathname === "/settings") return { name: "settings" };
   if (pathname.startsWith("/qualeval/")) {
     const evaluationId = decodeURIComponent(pathname.slice("/qualeval/".length));
     if (!evaluationId) return { name: "qualeval" };
