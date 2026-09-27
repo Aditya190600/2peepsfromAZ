@@ -592,14 +592,6 @@ button.site-nav-link {
   color: inherit;
 }
 
-.brand-mark {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--accent);
-  display: inline-block;
-}
-
 .brand h1 {
   font-family: var(--serif);
   font-weight: 600;
