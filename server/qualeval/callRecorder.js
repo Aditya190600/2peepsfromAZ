@@ -35,48 +35,73 @@ function encodeWav(pcmData, sampleRate) {
   return Buffer.concat([header, pcmData]);
 }
 
-// Buffers both call legs' decoded PCM into one mixed mono track, positioned
-// by each frame's arrival offset (tMs since call start, the same clock
-// bridgeSession.js uses for transcript turns) - an approximate wall-clock
-// sync, not sample-accurate, but sufficient for a played-back call
-// recording where both parties need to be audible together.
+// Records both call legs into one mixed mono track. Each leg has its own
+// buffer and every frame is written at the position bridgeSession.js
+// reports on the call timeline (see its callClockMs), so one leg's frames
+// never sum into each other - only the two legs are summed, in
+// toWavBuffer.
+//
+// Frames used to be summed into a single buffer at their wall-clock arrival
+// time. Reproduced on a real call 2026-09-27: Twilio's 20 ms media frames
+// for the target agent arrive with ~0.5 s of network jitter, so about half
+// of them landed on top of the previous frame, leaving ~18% of the agent's
+// speech as dropped-out gaps and ~7% doubled (and buffered frames replayed
+// after setup all stacked at t=0) - the agent side played back choppy next
+// to the caller side. Positioning by the media's own timeline
+// removes both.
 //
 // Preallocated to maxDurationMs since bridgeSession.js already caps every
-// call at that length (its maxDurationTimer forces session.end), so a fixed
-// Int32Array avoids dynamic-growth bookkeeping for the accumulation buffer
-// (int32 headroom absorbs the overlap of two mu-law legs summed before the
-// final int16 clamp in toWavBuffer).
+// call at that length (its maxDurationTimer forces session.end).
 export function createCallRecorder(maxDurationMs) {
   const capacity = Math.ceil((maxDurationMs / 1000) * SAMPLE_RATE) + SAMPLE_RATE; // +1s pad
-  const mix = new Int32Array(capacity);
-  let maxIndex = -1;
+  const tracks = {
+    incoming: { samples: new Int16Array(capacity), end: 0 },
+    outgoing: { samples: new Int16Array(capacity), end: 0 },
+  };
 
-  function addFrame(base64Payload, tMs) {
+  function indexAt(tMs) {
+    return Math.min(capacity, Math.max(0, Math.round((tMs / 1000) * SAMPLE_RATE)));
+  }
+
+  function write(track, base64Payload, tMs) {
     if (!base64Payload) return;
-    const bytes = Buffer.from(base64Payload, "base64");
-    const samples = decodeMuLawBytes(bytes);
-    const startIndex = Math.max(0, Math.round((tMs / 1000) * SAMPLE_RATE));
-    for (let i = 0; i < samples.length; i++) {
-      const idx = startIndex + i;
-      if (idx >= capacity) break;
-      mix[idx] += samples[i];
-      if (idx > maxIndex) maxIndex = idx;
-    }
+    const samples = decodeMuLawBytes(Buffer.from(base64Payload, "base64"));
+    const startIndex = indexAt(tMs);
+    const fitted = samples.subarray(0, Math.max(0, capacity - startIndex));
+    if (fitted.length === 0) return;
+    track.samples.set(fitted, startIndex);
+    track.end = Math.max(track.end, startIndex + fitted.length);
+  }
+
+  // Barge-in: Twilio discarded every outgoing frame it had not played yet,
+  // so drop whatever this leg had queued past that point.
+  function clearOutgoingFrom(tMs) {
+    const track = tracks.outgoing;
+    const from = indexAt(tMs);
+    if (from >= track.end) return;
+    track.samples.fill(0, from, track.end);
+    track.end = from;
   }
 
   function hasAudio() {
-    return maxIndex >= 0;
+    return tracks.incoming.end > 0 || tracks.outgoing.end > 0;
   }
 
   function toWavBuffer() {
-    const length = maxIndex + 1;
+    const length = Math.max(tracks.incoming.end, tracks.outgoing.end);
     const pcm = Buffer.alloc(length * 2);
     for (let i = 0; i < length; i++) {
-      const clamped = Math.max(-32768, Math.min(32767, mix[i]));
-      pcm.writeInt16LE(clamped, i * 2);
+      const mixed = tracks.incoming.samples[i] + tracks.outgoing.samples[i];
+      pcm.writeInt16LE(Math.max(-32768, Math.min(32767, mixed)), i * 2);
     }
     return encodeWav(pcm, SAMPLE_RATE);
   }
 
-  return { addFrame, hasAudio, toWavBuffer };
+  return {
+    addIncomingFrame: (base64Payload, tMs) => write(tracks.incoming, base64Payload, tMs),
+    addOutgoingFrame: (base64Payload, tMs) => write(tracks.outgoing, base64Payload, tMs),
+    clearOutgoingFrom,
+    hasAudio,
+    toWavBuffer,
+  };
 }

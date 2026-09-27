@@ -139,8 +139,9 @@ export function attachTargetAgentStreamServer(
         // comment for why the two directions map roles oppositely.
         transcriptUserRole: "user",
         transcriptAgentRole: "agent",
-        onIncomingAudio: (audio, tMs) => recorder.addFrame(audio, tMs),
-        onOutgoingAudio: (audio, tMs) => recorder.addFrame(audio, tMs),
+        onIncomingAudio: (audio, tMs) => recorder.addIncomingFrame(audio, tMs),
+        onOutgoingAudio: (audio, tMs) => recorder.addOutgoingFrame(audio, tMs),
+        onOutgoingAudioCleared: (tMs) => recorder.clearOutgoingFrom(tMs),
         onFinished,
         onError,
       });
