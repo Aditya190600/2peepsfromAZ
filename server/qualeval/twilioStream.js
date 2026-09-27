@@ -163,6 +163,9 @@ export function attachTwilioStreamServer(
         twilioWs,
         token,
         systemPrompt: buildCallerSystemPrompt(scenario),
+        // Our simulated caller hangs up once both sides have wrapped up,
+        // instead of every run holding the line to the max-duration cap.
+        endCallTool: true,
         // This leg carries both sides of the call: incoming is the target
         // agent over the phone, outgoing is our simulated caller. Each frame
         // goes to the recorder and to any live listener (liveCallHub.js).

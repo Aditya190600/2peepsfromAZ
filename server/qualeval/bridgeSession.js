@@ -7,6 +7,27 @@ import { peakPcmuAmplitude, SILENCE_AMPLITUDE_THRESHOLD } from "./pcmuAudio.js";
 export const DEFAULT_MAX_DURATION_MS = 5 * 60 * 1000;
 export const DEFAULT_SILENCE_TIMEOUT_MS = 30 * 1000;
 
+// Lets the simulated caller hang up once the conversation is over, instead
+// of both agents trading pleasantries until DEFAULT_MAX_DURATION_MS. A
+// client-side function tool in AssemblyAI's flat schema
+// (docs/voice-agents/voice-agent-api/tools/overview): AssemblyAI emits a
+// tool.call and this bridge does the hangup itself - see the "tool.call"
+// case below. The description is the model's only cue for when to call it,
+// so it names both the trigger and the anti-triggers.
+export const END_CALL_TOOL_NAME = "end_call";
+export const END_CALL_TOOL = {
+  type: "function",
+  name: END_CALL_TOOL_NAME,
+  description:
+    "Hang up the phone call. Call this only once the conversation is over on both sides: you have said goodbye (or clearly said you need nothing more) AND the other party has said goodbye back or confirmed there is nothing more to discuss. Do not call it while the other party is still helping you, is in the middle of speaking, or has just asked you a question.",
+  parameters: { type: "object", properties: {} },
+};
+// Upper bound on how long a requested hangup waits for the caller's final
+// reply to finish and for Twilio to play it out (the "mark" echo below)
+// before ending anyway, so a lost reply.done/mark can't hold the call open.
+export const DEFAULT_HANGUP_TIMEOUT_MS = 15 * 1000;
+const END_CALL_MARK = "end_call";
+
 // Bridges one Twilio Media Streams WebSocket connection (already accepted -
 // see server/qualeval/twilioStream.js) with a new server-side AssemblyAI
 // Voice Agent session configured as the scenario's simulated caller.
@@ -94,6 +115,12 @@ export function createBridgeSession({
   // only - neither feeds anything back into a leg.
   onTurn,
   onOutgoingAudioCleared,
+  // Registers END_CALL_TOOL on the session so this side's AssemblyAI agent
+  // can hang up. Only the simulated-caller side (server/qualeval/
+  // twilioStream.js) sets it; the target-agent side binds a stored agent
+  // (agentId), which can't carry inline tools anyway.
+  endCallTool = false,
+  hangupTimeoutMs = DEFAULT_HANGUP_TIMEOUT_MS,
   maxDurationMs = DEFAULT_MAX_DURATION_MS,
   silenceTimeoutMs = DEFAULT_SILENCE_TIMEOUT_MS,
   // Bounded grace window given to AssemblyAI to flush a final transcript/
@@ -110,6 +137,14 @@ export function createBridgeSession({
   let maxDurationTimer = null;
   let stopGraceTimer = null;
   let silenceTimer = null;
+  // End-of-conversation hangup (endCallTool): null, then "requested" once
+  // the caller's agent calls END_CALL_TOOL, then either "playing" (that
+  // reply finished and we're waiting for Twilio to finish playing it - the
+  // END_CALL_MARK echo) or "farEndTalking" (the far end talked over it and
+  // we're waiting for its turn to end), then "ending" once session.end is
+  // sent.
+  let hangup = null;
+  let hangupTimer = null;
   // AssemblyAI's session.ready/reply.audio and Twilio's Media Streams "start"
   // event arrive over two independent sockets with no ordering guarantee -
   // confirmed live 2026-09-26 against a real inbound call (Twilio Voice
@@ -191,6 +226,7 @@ export function createBridgeSession({
     clearTimeout(maxDurationTimer);
     clearTimeout(stopGraceTimer);
     clearTimeout(silenceTimer);
+    clearTimeout(hangupTimer);
     silenceTimer = null;
     closeSockets();
     onFinished?.({ turns: [...turns], callSid, reason });
@@ -202,6 +238,7 @@ export function createBridgeSession({
     clearTimeout(maxDurationTimer);
     clearTimeout(stopGraceTimer);
     clearTimeout(silenceTimer);
+    clearTimeout(hangupTimer);
     silenceTimer = null;
     closeSockets();
     onError?.(message);
@@ -238,6 +275,46 @@ export function createBridgeSession({
     resetSilenceTimer();
   }
 
+  // Ends the call because the caller's agent decided the conversation is
+  // over. Closing the Twilio Media Stream socket (finish -> closeSockets)
+  // is what actually hangs up the phone: <Connect><Stream> returns once its
+  // WebSocket closes and twilioVoice.js's TwiML has no further verbs, so
+  // Twilio completes the call - and the far leg gets a normal "stop".
+  function endCallNow() {
+    if (finished || hangup === "ending") return;
+    hangup = "ending";
+    clearTimeout(hangupTimer);
+    log("hanging up (end_call)");
+    if (aaiReady && aaiWs.readyState === aaiWs.OPEN) {
+      aaiWs.send(JSON.stringify({ type: "session.end" }));
+      clearTimeout(stopGraceTimer);
+      stopGraceTimer = setTimeout(() => finish("end_call"), stopGraceMs);
+    } else {
+      finish("end_call");
+    }
+  }
+
+  function requestHangup() {
+    if (finished || hangup) return;
+    hangup = "requested";
+    clearTimeout(hangupTimer);
+    hangupTimer = setTimeout(endCallNow, hangupTimeoutMs);
+  }
+
+  // The reply that carried the end_call tool call finished generating. Its
+  // goodbye audio may still be queued at Twilio (AssemblyAI streams replies
+  // faster than real time), so ask Twilio to echo a mark once playback
+  // reaches this point and hang up then, not now - otherwise the far end
+  // hears the goodbye cut off mid-word.
+  function hangUpAfterPlayout() {
+    hangup = "playing";
+    if (streamSid && twilioWs.readyState === twilioWs.OPEN) {
+      twilioWs.send(JSON.stringify({ event: "mark", streamSid, mark: { name: END_CALL_MARK } }));
+    } else {
+      endCallNow();
+    }
+  }
+
   function armMaxDurationCap() {
     if (maxDurationTimer) return;
     maxDurationTimer = setTimeout(() => {
@@ -258,6 +335,7 @@ export function createBridgeSession({
       : {
           system_prompt: systemPrompt,
           ...(greeting ? { greeting } : {}),
+          ...(endCallTool ? { tools: [END_CALL_TOOL] } : {}),
           input: { format: { encoding: "audio/pcmu" } },
           // `voice` is a plain string nested under `output` on the WS
           // session.update payload - NOT the top-level `{voice: {voice_id}}`
@@ -286,6 +364,7 @@ export function createBridgeSession({
         break;
       case "transcript.user":
         addTurn(transcriptUserRole, msg.text);
+        if (hangup === "farEndTalking") endCallNow();
         break;
       case "transcript.agent":
         addTurn(transcriptAgentRole, msg.text);
@@ -306,8 +385,30 @@ export function createBridgeSession({
           onOutgoingAudio?.(msg.data, playAtMs);
         }
         break;
+      case "tool.call":
+        if (endCallTool && msg.name === END_CALL_TOOL_NAME) {
+          log("aai requested end_call");
+          requestHangup();
+        }
+        break;
       case "reply.done":
         log("aai reply.done status", msg.status);
+        if (hangup === "requested") {
+          // Interrupted means the far end talked over our goodbye - on a
+          // real call that is almost always its own farewell ("thanks for
+          // calling, have a great day"), reproduced live 2026-09-27. An
+          // earlier version cancelled the hangup here; the caller's agent
+          // then answered the farewell without calling end_call again and
+          // the line sat open until a silence/duration backstop. Our side
+          // has already decided the call is over, so let the far end finish
+          // its turn and hang up then, rather than cutting it off mid-word.
+          if (msg.status === "interrupted") {
+            log("end_call reply interrupted - hanging up once the far end finishes its turn");
+            hangup = "farEndTalking";
+          } else {
+            hangUpAfterPlayout();
+          }
+        }
         // Barge-in: the far end started talking over this agent, so
         // AssemblyAI cancelled the reply. Twilio has already buffered every
         // reply.audio chunk sent so far and keeps playing them unless told
@@ -328,7 +429,7 @@ export function createBridgeSession({
         }
         break;
       case "session.ended":
-        finish("session.ended");
+        finish(hangup === "ending" ? "end_call" : "session.ended");
         break;
       case "session.error":
         fail(`AssemblyAI session error: ${msg.error ?? msg.message ?? "unknown"}`);
@@ -368,6 +469,9 @@ export function createBridgeSession({
           }
         }
         pendingReplyAudio.length = 0;
+        break;
+      case "mark":
+        if (hangup === "playing" && msg.mark?.name === END_CALL_MARK) endCallNow();
         break;
       case "media":
         noteAudioActivity(msg.media?.payload);
