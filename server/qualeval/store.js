@@ -337,21 +337,65 @@ export async function markRunError(id, message, env = process.env, pool = getPoo
   return runRow(rows[0]);
 }
 
-// Watchdog-only variant of markRunError (see server/qualeval/streamWatchdog.js):
-// only writes if the run is still 'in_progress', so a watchdog that fires
-// late (after the call bridge already reached awaiting_evaluation/pass/fail
-// on its own) can never clobber a real result with a fabricated timeout
-// error. Returns null (no-op) instead of throwing when the run has already
-// moved on or doesn't exist.
-export async function markRunErrorIfStale(id, message, env = process.env, pool = getPool(env)) {
+// How long a run may sit in each unfinished state before expireStaleRuns
+// treats it as abandoned. Each bound comfortably exceeds the real work that
+// state covers, so a live call or evaluation is never cut short:
+// - pending: dispatch (router.js's dispatchCallPlacement) starts right after
+//   createRun and reaches Twilio within seconds.
+// - in_progress: Twilio ringing (up to ~60s), the Media Stream connecting,
+//   and bridgeSession.js's DEFAULT_MAX_DURATION_MS (5 min) call cap.
+// - awaiting_evaluation: the LLM Gateway evaluator. llmGateway.js serializes
+//   every Gateway caller behind one process-wide mutex, so an evaluation can
+//   queue behind others (e.g. the boot-time warmCache right after a deploy)
+//   before its own retry budget (up to 7 x 25s timeouts plus 429 backoff,
+//   roughly 4 min) even starts.
+export const STALE_RUN_AFTER_MS = {
+  pending: 2 * 60 * 1000,
+  in_progress: 8 * 60 * 1000,
+  awaiting_evaluation: 20 * 60 * 1000,
+};
+
+const STALE_RUN_ERRORS = {
+  pending: "Call was never placed - call placement stopped before reaching Twilio (e.g. the server restarted).",
+  in_progress:
+    "Call did not finish - the call bridge stopped reporting before a transcript landed (e.g. the server restarted mid-call, or the Media Stream never connected).",
+  awaiting_evaluation: "Evaluation did not finish - the evaluator stopped before recording a verdict (e.g. the server restarted).",
+};
+
+// Durable reconciliation for runs whose in-process owner is gone: the call
+// bridge (twilioStream.js), placement dispatch, and evaluator all run inside
+// the app process, so a redeploy/restart (routine on Railway) or a Media
+// Stream that never connects leaves the run in its unfinished state with
+// nothing left to ever advance it. Any run past its STALE_RUN_AFTER_MS bound
+// is marked 'error' honestly - never given a fabricated verdict. Runs at read
+// time (router.js) rather than on an in-memory timer, so it survives the very
+// restarts it exists to clean up. `includePending` is false when Twilio isn't
+// configured, since 'pending' is then the honest resting state of a stub run.
+export async function expireStaleRuns(
+  { includePending = true, now = Date.now() } = {},
+  env = process.env,
+  pool = getPool(env),
+) {
   requirePool(pool);
+  const cutoff = (state) => new Date(now - STALE_RUN_AFTER_MS[state]).toISOString();
   const { rows } = await pool.query(
-    `update qualeval_runs set verdict = 'error', error = $2
-     where id = $1 and verdict = 'in_progress'
+    `update qualeval_runs
+     set verdict = 'error',
+         error = case verdict when 'pending' then $4 when 'in_progress' then $5 else $6 end
+     where (verdict = 'pending' and $1::timestamptz is not null and created_at < $1::timestamptz)
+        or (verdict = 'in_progress' and created_at < $2::timestamptz)
+        or (verdict = 'awaiting_evaluation' and coalesce(call_timestamp, created_at) < $3::timestamptz)
      returning ${RUN_COLUMNS}`,
-    [id, message],
+    [
+      includePending ? cutoff("pending") : null,
+      cutoff("in_progress"),
+      cutoff("awaiting_evaluation"),
+      STALE_RUN_ERRORS.pending,
+      STALE_RUN_ERRORS.in_progress,
+      STALE_RUN_ERRORS.awaiting_evaluation,
+    ],
   );
-  return rows[0] ? runRow(rows[0]) : null;
+  return rows.map(runRow);
 }
 
 // Attaches a real transcript to a run and records the call timestamp. Called
