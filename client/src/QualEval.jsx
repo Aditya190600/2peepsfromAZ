@@ -352,7 +352,12 @@ function RunResult({ run }) {
       <VerdictPill run={run} />
       {run?.audioRef && (
         <div className="qe-run-audio">
-          <AudioPlayer src={run.audioRef} audioRef={audioRef} markers={runToAudioMarkers(run)} />
+          <AudioPlayer
+            src={run.audioRef}
+            audioRef={audioRef}
+            turns={turns}
+            markers={runToAudioMarkers(run)}
+          />
           <p className="hint">
             Click a transcript timestamp or a waveform marker to seek. Red markers show evaluation
             evidence for failed criteria.

@@ -43,6 +43,7 @@ export function ExamplesPanels({ navigate, topTabBar = null, onShowLiveCall = nu
   const [fleetProgress, setFleetProgress] = useState(null);
   const [fleetError, setFleetError] = useState(null);
   const [activeAudioUrl, setActiveAudioUrl] = useState(null);
+  const [activeTurns, setActiveTurns] = useState(null);
   const [sampleLoadingKey, setSampleLoadingKey] = useState(null);
   const [sampleError, setSampleError] = useState(null);
   const [sampleTab, setSampleTab] = useState("samples"); // samples | scripted
@@ -88,6 +89,7 @@ export function ExamplesPanels({ navigate, topTabBar = null, onShowLiveCall = nu
     showAudio(SAMPLE_AUDIO_URLS[key] && PLAYABLE_SAMPLE_LABEL[key] ? SAMPLE_AUDIO_URLS[key] : null);
     try {
       const session = sessionByKey(key);
+      setActiveTurns(session.turns ?? null);
       const nextReport = await analyze(session, packIds);
       setReport(nextReport);
       recordHistory(sampleLabel(key), nextReport, session, packIds, {
@@ -116,6 +118,7 @@ export function ExamplesPanels({ navigate, topTabBar = null, onShowLiveCall = nu
     setFleetResults(null);
     clearErrors();
     showAudio(entry.audioKey ? SAMPLE_AUDIO_URLS[entry.audioKey] ?? null : null);
+    setActiveTurns(entry.turns ?? SAMPLE_SESSIONS[key]?.turns ?? null);
     setReport(entry.report);
   };
 
@@ -261,7 +264,7 @@ export function ExamplesPanels({ navigate, topTabBar = null, onShowLiveCall = nu
                           {sampleLoadingKey === key ? "Analyzing…" : "Analyze"}
                         </button>
                       </div>
-                      <AudioPlayer src={SAMPLE_AUDIO_URLS[key]} />
+                      <AudioPlayer src={SAMPLE_AUDIO_URLS[key]} turns={SAMPLE_SESSIONS[key]?.turns} />
                     </div>
                   ))}
                 </div>
@@ -316,6 +319,7 @@ export function ExamplesPanels({ navigate, topTabBar = null, onShowLiveCall = nu
                 error={reportError}
                 audioUrl={activeAudioUrl}
                 audioRef={audioRef}
+                turns={activeTurns}
                 onSeek={onSeek}
                 showStorageNote={Boolean(report) && !reportLoading && !reportError}
                 navigate={navigate}

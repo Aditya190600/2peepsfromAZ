@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from "react";
+import { computeDualPeaks, WAVEFORM_BUCKETS } from "./audioPeaks";
 import { seekAudio } from "./seek";
+
+const PLAYBACK_RATES = [1, 1.25, 1.5, 2];
+const AGENT_COLOR = "#662222";
+const USER_COLOR = "#888888";
+const AGENT_DIM = "#441818";
+const USER_DIM = "#555555";
+const PLAYHEAD_COLOR = "#ffffff";
+const SILENT_THRESHOLD = 0.02;
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds)) return "0:00";
@@ -7,33 +16,6 @@ function formatTime(seconds) {
   const m = Math.floor(total / 60);
   const s = total % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
-}
-
-const WAVEFORM_BUCKETS = 240;
-
-// Downsamples a decoded AudioBuffer into WAVEFORM_BUCKETS peak-amplitude
-// values (0..1), mixing all channels down to mono first. Runs once per src.
-function computePeaks(audioBuffer, buckets) {
-  const channels = audioBuffer.numberOfChannels;
-  const length = audioBuffer.length;
-  const bucketSize = Math.max(1, Math.floor(length / buckets));
-  const peaks = new Array(buckets).fill(0);
-  const channelData = [];
-  for (let c = 0; c < channels; c++) channelData.push(audioBuffer.getChannelData(c));
-  for (let b = 0; b < buckets; b++) {
-    const start = b * bucketSize;
-    const end = Math.min(length, start + bucketSize);
-    let peak = 0;
-    for (let i = start; i < end; i++) {
-      let sample = 0;
-      for (let c = 0; c < channels; c++) sample += Math.abs(channelData[c][i]);
-      sample /= channels;
-      if (sample > peak) peak = sample;
-    }
-    peaks[b] = peak;
-  }
-  const max = Math.max(...peaks, 0.0001);
-  return peaks.map((p) => p / max);
 }
 
 function groupMarkersByTime(markers) {
@@ -56,7 +38,43 @@ function groupMarkersByTime(markers) {
   return [...byTime.values()];
 }
 
-function drawWaveform(canvas, peaks, progress) {
+function drawTrackBars(ctx, peaks, xStart, trackTop, trackHeight, color, dimColor, progressX, growUp) {
+  const width = ctx.canvas.width / (window.devicePixelRatio || 1);
+  const barWidth = width / peaks.length;
+  const baseline = growUp ? trackTop + trackHeight - 3 : trackTop + 3;
+  const maxBar = trackHeight * 0.42;
+
+  for (let i = 0; i < peaks.length; i++) {
+    const x = xStart + i * barWidth + barWidth / 2;
+    const peak = peaks[i];
+    const played = x < progressX;
+    const colorForBar = played ? color : dimColor;
+
+    if (peak < SILENT_THRESHOLD) {
+      ctx.fillStyle = played ? color : dimColor;
+      ctx.beginPath();
+      ctx.arc(x, baseline, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      continue;
+    }
+
+    const barH = Math.max(2, peak * maxBar);
+    ctx.strokeStyle = colorForBar;
+    ctx.lineWidth = Math.max(2, barWidth * 0.55);
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    if (growUp) {
+      ctx.moveTo(x, baseline);
+      ctx.lineTo(x, baseline - barH);
+    } else {
+      ctx.moveTo(x, baseline);
+      ctx.lineTo(x, baseline + barH);
+    }
+    ctx.stroke();
+  }
+}
+
+function drawDualWaveform(canvas, dualPeaks, progress) {
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
   const width = Math.max(1, Math.floor(rect.width));
@@ -68,35 +86,56 @@ function drawWaveform(canvas, peaks, progress) {
   const ctx = canvas.getContext("2d");
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
-  if (!peaks || peaks.length === 0) return;
+  if (!dualPeaks) return;
 
-  const mid = height / 2;
-  const barWidth = width / peaks.length;
-  const playedStyle = getComputedStyle(document.documentElement);
-  const accent = playedStyle.getPropertyValue("--accent")?.trim() || "#2563eb";
-  const muted = playedStyle.getPropertyValue("--line")?.trim() || "#c7c9cc";
+  const gap = 4;
+  const trackHeight = (height - gap) / 2;
   const progressX = width * (Number.isFinite(progress) ? progress : 0);
+  const centerY = height / 2;
 
-  for (let i = 0; i < peaks.length; i++) {
-    const x = i * barWidth;
-    const barHeight = Math.max(1, peaks[i] * (height - 4));
-    ctx.fillStyle = x < progressX ? accent : muted;
-    ctx.fillRect(x, mid - barHeight / 2, Math.max(1, barWidth - 1), barHeight);
-  }
+  drawTrackBars(ctx, dualPeaks.agent, 0, 0, trackHeight, AGENT_COLOR, AGENT_DIM, progressX, true);
+  drawTrackBars(
+    ctx,
+    dualPeaks.user,
+    0,
+    trackHeight + gap,
+    trackHeight,
+    USER_COLOR,
+    USER_DIM,
+    progressX,
+    false,
+  );
+
+  ctx.strokeStyle = PLAYHEAD_COLOR;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(progressX, 2);
+  ctx.lineTo(progressX, height - 2);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(progressX, centerY, 5, 0, Math.PI * 2);
+  ctx.strokeStyle = PLAYHEAD_COLOR;
+  ctx.lineWidth = 2;
+  ctx.fillStyle = "#1a1a1a";
+  ctx.fill();
+  ctx.stroke();
 }
 
 // One shared, styled compact player replacing raw browser <audio controls>
 // widgets throughout the app - see judging-criteria-and-enterprise-gap-assessment.md
 // item 7 (seven stacked default grey pills read as a debug scaffold).
 //
-// `markers` (optional) overlays clickable ticks on the waveform at each
-// {tMs, kind, label} entry - `kind: "flag"` renders as a flagged-finding
-// marker, anything else as a plain turn-boundary marker. Clicking one seeks
-// via the same seekAudio (client/src/seek.js) the clickable-timestamp list
-// UI uses, through `onSeek` if the caller supplied one (so the caller's own
-// offsetMs-aware seek logic - e.g. live-call recording offset - stays the
-// single source of truth), else directly.
-export default function AudioPlayer({ src, audioRef, compact = false, markers = [], offsetMs = 0 }) {
+// Full mode: dark dual-track waveform (agent upper, user lower) with click-to-seek.
+// Compact mode: simple row with range scrubber for live-call previews.
+export default function AudioPlayer({
+  src,
+  audioRef,
+  compact = false,
+  markers = [],
+  offsetMs = 0,
+  turns = null,
+}) {
   const internalRef = useRef(null);
   const ref = audioRef ?? internalRef;
   const containerRef = useRef(null);
@@ -104,9 +143,10 @@ export default function AudioPlayer({ src, audioRef, compact = false, markers = 
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [peaks, setPeaks] = useState(null);
-  const drawStateRef = useRef({ peaks: null, current: 0, duration: 0 });
-  drawStateRef.current = { peaks, current, duration };
+  const [dualPeaks, setDualPeaks] = useState(null);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const drawStateRef = useRef({ dualPeaks: null, current: 0, duration: 0 });
+  drawStateRef.current = { dualPeaks, current, duration };
 
   useEffect(() => {
     const audio = ref.current;
@@ -127,11 +167,13 @@ export default function AudioPlayer({ src, audioRef, compact = false, markers = 
     };
   }, [src, ref]);
 
-  // Waveform is decoded client-side from the same src the <audio> element
-  // already plays - no new backend endpoint. Skipped in compact mode (small
-  // inline previews where the space isn't worth the decode cost).
   useEffect(() => {
-    setPeaks(null);
+    const audio = ref.current;
+    if (audio) audio.playbackRate = playbackRate;
+  }, [playbackRate, src, ref]);
+
+  useEffect(() => {
+    setDualPeaks(null);
     if (compact || !src) return;
     let cancelled = false;
     let ctx = null;
@@ -144,7 +186,7 @@ export default function AudioPlayer({ src, audioRef, compact = false, markers = 
         ctx = new AudioContextImpl();
         const audioBuffer = await ctx.decodeAudioData(buf);
         if (cancelled) return;
-        setPeaks(computePeaks(audioBuffer, WAVEFORM_BUCKETS));
+        setDualPeaks(computeDualPeaks(audioBuffer, turns, WAVEFORM_BUCKETS));
       } catch (err) {
         console.error("Waveform decode failed:", err);
       } finally {
@@ -154,15 +196,15 @@ export default function AudioPlayer({ src, audioRef, compact = false, markers = 
     return () => {
       cancelled = true;
     };
-  }, [src, compact]);
+  }, [src, compact, turns]);
 
   useEffect(() => {
     if (compact) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const progress = duration ? current / duration : 0;
-    drawWaveform(canvas, peaks, progress);
-  }, [peaks, current, duration, compact]);
+    drawDualWaveform(canvas, dualPeaks, progress);
+  }, [dualPeaks, current, duration, compact]);
 
   useEffect(() => {
     if (compact) return;
@@ -170,8 +212,8 @@ export default function AudioPlayer({ src, audioRef, compact = false, markers = 
     const canvas = canvasRef.current;
     if (!container || !canvas) return;
     const onResize = () => {
-      const { peaks: p, current: c, duration: d } = drawStateRef.current;
-      drawWaveform(canvas, p, d ? c / d : 0);
+      const { dualPeaks: p, current: c, duration: d } = drawStateRef.current;
+      drawDualWaveform(canvas, p, d ? c / d : 0);
     };
     const observer = new ResizeObserver(onResize);
     observer.observe(container);
@@ -183,6 +225,13 @@ export default function AudioPlayer({ src, audioRef, compact = false, markers = 
     if (!audio) return;
     if (audio.paused) audio.play().catch((err) => console.error("Audio playback failed:", err));
     else audio.pause();
+  };
+
+  const cycleRate = () => {
+    setPlaybackRate((prev) => {
+      const idx = PLAYBACK_RATES.indexOf(prev);
+      return PLAYBACK_RATES[(idx + 1) % PLAYBACK_RATES.length];
+    });
   };
 
   const onScrub = (e) => {
@@ -201,79 +250,93 @@ export default function AudioPlayer({ src, audioRef, compact = false, markers = 
   };
 
   const progress = duration ? (current / duration) * 100 : 0;
+  const rateLabel = playbackRate === 1 ? "1x" : `${playbackRate}x`;
+
+  if (compact) {
+    return (
+      <div className="audio-player audio-player-compact">
+        <div className="audio-player-controls">
+          <audio ref={ref} src={src} preload="none" hidden />
+          <button
+            type="button"
+            className="audio-player-toggle"
+            onClick={togglePlay}
+            aria-label={playing ? "Pause" : "Play"}
+          >
+            {playing ? "❚❚" : "▶"}
+          </button>
+          <input
+            type="range"
+            className="audio-player-scrub"
+            min="0"
+            max="100"
+            value={Number.isFinite(progress) ? progress : 0}
+            onChange={onScrub}
+            aria-label="Seek"
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className={`audio-player ${compact ? "audio-player-compact" : ""}`}>
-      <div className="audio-player-controls">
-        <audio ref={ref} src={src} preload={compact ? "none" : "metadata"} hidden />
-        <button
-          type="button"
-          className="audio-player-toggle"
-          onClick={togglePlay}
-          aria-label={playing ? "Pause" : "Play"}
-        >
-          {playing ? "❚❚" : "▶"}
-        </button>
-        <input
-          type="range"
-          className="audio-player-scrub"
-          min="0"
-          max="100"
-          value={Number.isFinite(progress) ? progress : 0}
-          onChange={onScrub}
-          aria-label="Seek"
-        />
-        {!compact && (
-          <span className="audio-player-time">
-            {formatTime(current)} / {formatTime(duration)}
-          </span>
-        )}
+    <div className="audio-player audio-player-dual">
+      <audio ref={ref} src={src} preload="metadata" hidden />
+      <button
+        type="button"
+        className="audio-player-toggle audio-player-toggle-dual"
+        onClick={togglePlay}
+        aria-label={playing ? "Pause" : "Play"}
+      >
+        {playing ? "❚❚" : "▶"}
+      </button>
+      <div className="audio-player-waveform-wrap" ref={containerRef}>
+        <canvas ref={canvasRef} className="audio-player-waveform" onClick={onWaveformClick} />
+        {duration > 0 &&
+          groupMarkersByTime(markers.filter((m) => m.tMs != null && m.tMs - offsetMs >= 0)).map(
+            (m, i) => {
+              const relSeconds = (m.tMs - offsetMs) / 1000;
+              const left = `${Math.min(100, Math.max(0, (relSeconds / duration) * 100))}%`;
+              const isFlag = m.kind === "flag";
+              const tooltipId = `audio-marker-tip-${i}`;
+              return (
+                <div key={`${m.tMs}-${i}`} className="audio-marker-wrap" style={{ left }}>
+                  <button
+                    type="button"
+                    className={`audio-marker ${isFlag ? "is-flag" : "is-turn"}`}
+                    aria-describedby={isFlag && m.labels.length > 0 ? tooltipId : undefined}
+                    title={
+                      !isFlag || m.labels.length === 0 ? (m.labels[0] ?? formatTime(relSeconds)) : undefined
+                    }
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onMarkerClick(m);
+                    }}
+                  />
+                  {isFlag && m.labels.length > 0 && (
+                    <span id={tooltipId} role="tooltip" className="audio-marker-tooltip">
+                      {m.labels.length === 1 ? (
+                        m.labels[0]
+                      ) : (
+                        <ul>
+                          {m.labels.map((label) => (
+                            <li key={label}>{label}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </span>
+                  )}
+                </div>
+              );
+            },
+          )}
       </div>
-      {!compact && (
-        <div className="audio-player-waveform-wrap" ref={containerRef}>
-          <canvas
-            ref={canvasRef}
-            className="audio-player-waveform"
-            onClick={onWaveformClick}
-          />
-          {duration > 0 &&
-            groupMarkersByTime(markers.filter((m) => m.tMs != null && m.tMs - offsetMs >= 0)).map(
-              (m, i) => {
-                const relSeconds = (m.tMs - offsetMs) / 1000;
-                const left = `${Math.min(100, Math.max(0, (relSeconds / duration) * 100))}%`;
-                const isFlag = m.kind === "flag";
-                const tooltipId = `audio-marker-tip-${i}`;
-                return (
-                  <div key={`${m.tMs}-${i}`} className="audio-marker-wrap" style={{ left }}>
-                    <button
-                      type="button"
-                      className={`audio-marker ${isFlag ? "is-flag" : "is-turn"}`}
-                      aria-describedby={isFlag && m.labels.length > 0 ? tooltipId : undefined}
-                      title={!isFlag || m.labels.length === 0 ? m.labels[0] ?? formatTime(relSeconds) : undefined}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onMarkerClick(m);
-                      }}
-                    />
-                    {isFlag && m.labels.length > 0 && (
-                      <span id={tooltipId} role="tooltip" className="audio-marker-tooltip">
-                        {m.labels.length === 1 ? (
-                          m.labels[0]
-                        ) : (
-                          <ul>
-                            {m.labels.map((label) => (
-                              <li key={label}>{label}</li>
-                            ))}
-                          </ul>
-                        )}
-                      </span>
-                    )}
-                  </div>
-                );
-              },
-            )}
-        </div>
-      )}
+      <span className="audio-player-time audio-player-time-dual">
+        {formatTime(current)} / {formatTime(duration)}
+      </span>
+      <button type="button" className="audio-player-rate" onClick={cycleRate} aria-label="Playback speed">
+        {rateLabel}
+      </button>
     </div>
   );
 }
