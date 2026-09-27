@@ -358,6 +358,10 @@ body {
   border-radius: 99px;
 }
 
+.app-progress-fill.is-low {
+  background: var(--flag);
+}
+
 .fleet-board {
   margin-bottom: 28px;
 }
