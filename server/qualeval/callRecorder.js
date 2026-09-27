@@ -1,3 +1,5 @@
+import { decodeMuLawBytes } from "./pcmuAudio.js";
+
 const SAMPLE_RATE = 8000;
 
 // Shared by server/qualeval/twilioStream.js (upload) and
@@ -12,28 +14,6 @@ export function qualevalCallAudioKey(runId) {
 // by the Twilio Call SID, which is what production_calls is unique on.
 export function productionCallAudioKey(callSid) {
   return `production-calls/${encodeURIComponent(callSid)}.wav`;
-}
-
-function buildMuLawDecodeTable() {
-  const table = new Int16Array(256);
-  for (let i = 0; i < 256; i++) {
-    const muLawByte = ~i & 0xff;
-    const sign = muLawByte & 0x80;
-    const exponent = (muLawByte >> 4) & 0x07;
-    const mantissa = muLawByte & 0x0f;
-    let sample = ((mantissa << 3) + 0x84) << exponent;
-    sample -= 0x84;
-    table[i] = sign ? -sample : sample;
-  }
-  return table;
-}
-
-const MU_LAW_DECODE_TABLE = buildMuLawDecodeTable();
-
-function decodeMuLaw(bytes) {
-  const out = new Int16Array(bytes.length);
-  for (let i = 0; i < bytes.length; i++) out[i] = MU_LAW_DECODE_TABLE[bytes[i]];
-  return out;
 }
 
 function encodeWav(pcmData, sampleRate) {
@@ -74,7 +54,7 @@ export function createCallRecorder(maxDurationMs) {
   function addFrame(base64Payload, tMs) {
     if (!base64Payload) return;
     const bytes = Buffer.from(base64Payload, "base64");
-    const samples = decodeMuLaw(bytes);
+    const samples = decodeMuLawBytes(bytes);
     const startIndex = Math.max(0, Math.round((tMs / 1000) * SAMPLE_RATE));
     for (let i = 0; i < samples.length; i++) {
       const idx = startIndex + i;
