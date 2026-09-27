@@ -17,25 +17,65 @@ function muLawEncode(sample) {
   return ~(sign | (exponent << 4) | mantissa) & 0xff;
 }
 
-test("createCallRecorder mixes frames from both legs into one WAV buffer", () => {
+function wavSamples(wav) {
+  const samples = [];
+  for (let i = 44; i < wav.length; i += 2) samples.push(wav.readInt16LE(i));
+  return samples;
+}
+
+function frame(values) {
+  return Buffer.from(values.map(muLawEncode)).toString("base64");
+}
+
+// 1 ms at 8 kHz = 8 samples.
+const MS = 8;
+
+test("createCallRecorder mixes both legs into one WAV buffer", () => {
   const recorder = createCallRecorder(1000);
   assert.equal(recorder.hasAudio(), false);
 
-  const frame = Buffer.from([muLawEncode(1000), muLawEncode(1000)]).toString("base64");
-  recorder.addFrame(frame, 0);
-  recorder.addFrame(frame, 10);
+  recorder.addIncomingFrame(frame(Array(MS).fill(1000)), 0);
+  recorder.addOutgoingFrame(frame(Array(MS).fill(1000)), 0);
 
   assert.equal(recorder.hasAudio(), true);
   const wav = recorder.toWavBuffer();
   assert.equal(wav.subarray(0, 4).toString(), "RIFF");
   assert.equal(wav.subarray(8, 12).toString(), "WAVE");
-  assert.ok(wav.length > 44);
+  const samples = wavSamples(wav);
+  assert.equal(samples.length, MS);
+  // The two legs are summed: each decodes to ~1000.
+  assert.ok(samples.every((v) => v > 1900 && v < 2100), `unexpected mix ${samples}`);
+});
+
+test("createCallRecorder writes a leg's frames in place instead of summing overlapping frames of the same leg", () => {
+  const recorder = createCallRecorder(1000);
+  recorder.addIncomingFrame(frame(Array(2 * MS).fill(1000)), 0);
+  // A frame reported over the second half of the first (same leg) replaces
+  // it rather than doubling it.
+  recorder.addIncomingFrame(frame(Array(2 * MS).fill(-1000)), 1);
+
+  const samples = wavSamples(recorder.toWavBuffer());
+  assert.equal(samples.length, 3 * MS);
+  assert.ok(samples.slice(0, MS).every((v) => v > 900));
+  assert.ok(samples.slice(MS).every((v) => v < -900));
+});
+
+test("createCallRecorder.clearOutgoingFrom drops outgoing audio queued past a barge-in and keeps the incoming leg", () => {
+  const recorder = createCallRecorder(1000);
+  recorder.addIncomingFrame(frame(Array(4 * MS).fill(1000)), 0);
+  recorder.addOutgoingFrame(frame(Array(4 * MS).fill(-3000)), 0);
+  recorder.clearOutgoingFrom(2);
+
+  const samples = wavSamples(recorder.toWavBuffer());
+  assert.equal(samples.length, 4 * MS);
+  assert.ok(samples.slice(0, 2 * MS).every((v) => v < -1500), "outgoing audio before the clear stays");
+  assert.ok(samples.slice(2 * MS).every((v) => v > 900 && v < 1100), "only the incoming leg remains after the clear");
 });
 
 test("createCallRecorder ignores empty payloads", () => {
   const recorder = createCallRecorder(1000);
-  recorder.addFrame(null, 0);
-  recorder.addFrame("", 5);
+  recorder.addIncomingFrame(null, 0);
+  recorder.addOutgoingFrame("", 5);
   assert.equal(recorder.hasAudio(), false);
 });
 
