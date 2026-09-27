@@ -10,6 +10,9 @@ function formatTime(seconds) {
 }
 
 const WAVEFORM_BUCKETS = 240;
+// Horizontal spacing and stroke width (CSS px) of each waveform line.
+const WAVEFORM_LINE_PITCH = 4;
+const WAVEFORM_LINE_WIDTH = 2;
 
 // Downsamples a decoded AudioBuffer into WAVEFORM_BUCKETS peak-amplitude
 // values (0..1), mixing all channels down to mono first. Runs once per src.
@@ -51,17 +54,34 @@ function drawWaveform(canvas, peaks, progress) {
   if (!peaks || peaks.length === 0) return;
 
   const mid = height / 2;
-  const barWidth = width / peaks.length;
   const playedStyle = getComputedStyle(document.documentElement);
   const accent = playedStyle.getPropertyValue("--accent")?.trim() || "#2563eb";
   const muted = playedStyle.getPropertyValue("--line")?.trim() || "#c7c9cc";
   const progressX = width * (Number.isFinite(progress) ? progress : 0);
 
-  for (let i = 0; i < peaks.length; i++) {
-    const x = i * barWidth;
-    const barHeight = Math.max(1, peaks[i] * (height - 4));
-    ctx.fillStyle = x < progressX ? accent : muted;
-    ctx.fillRect(x, mid - barHeight / 2, Math.max(1, barWidth - 1), barHeight);
+  // Thin round-capped strokes at a fixed pitch rather than edge-to-edge
+  // blocks: fold peaks into however many lines fit the canvas width, taking
+  // each group's max so short spikes survive the downsample.
+  const lineCount = Math.max(1, Math.min(peaks.length, Math.floor(width / WAVEFORM_LINE_PITCH)));
+  const pitch = width / lineCount;
+  const lineWidth = Math.min(WAVEFORM_LINE_WIDTH, pitch * 0.6);
+  // Round caps extend lineWidth / 2 past each end, so reserve that inset.
+  const maxLength = height - 4 - lineWidth;
+  ctx.lineWidth = lineWidth;
+  ctx.lineCap = "round";
+
+  for (let i = 0; i < lineCount; i++) {
+    const start = Math.floor((i * peaks.length) / lineCount);
+    const end = Math.max(start + 1, Math.floor(((i + 1) * peaks.length) / lineCount));
+    let peak = 0;
+    for (let j = start; j < end; j++) if (peaks[j] > peak) peak = peaks[j];
+    const x = i * pitch + pitch / 2;
+    const half = Math.max(0.5, peak * maxLength) / 2;
+    ctx.strokeStyle = x < progressX ? accent : muted;
+    ctx.beginPath();
+    ctx.moveTo(x, mid - half);
+    ctx.lineTo(x, mid + half);
+    ctx.stroke();
   }
 }
 
