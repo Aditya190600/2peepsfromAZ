@@ -422,8 +422,8 @@ function VerdictPill({ run }) {
 
 // Listen-in for one in-progress run: both sides of the call as they happen,
 // plus the transcript so far (client/src/liveCallAudio.js). Starts listening
-// on its own only when the page-level auto-play toggle is on; otherwise the
-// viewer opts in per call, so parallel runs don't all stream at once.
+// on its own when the page-level auto-play toggle is on (the default); the
+// viewer can stop any one call with "Stop listening" or turn auto-play off.
 function LiveCallPanel({ run, autoListen }) {
   const [listening, setListening] = useState(autoListen);
   const [turns, setTurns] = useState([]);
@@ -1490,7 +1490,7 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
               <div className="qe-scenarios-heading-actions">
                 <label
                   className="check-row qe-live-toggle"
-                  title="Off by default, so running many scenarios at once doesn't stream every call's audio. You can still listen to a single call from its card."
+                  title="On by default, so every in-progress call's audio plays. Turn it off here, or stop a single call from its card with Stop listening."
                 >
                   <input
                     type="checkbox"
