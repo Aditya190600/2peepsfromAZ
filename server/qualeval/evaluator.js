@@ -18,7 +18,24 @@ import { callLlmGateway, parseJsonResponse } from "../checks/llmGateway.js";
 // any clause of a failing assessment that concedes a criterion was met.
 const SYSTEM_PROMPT = `You are a strict qualitative acceptance-test evaluator for an AI voice agent. You are given a test scenario (persona, situation, caller objectives, expected behavior, evaluation criteria) and the transcript of a real phone call a simulated caller placed against the target agent to run that scenario. Judge whether the target agent's behavior in the transcript satisfies the expected behavior and each evaluation criterion. Respond with ONLY a JSON object, no other text, with the keys in this order: {"criterionResults": [{"criterion": string, "met": boolean, "explanation": string}], "evidenceQuotes": [{"quote": string, "turnIndex": number}], "verdict": "pass"|"fail", "assessment": string}. Judge every criterion first. "verdict" is "fail" if any criterion is not met or the expected behavior is not satisfied, otherwise "pass". "assessment" is a short overall summary of why the call passed or failed, written after judging the criteria: for a fail, give only the reasons that made it fail and never name a criterion you marked met. Quote exact text from the transcript in evidenceQuotes, and reference the turnIndex it came from.`;
 
-const CONCESSION = /\b(?:is|was)\s+(?:actually\s+)?(?:met|satisfied)\b|\bwhich is under\b/i;
+const MET = String.raw`(?:is|was)\s+(?:actually\s+)?(?:met|satisfied)\b(?!\s+with)`;
+const CONCESSION = new RegExp(
+  String.raw`\b(?:criterion|requirement|this|it)\s+${MET}|\b(?:actually|which is)\s+(?:met|satisfied)\b(?!\s+with)|\bso\b[^.]*?\b${MET}`,
+  "i",
+);
+
+const STOPWORDS = new Set(["agent", "caller", "call", "that", "this", "with", "within", "first", "their", "them", "they", "from", "does", "should", "must", "criterion", "criteria", "actually", "which", "took"]);
+
+function terms(text) {
+  const words = String(text ?? "").toLowerCase().match(/[a-z]{4,}/g) ?? [];
+  return new Set(words.filter((w) => !STOPWORDS.has(w)).map((w) => w.slice(0, 5)));
+}
+
+function references(clauseTerms, criterion) {
+  let shared = 0;
+  for (const t of terms(criterion.criterion)) if (clauseTerms.has(t)) shared += 1;
+  return shared >= 2;
+}
 
 // Splits prose into clauses at sentence ends and ", and"/", but" joins, never
 // inside parentheses (where the model tends to argue with itself). Each
@@ -51,15 +68,20 @@ function clauses(text) {
   return out.filter((c) => c.body.trim());
 }
 
-// A failing assessment with every clause that concedes a criterion was met
-// removed, when criterionResults does mark some criterion met. Falls back to
+// A failing assessment with every clause removed that concedes a specific
+// criterion criterionResults marks met, and references no unmet one. Falls back to
 // listing the unmet criteria only when nothing of the assessment is left.
 function withoutConcededCriteria(assessment, criterionResults) {
   const judged = criterionResults.filter((c) => c && typeof c === "object" && typeof c.met === "boolean");
+  const met = judged.filter((c) => c.met);
   const unmet = judged.filter((c) => !c.met);
-  if (!assessment || !judged.some((c) => c.met)) return assessment;
+  if (!assessment || met.length === 0) return assessment;
   const all = clauses(assessment);
-  const kept = all.filter((c) => !CONCESSION.test(c.body));
+  const kept = all.filter((c) => {
+    if (!CONCESSION.test(c.body)) return true;
+    const clauseTerms = terms(c.body);
+    return !met.some((m) => references(clauseTerms, m)) || unmet.some((u) => references(clauseTerms, u));
+  });
   if (kept.length === all.length) return assessment;
   if (kept.length === 0) {
     const reasons = unmet.map((c) => String(c.criterion ?? "").trim()).filter(Boolean);

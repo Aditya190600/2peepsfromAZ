@@ -124,6 +124,31 @@ test("keeps a surviving reason with 'and' inside it intact", async () => {
   );
 });
 
+test("keeps a failure clause where 'met' is ordinary prose, not a concession", async () => {
+  const assessment = "The agent never took a callback number, and the caller's refill request was met with silence.";
+  const result = await evaluateTranscript(scenario, transcript, {
+    llmGateway: async () => JSON.stringify({ ...contradictoryJudgement, assessment }),
+  });
+  assert.equal(result.assessment, assessment);
+});
+
+test("keeps a conceding clause that references no met criterion", async () => {
+  const assessment =
+    "The agent quoted the pharmacy hours (so this is actually met), and it never confirmed medication adherence.";
+  const result = await evaluateTranscript(scenario, transcript, {
+    llmGateway: async () => JSON.stringify({ ...contradictoryJudgement, assessment }),
+  });
+  assert.equal(result.assessment, assessment);
+});
+
+test("keeps a clause that says a criterion was not met", async () => {
+  const assessment = "The disclosure of the automated system within 10 seconds was not met, and medication adherence was never confirmed.";
+  const result = await evaluateTranscript(scenario, transcript, {
+    llmGateway: async () => JSON.stringify({ ...contradictoryJudgement, assessment }),
+  });
+  assert.equal(result.assessment, assessment);
+});
+
 test("falls back to the unmet criteria when every clause of the summary concedes a met criterion", async () => {
   const result = await evaluateTranscript(scenario, transcript, {
     llmGateway: async () =>
