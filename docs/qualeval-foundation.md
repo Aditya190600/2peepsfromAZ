@@ -88,3 +88,4 @@ phone-number-pool rotation, persona avatars, failure-driven regeneration.
   `evaluator.js`, `router.js`, and their `*.test.js` files).
 - Migration: `server/migrations/003_qualeval.sql`.
 - Frontend: `client/src/QualEval.jsx`, `client/src/qualevalClient.js`.
+- Direct-dial reports (separate from scenario runs): `docs/phone-evals.md`.

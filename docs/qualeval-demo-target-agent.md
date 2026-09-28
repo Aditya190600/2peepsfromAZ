@@ -86,19 +86,22 @@ It is backed by `server/qualeval/router.js`:
 ### Operator-only access
 
 The live agent is shared by every caller of the number, and the demo is a
-public link, so Settings is restricted to an operator allowlist
-(`server/qualeval/operatorAccess.js`). Set `QUALEVAL_OPERATOR_EMAILS` to a
-comma-separated, case-insensitive list of emails; it is matched against the
-signed-in Clerk user's verified email addresses. Every
-`/v1/qualeval/demo-agent/*` route returns 403 to anyone else, `/config` omits
-`personaPhoneNumber` for them, and the client hides the Settings nav entry and
-shows no agents or controls on `/settings` (the server check is the real gate).
-Unset or empty means nobody is an operator. When Clerk isn't configured there
-is no identity to check, so access stays closed unless the value is exactly
-`*`, which allows every visitor - use that only for local dev or a deliberately
-open demo. A `*` mixed into an email list is ignored. The same gate covers the
-Phone Evals routes (`/v1/qualeval/phone-evals`, its `/:callSid/analyze` re-run,
-and `/v1/qualeval/production-calls/:callSid/audio`).
+public link, so the target-agent controls are restricted to an operator
+allowlist (`server/qualeval/operatorAccess.js`). Set `QUALEVAL_OPERATOR_EMAILS`
+to a comma-separated, case-insensitive list of emails; it is matched against
+the signed-in Clerk user's verified email addresses. Every
+`/v1/qualeval/demo-agent/*` route returns 403 to anyone else, and `/config`
+omits `personaPhoneNumber` for them. Settings itself stays in the nav: a
+non-operator still sees the call-persona phone prefill and, unless they are a
+Phone Evals admin, the Twilio import form. The Target agents and deployment
+phone number sections render only when `isOperator` is true. The server check
+is the real gate. Unset or empty means nobody is an operator. When Clerk isn't
+configured there is no identity to check, so access stays closed unless the
+value is exactly `*`, which allows every visitor - use that only for local dev
+or a deliberately open demo. A `*` mixed into an email list is ignored.
+`QUALEVAL_ADMIN_EMAILS` is a separate list: those addresses are also treated
+as operators, and they are what opens Phone Evals to every call. Phone Evals
+routes are not behind `requireOperator`. See `docs/phone-evals.md`.
 
 ## The bridge
 
