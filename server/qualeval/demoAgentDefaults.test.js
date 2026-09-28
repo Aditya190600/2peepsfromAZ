@@ -20,7 +20,11 @@ test("every domain ships exactly one compliant and one flawed agent", () => {
 test("every agent body is telephony-ready and uses a documented voice", () => {
   const documentedVoices = ["alba", "eve", "george", "jane", "jean", "mary", "michael", "anna", "charles", "paul", "vera"];
   for (const { key, agent } of DEMO_AGENTS) {
-    assert.deepEqual(agent.input, { format: { encoding: "audio/pcmu" } }, key);
+    assert.deepEqual(
+      agent.input,
+      { format: { encoding: "audio/pcmu" }, turn_detection: { min_silence: 1200 } },
+      key,
+    );
     assert.deepEqual(agent.output, { format: { encoding: "audio/pcmu" } }, key);
     assert.ok(documentedVoices.includes(agent.voice.voice_id), key);
     assert.ok(agent.system_prompt && agent.greeting && agent.name, key);
