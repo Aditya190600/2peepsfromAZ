@@ -8,3 +8,5 @@ dist/
 server/providers/.provider-store.json
 server/.eval-data/
 server/telephony/.telephony-store.json
+__pycache__/
+*.pyc
