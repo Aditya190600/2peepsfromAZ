@@ -24,9 +24,13 @@ export function PhoneEvalsSetupSection({ ownedNumbers, onConfigured }) {
     setError(null);
     setNotice(null);
     try {
-      await importTwilio(twilio);
+      const imported = await importTwilio(twilio);
       setTwilio({ accountSid: "", authToken: "", e164: "", label: "" });
-      setNotice("Twilio number imported. Point its voice webhook at your AssemblyAI agent or SIP trunk next.");
+      setNotice(
+        imported.voiceWebhookConfigured
+          ? "Twilio number imported. Inbound calls to it are recorded and scored in Phone Evals."
+          : "Twilio number imported. This server has no public URL, so its voice webhook was not set and calls will not be scored yet.",
+      );
       await onConfigured?.();
     } catch (err) {
       setError(err.message ?? "Import failed.");
@@ -40,9 +44,8 @@ export function PhoneEvalsSetupSection({ ownedNumbers, onConfigured }) {
       <h2>Phone Evals · Twilio setup</h2>
       <p className="pack-note">
         Import the Twilio number you want scored in Phone Evals. Credentials stay on this server only.
-        After import, configure Twilio to route inbound calls to your voice agent (AssemblyAI SIP at{" "}
-        <code>sip.assemblyai.com</code> or your own webhook). You will only see calls placed to numbers
-        you register here.
+        Import points that number&apos;s voice webhook at this server, so calls to it are recorded and
+        scored here. You will only see calls placed to numbers you register here.
       </p>
       {ownedNumbers?.length > 0 && (
         <ul className="settings-owned-numbers">

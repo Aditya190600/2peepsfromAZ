@@ -203,9 +203,20 @@ test("listPhoneEvalCalls filters by to_number when toNumberDigits is set", async
       transcript: [{ role: "user", text: "bye" }],
     },
   ];
-  const pool = { query: async () => ({ rows: stored }) };
+  let seen;
+  const pool = {
+    query: async (sql, params) => {
+      seen = { sql: sql.replace(/\s+/g, " ").toLowerCase(), params };
+      const scoped = seen.sql.includes("regexp_replace") && params?.[0]?.includes("8038245760");
+      return { rows: scoped ? stored.filter((row) => row.twilio_call_sid === "CA_match") : stored };
+    },
+  };
   const calls = await listPhoneEvalCalls({}, pool, { toNumberDigits: new Set(["8038245760"]) });
   assert.deepEqual(calls.map((c) => c.twilioCallSid), ["CA_match"]);
+  const filterAt = seen.sql.indexOf("regexp_replace");
+  const limitAt = seen.sql.indexOf("limit 50");
+  assert.ok(filterAt > 0 && filterAt < limitAt, seen.sql);
+  assert.deepEqual(seen.params, [["8038245760"]]);
 });
 
 test("stores a call's compliance report and returns it on the call", async () => {

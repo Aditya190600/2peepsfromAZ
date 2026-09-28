@@ -240,18 +240,24 @@ app.post(
   (req, res) => twilioVoiceRoute(req, res),
 );
 
+// Shared telephony store: Phone Evals visibility (server/qualeval/
+// phoneEvalAccess.js) and /v1/telephony/* both read numbers registered here.
+// Created before the demo-agent voice webhook so an imported number's own
+// auth token can validate that POST (the deployment token will not).
+const telephonyStore = new TelephonyStore();
+
 // POST /v1/qualeval/demo-agent-voice - same Twilio-webhook posture as the
-// route above, answered by QUALEVAL_AGENT_NUMBER (server/qualeval/demoAgentVoice.js,
-// server/qualeval/demoAgentProvision.js).
+// route above, answered by QUALEVAL_AGENT_NUMBER and by Twilio numbers
+// imported for Phone Evals (server/qualeval/demoAgentVoice.js,
+// server/qualeval/demoAgentProvision.js, server/telephony/router.js).
 app.post(
   "/v1/qualeval/demo-agent-voice",
   express.urlencoded({ extended: false }),
-  (req, res) => demoAgentVoiceRoute(req, res),
+  (req, res) => demoAgentVoiceRoute(req, res, {
+    authTokenForTo: (to) => telephonyStore.twilioAuthTokenForE164(to),
+  }),
 );
 
-// Shared telephony store: Phone Evals visibility (server/qualeval/
-// phoneEvalAccess.js) and /v1/telephony/* both read numbers registered here.
-const telephonyStore = new TelephonyStore();
 app.use("/v1/qualeval", requireVisitor, qualevalRouter({ visitorId, isOperator, telephonyStore }));
 
 // Numbers, trunks, and inbound sessions are scoped to the signed-in visitor

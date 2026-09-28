@@ -67,6 +67,38 @@ test("returns bidirectional Connect/Stream TwiML pointed at the target-agent str
   assert.equal(validated[2], "https://app.example.com/v1/qualeval/demo-agent-voice");
 });
 
+test("accepts an imported account's auth token when the deployment token does not match", async () => {
+  const ctx = fakeReqRes({ body: { To: "+15557650000", CallSid: "CA9", From: "+13128003792" } });
+  const tried = [];
+  await demoAgentVoiceRoute(ctx.req, ctx.res, {
+    env: ENV,
+    validate: (token) => {
+      tried.push(token);
+      return token === "imported-token";
+    },
+    authTokenForTo: async (to) => {
+      assert.equal(to, "+15557650000");
+      return "imported-token";
+    },
+    recordCall: async () => {},
+  });
+  assert.equal(ctx.status, 200);
+  assert.match(ctx.body, /<Connect>/);
+  assert.deepEqual(tried, [ENV.TWILIO_AUTH_TOKEN, "imported-token"]);
+});
+
+test("answers from an imported token alone when the deployment Twilio account is unset", async () => {
+  const ctx = fakeReqRes({ body: { To: "+15557650000", CallSid: "CA9" } });
+  await demoAgentVoiceRoute(ctx.req, ctx.res, {
+    env: {},
+    validate: (token) => token === "imported-token",
+    authTokenForTo: async () => "imported-token",
+    recordCall: async () => {},
+  });
+  assert.equal(ctx.status, 200);
+  assert.match(ctx.body, /<Connect>/);
+});
+
 test("records the inbound caller before answering, and still answers if recording throws", async () => {
   const ctx = fakeReqRes({
     body: {
