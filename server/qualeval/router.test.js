@@ -120,7 +120,9 @@ test("non-operators get 403 from every demo-agent route and no persona number fr
         body: JSON.stringify({ variant: "flawed" }),
       });
       assert.equal(active.status, 403);
-      assert.deepEqual(await (await fetch(`${base}/config`)).json(), {
+      const { demoAgents, ...config } = await (await fetch(`${base}/config`)).json();
+      assert.ok(demoAgents.length > 0);
+      assert.deepEqual(config, {
         agentPhoneNumber: "+15550000001",
         isOperator: false,
         isPhoneEvalAdmin: false,
@@ -130,7 +132,9 @@ test("non-operators get 403 from every demo-agent route and no persona number fr
       });
     });
     await withRouter({ isOperator: true, isPhoneEvalAdmin: true }, async (base) => {
-      assert.deepEqual(await (await fetch(`${base}/config`)).json(), {
+      const { demoAgents, ...config } = await (await fetch(`${base}/config`)).json();
+      assert.ok(demoAgents.length > 0);
+      assert.deepEqual(config, {
         agentPhoneNumber: "+15550000001",
         isOperator: true,
         isPhoneEvalAdmin: true,
@@ -294,6 +298,10 @@ test("operator and admin allowlists gate deployment controls vs Phone Evals sepa
       const config = await (await hit(base, user, ["GET", "/config"])).json();
       assert.equal(config.isOperator, false);
       assert.equal(config.isPhoneEvalAdmin, false);
+      // Anyone creating an evaluation picks which demo agent answers it, so
+      // the catalog's labels are public - never the prompts.
+      assert.ok(config.demoAgents.some((a) => a.key === "healthcare-compliant" && a.domainLabel === "Healthcare"));
+      assert.ok(config.demoAgents.every((a) => Object.keys(a).sort().join() === "domainLabel,key,label"));
     }
     // The listed user passes every gate (no DB/bucket in tests, so later
     // handler steps may 404/500 - but never the access 403).

@@ -2691,6 +2691,7 @@ button.site-nav-link {
 }
 
 .qe-field input,
+.qe-field select,
 .qe-field textarea {
   width: 100%;
   border: none;
@@ -2703,6 +2704,7 @@ button.site-nav-link {
 }
 
 .qe-field input:focus,
+.qe-field select:focus,
 .qe-field textarea:focus {
   outline: none;
 }

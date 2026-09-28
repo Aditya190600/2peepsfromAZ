@@ -1,6 +1,7 @@
 import * as twilioClient from "./twilioClient.js";
 import * as store from "./store.js";
 import { recordProductionCall } from "./productionCalls.js";
+import * as broker from "./callBridgeBroker.js";
 
 export { twilioConfigured } from "./twilioClient.js";
 
@@ -27,6 +28,8 @@ export async function placeCall(
     markRunInProgress = store.markRunInProgress,
     markRunError = store.markRunError,
     recordCall = recordProductionCall,
+    registerPlacedRun = broker.registerPlacedRun,
+    releaseRun = broker.releaseRun,
   } = {},
 ) {
   try {
@@ -38,6 +41,11 @@ export async function placeCall(
     const to = evaluation.agentPhoneNumber;
     if (!to) throw new Error("This evaluation has no agentPhoneNumber to call.");
 
+    // Before dialing, so the target leg finds it the moment it connects: if
+    // the number is answered by our own demo target agent
+    // (targetAgentStream.js), this is how that leg knows which agent this
+    // evaluation asked for (see callBridgeBroker.js).
+    registerPlacedRun(run.id, { demoAgentKey: evaluation.demoAgentKey ?? null });
     const { sid } = await place(
       {
         to,
@@ -63,6 +71,7 @@ export async function placeCall(
     return await markRunInProgress(run.id, sid);
   } catch (err) {
     console.error(`QualEval call bridge: placeCall failed for run ${run.id}: ${err.message}`);
+    releaseRun(run.id);
     return await markRunError(run.id, err.message).catch(() => null);
   }
 }

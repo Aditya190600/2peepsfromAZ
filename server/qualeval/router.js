@@ -1,7 +1,7 @@
 import { Router } from "express";
 import * as store from "./store.js";
 import * as demoAgentConfig from "./demoAgentConfig.js";
-import { findDemoAgent, DEMO_AGENT_DOMAINS } from "./demoAgentDefaults.js";
+import { findDemoAgent, DEMO_AGENTS, DEMO_AGENT_DOMAINS } from "./demoAgentDefaults.js";
 import { generateScenarios } from "./generator.js";
 import { evaluateTranscript } from "./evaluator.js";
 import * as providers from "../providers/registry.js";
@@ -161,13 +161,14 @@ export function qualevalRouter({
   router.post(
     "/evaluations",
     wrap(async (req, res) => {
-      const { name, agentPhoneNumber, description, requirements } = req.body ?? {};
+      const { name, agentPhoneNumber, description, requirements, demoAgentKey } = req.body ?? {};
       const evaluation = await store.createEvaluation({
         clerkUserId: visitorId(req),
         name,
         agentPhoneNumber,
         description,
         requirements,
+        demoAgentKey,
       });
       res.status(201).json(evaluation);
     }),
@@ -185,7 +186,9 @@ export function qualevalRouter({
   // the client bundle hardcoding them: QualEval prefills the target-agent
   // phone number field with QUALEVAL_AGENT_NUMBER for everyone. Only
   // operators (operatorAccess.js) also get QUALEVAL_PERSONA_NUMBER, the caller
-  // ID QualEval dials out from, which the Settings page shows.
+  // ID QualEval dials out from, which the Settings page shows. Everyone gets
+  // the demo target agent catalog (labels only, no prompts) to pick which
+  // agent answers an evaluation's calls.
   router.get(
     "/config",
     wrap(async (req, res) => {
@@ -197,6 +200,11 @@ export function qualevalRouter({
         canAccessPhoneEvals: access.canAccess,
         phoneEvalsConfigured: access.ownedNumbers.length > 0,
         ownedPhoneNumbers: access.ownedNumbers,
+        demoAgents: DEMO_AGENTS.map(({ key, domain, label }) => ({
+          key,
+          label,
+          domainLabel: DEMO_AGENT_DOMAINS[domain],
+        })),
         ...(access.operator && { personaPhoneNumber: process.env.QUALEVAL_PERSONA_NUMBER || null }),
       });
     }),

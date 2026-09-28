@@ -43,3 +43,30 @@ test("releaseRun removes the run so a later claim never resurfaces it", () => {
   broker.releaseRun("run_e");
   assert.equal(broker.claimPendingRunForTarget(), null);
 });
+
+test("claimPendingRun hands the target leg the demo agent key placeCall registered for the run", () => {
+  broker.registerPlacedRun("run_f", { demoAgentKey: "healthcare-compliant" });
+  assert.deepEqual(broker.claimPendingRun(), { runId: "run_f", demoAgentKey: "healthcare-compliant" });
+  assert.equal(broker.claimPendingRun(), null);
+  broker.releaseRun("run_f");
+});
+
+test("the persona leg registering after placement keeps the placed run's demo agent key", () => {
+  broker.registerPlacedRun("run_g", { demoAgentKey: "flight-flawed" });
+  broker.registerPersonaLeg("run_g");
+  assert.deepEqual(broker.claimPendingRun(), { runId: "run_g", demoAgentKey: "flight-flawed" });
+  broker.releaseRun("run_g");
+});
+
+test("a run registered only by its persona leg claims with no demo agent key", () => {
+  broker.registerPersonaLeg("run_h");
+  assert.deepEqual(broker.claimPendingRun(), { runId: "run_h", demoAgentKey: null });
+  broker.releaseRun("run_h");
+});
+
+test("a placed run no target leg claimed in time is dropped, not handed to a later caller", () => {
+  broker.registerPlacedRun("run_i", { demoAgentKey: "healthcare-compliant" }, 1_000);
+  assert.equal(broker.claimPendingRun(1_000 + broker.UNCLAIMED_RUN_TTL_MS + 1), null);
+  // Dropped for good, not just skipped.
+  assert.equal(broker.claimPendingRun(1_000), null);
+});

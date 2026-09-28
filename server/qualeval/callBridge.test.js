@@ -118,3 +118,45 @@ test("placeCall marks the run as error when Twilio's API rejects the call", asyn
   );
   assert.match(markedError.message, /unverified caller ID/);
 });
+
+test("placeCall registers the run with the evaluation's demo target agent before dialing", async () => {
+  const events = [];
+  await placeCall(
+    { id: "run_7" },
+    { id: "s1" },
+    { agentPhoneNumber: "+15551234567", demoAgentKey: "healthcare-compliant" },
+    {
+      baseUrl: "https://app.example.com",
+      env: ENV,
+      registerPlacedRun: (runId, fields) => events.push(["register", runId, fields]),
+      releaseRun: () => assert.fail("should not release a placed call"),
+      place: async () => {
+        events.push(["place"]);
+        return { sid: "CA7", status: "queued" };
+      },
+      markRunInProgress: async (id, sid) => ({ id, verdict: "in_progress", twilioCallSid: sid }),
+      recordCall: async () => {},
+    },
+  );
+  assert.deepEqual(events, [["register", "run_7", { demoAgentKey: "healthcare-compliant" }], ["place"]]);
+});
+
+test("placeCall releases the registered run when Twilio rejects the call", async () => {
+  const released = [];
+  await placeCall(
+    { id: "run_8" },
+    { id: "s1" },
+    { agentPhoneNumber: "+1555" },
+    {
+      baseUrl: "https://app.example.com",
+      env: ENV,
+      registerPlacedRun: () => {},
+      releaseRun: (runId) => released.push(runId),
+      place: async () => {
+        throw new Error("Twilio rejected the call");
+      },
+      markRunError: async () => {},
+    },
+  );
+  assert.deepEqual(released, ["run_8"]);
+});

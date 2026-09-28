@@ -286,7 +286,8 @@ export default function Settings({ path, navigate }) {
               <h2>Target agents</h2>
               <p className="pack-note">
                 Each domain has a compliant agent and a flawed one with a seeded gap, so a QualEval
-                evaluation can demo both a pass and a fail. Only one agent answers the number at a time.
+                evaluation can demo both a pass and a fail. The live agent answers direct callers and any
+                evaluation that doesn't pick its own demo agent.
               </p>
               {!agents && !error && <p className="pack-note">Loading…</p>}
               {agents &&

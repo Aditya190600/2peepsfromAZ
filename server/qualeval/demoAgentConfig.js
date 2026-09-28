@@ -159,6 +159,22 @@ export async function getActiveVariant(env = process.env, pool = getPool(env)) {
   return variant;
 }
 
+// The agent a target-agent leg (server/qualeval/targetAgentStream.js)
+// answers as: the one its QualEval evaluation asked for
+// (qualeval_evaluations.demo_agent_key, handed over by callBridgeBroker.js),
+// else Settings' Target agents switch - which is all a direct Phone Evals
+// caller, with no evaluation behind the call, ever gets. An evaluation's
+// agent that isn't provisioned yet fails the call rather than quietly
+// answering as the Settings default, the exact wrong-agent answer this
+// assignment exists to prevent.
+export async function getAnsweringVariant(demoAgentKey, env = process.env, pool = getPool(env)) {
+  if (!demoAgentKey) return getActiveVariant(env, pool);
+  const variant = await getVariant(demoAgentKey, env, pool);
+  if (!variant) throw new Error(`Demo-agent variant "${demoAgentKey}" not found.`);
+  if (!variant.agentId) throw new Error(`Demo-agent variant "${demoAgentKey}" has no AssemblyAI agent_id yet.`);
+  return variant;
+}
+
 // Live prompt/greeting/voice for a variant, read straight from its
 // AssemblyAI agent record - server/qualeval/router.js's
 // GET /demo-agent/variants uses this so the operator sees what's actually

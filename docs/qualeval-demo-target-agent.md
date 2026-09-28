@@ -53,6 +53,12 @@ directly) too.
 `qualeval_demo_agent_state` is a single-row runtime toggle (`active_variant`)
 read by `server/qualeval/targetAgentStream.js` at connect time - there's only
 one number, so switching agents is a toggle, not several simultaneous numbers.
+It is only the default: a QualEval evaluation (eval set) can name its own
+agent (`qualeval_evaluations.demo_agent_key`, migration `011`, the "Demo agent
+that answers" field on the QualEval create/edit forms), and its scenario calls
+answer as that agent whatever the toggle says - see "Which agent answers"
+below. Direct Phone Evals callers have no evaluation behind the call, so they
+always get the toggle.
 The operator surface is the **Settings** page (`/settings`,
 `client/src/Settings.jsx`): it lists every agent grouped by domain with its
 live greeting/prompt/voice, marks the live one, switches it with "Make live",
@@ -95,18 +101,29 @@ and `/v1/qualeval/production-calls/:callSid/audio`).
 returns `<Connect><Stream url="wss://.../v1/qualeval/target-agent-stream"/>`,
 the same bidirectional-Media-Streams pattern the outbound/persona side uses
 (`twilioVoice.js` -> `twilioStream.js`). `server/qualeval/targetAgentStream.js`
-accepts that WebSocket, resolves the currently active variant's `agentId`
-(`demoAgentConfig.getActiveVariant()`), mints an AssemblyAI token, and binds
+accepts that WebSocket, resolves the answering variant's `agentId`
+(`demoAgentConfig.getAnsweringVariant()`), mints an AssemblyAI token, and binds
 via `server/qualeval/bridgeSession.js`'s `createBridgeSession` - the same
 generic primitive the caller side uses, but with `agentId` instead of
 `systemPrompt` (mutually exclusive per AssemblyAI's own rule; `bridgeSession.js`
 sends `{session: {agent_id}}` alone when `agentId` is set).
 
-Unlike the caller side, this stream isn't tied to a run: which prompt to
-bridge with is a global setting, not something carried on the call, so
-`targetAgentStream.js` doesn't wait for the Media Streams `start` event before
-creating the bridge session (`createBridgeSession` itself picks up
-`streamSid`/`callSid` whenever `start` arrives).
+### Which agent answers
+
+The agent is fixed on the AssemblyAI session's first `session.update`, so it
+has to be known the moment the Media Stream connects. `placeCall`
+(`server/qualeval/callBridge.js`) registers each run with
+`server/qualeval/callBridgeBroker.js` just before asking Twilio to dial,
+carrying the evaluation's `demoAgentKey`; `targetAgentStream.js` claims that
+registration synchronously on connect and answers as that agent. No claim (a
+direct Phone Evals caller) or no key on the evaluation means the Settings
+toggle. An unclaimed registration expires after `UNCLAIMED_RUN_TTL_MS` so a
+later unrelated caller can't inherit it. Like the rest of the broker, this
+assumes one QualEval call in flight against the number at a time.
+
+Because of that, `targetAgentStream.js` doesn't wait for the Media Streams
+`start` event before creating the bridge session (`createBridgeSession`
+itself picks up `streamSid`/`callSid` whenever `start` arrives).
 
 ## The two legs hear each other over the phone line
 

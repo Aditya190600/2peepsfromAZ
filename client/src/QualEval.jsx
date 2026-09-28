@@ -37,6 +37,7 @@ const TEMPLATES = {
   healthcare: {
     label: "Healthcare",
     color: "#1e7a8c",
+    demoAgentKey: "healthcare-compliant",
     description: [
       "- Calls a patient 48 hours after discharge to check on recovery and symptoms.",
       "- Confirms the patient took prescribed medication and followed discharge instructions.",
@@ -53,6 +54,7 @@ const TEMPLATES = {
   finance: {
     label: "Finance",
     color: "#8c6b1e",
+    demoAgentKey: "compliant",
     description: [
       "- Answers inbound calls about billing, balances, and account status for a retail bank.",
       "- Verifies caller identity before discussing any account-specific detail.",
@@ -130,10 +132,44 @@ function MarkdownText({ text }) {
   );
 }
 
+// Which demo target agent answers this evaluation's scenario calls when they
+// dial a number our own demo agent answers (server/qualeval/
+// targetAgentStream.js). Set once per evaluation. Empty keeps Settings'
+// Target agents switch, the one agent every direct caller gets.
+function DemoAgentField({ id, demoAgents, value, onChange }) {
+  const domains = [...new Set(demoAgents.map((a) => a.domainLabel))];
+  return (
+    <div className="qe-field" style={{ "--qe-field-color": "#6b4c9a" }}>
+      <label htmlFor={id}>Demo agent that answers</label>
+      <select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">Settings default (Target agents)</option>
+        {domains.map((domain) => (
+          <optgroup key={domain} label={domain}>
+            {demoAgents
+              .filter((a) => a.domainLabel === domain)
+              .map((a) => (
+                <option key={a.key} value={a.key}>
+                  {a.label}
+                </option>
+              ))}
+          </optgroup>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function demoAgentLabel(demoAgents, key) {
+  const agent = demoAgents.find((a) => a.key === key);
+  return agent ? `${agent.domainLabel} - ${agent.label}` : key;
+}
+
 function NewEvaluationForm({ onCreated, tourRefs }) {
   const [name, setName] = useState("");
   const [agentPhoneNumber, setAgentPhoneNumber] = useState("");
   const [defaultPhoneNumber, setDefaultPhoneNumber] = useState(null);
+  const [demoAgents, setDemoAgents] = useState([]);
+  const [demoAgentKey, setDemoAgentKey] = useState("");
   const [description, setDescription] = useState("");
   const [requirements, setRequirements] = useState("");
   const [activeTemplate, setActiveTemplate] = useState(null);
@@ -146,6 +182,7 @@ function NewEvaluationForm({ onCreated, tourRefs }) {
     getQualevalConfig()
       .then((config) => {
         if (config.agentPhoneNumber) setDefaultPhoneNumber(config.agentPhoneNumber);
+        setDemoAgents(config.demoAgents ?? []);
         const preferred = getDefaultPhoneNumber() || config.agentPhoneNumber;
         if (preferred) setAgentPhoneNumber((current) => current || preferred);
       })
@@ -157,6 +194,7 @@ function NewEvaluationForm({ onCreated, tourRefs }) {
   const applyTemplate = (key) => {
     const template = TEMPLATES[key];
     setActiveTemplate(key);
+    setDemoAgentKey(template.demoAgentKey ?? "");
     setDescription(template.description);
     setRequirements(template.requirements);
     setName((current) => {
@@ -178,6 +216,7 @@ function NewEvaluationForm({ onCreated, tourRefs }) {
         agentPhoneNumber: agentPhoneNumber.trim() || null,
         description: description.trim() || null,
         requirements: requirements.trim() || null,
+        demoAgentKey: demoAgentKey || null,
       });
     } catch (err) {
       setError(err.message ?? "Could not create the evaluation.");
@@ -251,6 +290,21 @@ function NewEvaluationForm({ onCreated, tourRefs }) {
         <p className="qe-field-hint">
           Defaults to this deployment's demo target agent number. Replace it to test a different agent.
         </p>
+      )}
+      {demoAgents.length > 0 && (
+        <>
+          <div className="qe-field-row-narrow">
+            <DemoAgentField
+              id="qe-demo-agent"
+              demoAgents={demoAgents}
+              value={demoAgentKey}
+              onChange={setDemoAgentKey}
+            />
+          </div>
+          <p className="qe-field-hint">
+            Which demo agent picks up this evaluation's calls to the demo number. Other numbers ignore it.
+          </p>
+        </>
       )}
 
       <div className="qe-field-grid" ref={tourRefs.details}>
@@ -886,9 +940,10 @@ const STATUS_TABS = [
   { key: "rejected", label: "Rejected" },
 ];
 
-function EditEvaluationForm({ evaluation, onSaved, onCancel }) {
+function EditEvaluationForm({ evaluation, demoAgents, onSaved, onCancel }) {
   const [name, setName] = useState(evaluation.name ?? "");
   const [agentPhoneNumber, setAgentPhoneNumber] = useState(evaluation.agentPhoneNumber ?? "");
+  const [demoAgentKey, setDemoAgentKey] = useState(evaluation.demoAgentKey ?? "");
   const [description, setDescription] = useState(evaluation.description ?? "");
   const [requirements, setRequirements] = useState(evaluation.requirements ?? "");
   const [busy, setBusy] = useState(false);
@@ -905,6 +960,7 @@ function EditEvaluationForm({ evaluation, onSaved, onCancel }) {
         agentPhoneNumber: agentPhoneNumber.trim() || null,
         description: description.trim() || null,
         requirements: requirements.trim() || null,
+        demoAgentKey: demoAgentKey || null,
       });
       onSaved(updated);
     } catch (err) {
@@ -932,6 +988,16 @@ function EditEvaluationForm({ evaluation, onSaved, onCancel }) {
           />
         </div>
       </div>
+      {demoAgents.length > 0 && (
+        <div className="qe-field-row-narrow">
+          <DemoAgentField
+            id="qe-edit-demo-agent"
+            demoAgents={demoAgents}
+            value={demoAgentKey}
+            onChange={setDemoAgentKey}
+          />
+        </div>
+      )}
       <div className="qe-field-grid">
         <div className="qe-field qe-field-full" style={{ "--qe-field-color": "var(--accent-2)" }}>
           <label htmlFor="qe-edit-description">Description - what does this agent do?</label>
@@ -992,6 +1058,13 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
   useEffect(() => {
     createTimeGenErrors.delete(evaluationId);
   }, [evaluationId]);
+
+  const [demoAgents, setDemoAgents] = useState([]);
+  useEffect(() => {
+    getQualevalConfig()
+      .then((config) => setDemoAgents(config.demoAgents ?? []))
+      .catch(() => {});
+  }, []);
 
   const load = async () => {
     try {
@@ -1267,6 +1340,7 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
         {editing ? (
           <EditEvaluationForm
             evaluation={evaluation}
+            demoAgents={demoAgents}
             onSaved={(updated) => {
               setEvaluation((prev) => ({ ...prev, ...updated }));
               setEditing(false);
@@ -1278,6 +1352,11 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
             <li>
               <strong>Target agent:</strong> {evaluation.agentPhoneNumber ?? "no phone number set"}
             </li>
+            {evaluation.demoAgentKey && (
+              <li>
+                <strong>Demo agent that answers:</strong> {demoAgentLabel(demoAgents, evaluation.demoAgentKey)}
+              </li>
+            )}
             {evaluation.description && (
               <li>
                 <strong>Description:</strong>
