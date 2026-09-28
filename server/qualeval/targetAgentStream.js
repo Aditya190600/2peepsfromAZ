@@ -1,6 +1,7 @@
 import { WebSocketServer } from "ws";
 import { createBridgeSession, DEFAULT_MAX_DURATION_MS } from "./bridgeSession.js";
 import { createCallRecorder, productionCallAudioKey } from "./callRecorder.js";
+import { transcribeCallRecording } from "./callTranscription.js";
 import { mintAssemblyAiToken } from "./assemblyaiToken.js";
 import * as demoAgentConfig from "./demoAgentConfig.js";
 import * as broker from "./callBridgeBroker.js";
@@ -57,6 +58,8 @@ export function attachTargetAgentStreamServer(
     createRecorder = () => createCallRecorder(DEFAULT_MAX_DURATION_MS),
     recordingsReady = recordingsConfigured,
     uploadRecording = uploadObject,
+    transcribeCall = (recorder, roles) =>
+      transcribeCallRecording(recorder, { apiKey: process.env.ASSEMBLYAI_API_KEY, ...roles }),
   } = {},
 ) {
   const wss = new WebSocketServer({ noServer: true });
@@ -85,7 +88,26 @@ export function attachTargetAgentStreamServer(
       return pending;
     }
 
-    async function saveInboundRecording({ turns, callSid, reason }) {
+    // Same as the persona leg (server/qualeval/twilioStream.js): the call is
+    // scored on the recording's per-leg transcript, with the live session's
+    // turns as the fallback. Here the far end is the caller. A leg claimed by
+    // a QualEval run keeps its live turns: Phone Evals excludes it, and the
+    // persona leg already transcribes the same call.
+    async function transcriptOf(liveTurns) {
+      if (claimedRunId || !recorder.hasAudio()) return liveTurns;
+      try {
+        const turns = await transcribeCall(recorder, { incomingRole: "user", outgoingRole: "agent" });
+        if (turns.length > 0) return turns;
+        console.error(`QualEval target-agent bridge: the recording's transcript was empty; using the live turns`);
+        return liveTurns;
+      } catch (err) {
+        console.error(`QualEval target-agent bridge: transcribing the recording failed: ${err.message}`);
+        return liveTurns;
+      }
+    }
+
+    async function saveInboundRecording({ turns: liveTurns, callSid, reason }) {
+      const turns = await transcriptOf(liveTurns);
       let audioRef = null;
       if (callSid && recordingsReady() && recorder.hasAudio()) {
         try {

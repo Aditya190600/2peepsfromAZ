@@ -270,8 +270,9 @@ test("uploads a mixed WAV for an inbound call and stores its audio path", async 
       addOutgoingFrame() {},
       clearOutgoingFrom() {},
       hasAudio: () => true,
-      toWavBuffer: () => wav,
+      toStereoWavBuffer: () => wav,
     }),
+    transcribeCall: async () => [{ role: "agent", text: "hello", tMs: 0 }],
     recordingsReady: () => true,
     uploadRecording: async (key, body, contentType) => {
       uploaded = { key, body, contentType };
@@ -298,4 +299,109 @@ test("uploads a mixed WAV for an inbound call and stores its audio path", async 
   assert.equal(uploaded.contentType, "audio/wav");
   assert.equal(uploaded.body, wav);
   assert.equal(finished.audioRef, "/v1/qualeval/production-calls/CA111/audio");
+});
+
+test("scores an inbound call on the recording's per-leg transcript, with the caller as the far end", async () => {
+  const twilioWs = new FakeSocket();
+  const httpServer = new EventEmitter();
+  let sessionArgs;
+  let finished;
+  let analyzed;
+  let roles;
+  const recorded = [
+    { role: "agent", text: "Can I get your full name?", tMs: 900 },
+    { role: "user", text: "Maria Lopez.", tMs: 4200 },
+  ];
+  const wss = attachTargetAgentStreamServer(httpServer, {
+    getActiveVariant: async () => ({ key: "compliant", agentId: "agent_1" }),
+    mintToken: async () => "tok",
+    createSession: (args) => {
+      sessionArgs = args;
+      return {};
+    },
+    waitForClaimableRun: async () => null,
+    transcribeCall: async (recorder, r) => {
+      roles = r;
+      return recorded;
+    },
+    recordingsReady: () => false,
+    finishCall: async (fields) => {
+      finished = fields;
+      return {};
+    },
+    analyzeCall: async (fields) => {
+      analyzed = fields;
+    },
+  });
+  connect(wss, twilioWs);
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  sessionArgs.onIncomingAudio(Buffer.alloc(160, 0x10).toString("base64"), 0);
+  await sessionArgs.onFinished({
+    turns: [{ role: "agent", text: "Can I get you a doctor?", tMs: 3000 }],
+    callSid: "CA222",
+    reason: "session.ended",
+  });
+
+  assert.deepEqual(roles, { incomingRole: "user", outgoingRole: "agent" });
+  assert.deepEqual(finished.transcript, recorded);
+  assert.deepEqual(analyzed.transcript, recorded);
+});
+
+async function finishInboundCall({ claimedRunId = null, transcribeCall, liveTurns }) {
+  const twilioWs = new FakeSocket();
+  const httpServer = new EventEmitter();
+  let sessionArgs;
+  let finished;
+  let analyzed;
+  const wss = attachTargetAgentStreamServer(httpServer, {
+    getActiveVariant: async () => ({ key: "compliant", agentId: "agent_1" }),
+    mintToken: async () => "tok",
+    createSession: (args) => {
+      sessionArgs = args;
+      return {};
+    },
+    waitForClaimableRun: async () => claimedRunId,
+    releaseRun: () => {},
+    transcribeCall,
+    recordingsReady: () => false,
+    finishCall: async (fields) => {
+      finished = fields;
+      return {};
+    },
+    analyzeCall: async (fields) => {
+      analyzed = fields;
+    },
+  });
+  connect(wss, twilioWs);
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  sessionArgs.onIncomingAudio(Buffer.alloc(160, 0x10).toString("base64"), 0);
+  await sessionArgs.onFinished({ turns: liveTurns, callSid: "CA333", reason: "session.ended" });
+  return { finished, analyzed };
+}
+
+test("keeps the live turns for an inbound call when the recording's transcript is empty", async () => {
+  const liveTurns = [{ role: "agent", text: "Hello, how can I help?", tMs: 300 }];
+  const { finished, analyzed } = await finishInboundCall({ liveTurns, transcribeCall: async () => [] });
+  assert.deepEqual(finished.transcript, liveTurns);
+  assert.deepEqual(analyzed.transcript, liveTurns);
+});
+
+test("does not transcribe the recording of a leg claimed by a QualEval run", async () => {
+  const liveTurns = [{ role: "agent", text: "Hello, how can I help?", tMs: 300 }];
+  let transcribed = false;
+  const { finished } = await finishInboundCall({
+    claimedRunId: "run_claimed",
+    liveTurns,
+    transcribeCall: async () => {
+      transcribed = true;
+      return [{ role: "agent", text: "from the recording", tMs: 0 }];
+    },
+  });
+  assert.equal(transcribed, false);
+  assert.deepEqual(finished.transcript, liveTurns);
+  assert.equal(finished.qualevalRunId, "run_claimed");
 });
