@@ -22,6 +22,15 @@ export const SCENARIO_EXPORT_COLUMNS = [
   { key: "latestAssessment", header: "Latest run assessment", width: 60 },
 ];
 
+export const SCENARIO_EXPORT_STATUSES = Object.keys(STATUS_LABELS);
+
+// Narrows the scenario set to one status tab, or returns every scenario when
+// no status is given.
+export function scenariosWithStatus(scenarios, status) {
+  if (status === undefined) return scenarios;
+  return scenarios.filter((scenario) => scenario.status === status);
+}
+
 function blankToNull(value) {
   return value === undefined || value === "" ? null : value;
 }

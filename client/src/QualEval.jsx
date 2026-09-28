@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import { AppShell } from "./Chrome";
@@ -388,6 +389,16 @@ function runStatus(run) {
   return { text: "Pending - not yet run", cls: "is-na" };
 }
 
+// Short latest-run label for a scenario's summary row.
+function runChipText(run) {
+  if (run.verdict === "pass") return "Pass";
+  if (run.verdict === "fail") return "Fail";
+  if (run.verdict === "in_progress") return "In call";
+  if (run.verdict === "awaiting_evaluation") return "Evaluating";
+  if (run.verdict === "error") return "Error";
+  return "Not run";
+}
+
 function VerdictPill({ run }) {
   const status = runStatus(run);
   if (run?.verdict !== "pass" && run?.verdict !== "fail") return null;
@@ -753,166 +764,212 @@ function EditScenarioForm({ scenario, onSaved, onCancel, busy }) {
   );
 }
 
-function ScenarioCard({ scenario, onApprove, onReject, onRun, onDelete, onEdit, onEndCall, busy, autoListen }) {
+// One accordion item: collapsed it is a single summary row (name, persona
+// and situation one-liner, latest run status) so many scenarios fit on
+// screen; the parent keeps at most one expanded at a time. A call in progress
+// stays live while collapsed: its End call button sits on the summary row and
+// its LiveCallPanel stays mounted (hidden), so listening doesn't stop.
+function ScenarioCard({
+  scenario,
+  expanded,
+  onToggle,
+  onApprove,
+  onReject,
+  onRun,
+  onDelete,
+  onEdit,
+  onEndCall,
+  busy,
+  autoListen,
+}) {
   const latestRun = scenario.runs?.[0] ?? null;
   const status = runStatus(latestRun);
   const inProgress = latestRun?.verdict === "in_progress";
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [editing, setEditing] = useState(false);
+  const bodyId = `qe-scenario-body-${scenario.id}`;
+  const oneLiner = [scenario.persona, scenario.situation].filter(Boolean).join(" · ");
 
-  if (editing) {
-    return (
-      <div className={`qe-scenario-card is-${scenario.status}`}>
-        <div className="qe-scenario-head">
-          <h4>{scenario.name}</h4>
-          <div className="qe-scenario-badges">
-            {scenario.category && <span className="qe-cat-badge">{scenario.category}</span>}
-            <span className={`qe-status-chip is-${scenario.status}`}>{scenario.status}</span>
-          </div>
-        </div>
-        <EditScenarioForm
-          scenario={scenario}
-          busy={busy}
-          onCancel={() => setEditing(false)}
-          onSaved={async (fields) => {
-            await onEdit(scenario, fields);
-            setEditing(false);
-          }}
-        />
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (!expanded) {
+      setEditing(false);
+      setConfirmingDelete(false);
+    }
+  }, [expanded]);
 
   return (
-    <div className={`qe-scenario-card is-${scenario.status}`}>
-      <div className="qe-scenario-head">
-        <h4>{scenario.name}</h4>
-        <div className="qe-scenario-badges">
-          {scenario.category && <span className="qe-cat-badge">{scenario.category}</span>}
-          <span className={`qe-status-chip is-${scenario.status}`}>{scenario.status}</span>
-        </div>
-      </div>
-
-      {(scenario.persona || scenario.situation || scenario.callerObjectives || scenario.expectedBehavior) && (
-        <div className="qe-scenario-meta-grid">
-          {scenario.persona && (
-            <div>
-              <div className="qe-meta-k">Persona</div>
-              <div className="qe-meta-v">{scenario.persona}</div>
-            </div>
-          )}
-          {scenario.situation && (
-            <div>
-              <div className="qe-meta-k">Situation</div>
-              <div className="qe-meta-v">{scenario.situation}</div>
-            </div>
-          )}
-          {scenario.callerObjectives && (
-            <div>
-              <div className="qe-meta-k">Caller objectives</div>
-              <div className="qe-meta-v">{scenario.callerObjectives}</div>
-            </div>
-          )}
-          {scenario.expectedBehavior && (
-            <div>
-              <div className="qe-meta-k">Expected behavior</div>
-              <div className="qe-meta-v">{scenario.expectedBehavior}</div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {scenario.evaluationCriteria?.length > 0 && (
-        <ul className="qe-criteria-list">
-          {scenario.evaluationCriteria.map((c, i) => (
-            <li key={i}>{c}</li>
-          ))}
-        </ul>
-      )}
-
-      <div className="qe-scenario-actions">
-        {scenario.status !== "approved" && (
-          <button
-            type="button"
-            className="btn-sm primary"
-            onClick={() => onApprove(scenario)}
-            disabled={busy || inProgress}
-          >
-            Approve
-          </button>
-        )}
-        {scenario.status !== "rejected" && (
-          <button
-            type="button"
-            className="btn-sm ghost"
-            onClick={() => onReject(scenario)}
-            disabled={busy || inProgress}
-          >
-            Reject
-          </button>
-        )}
-        {scenario.status === "approved" && (
-          <button
-            type="button"
-            className="btn-sm primary"
-            onClick={() => onRun(scenario)}
-            disabled={busy || inProgress}
-          >
-            ▶ Run
-          </button>
-        )}
-        <button type="button" className="btn-sm ghost" onClick={() => setEditing(true)} disabled={busy || inProgress}>
-          Edit
+    <div className={`qe-scenario-card is-${scenario.status} ${expanded ? "is-expanded" : "is-collapsed"}`}>
+      <div className="qe-scenario-summary-row">
+        <button
+          type="button"
+          className="qe-scenario-summary"
+          aria-expanded={expanded}
+          aria-controls={bodyId}
+          onClick={onToggle}
+        >
+          <span className="qe-scenario-chevron" aria-hidden="true" />
+          <span className="qe-scenario-summary-text">
+            <span className="qe-scenario-title">{scenario.name}</span>
+            {!expanded && oneLiner && <span className="qe-scenario-oneliner">{oneLiner}</span>}
+          </span>
+          <span className="qe-scenario-badges">
+            {scenario.category && <span className="qe-cat-badge">{scenario.category}</span>}
+            {inProgress ? (
+              <span className="qe-live-badge">
+                <span className="qe-live-dot" />
+                Live
+              </span>
+            ) : (
+              latestRun && <span className={`qe-run-chip ${status.cls}`}>{runChipText(latestRun)}</span>
+            )}
+            <span className={`qe-status-chip is-${scenario.status}`}>{scenario.status}</span>
+          </span>
         </button>
-        {confirmingDelete ? (
-          <>
-            <span className="qe-delete-confirm-text">Delete this scenario?</span>
-            <button
-              type="button"
-              className="btn-sm danger"
-              onClick={() => onDelete(scenario)}
-              disabled={busy || inProgress}
-            >
-              Confirm delete
-            </button>
-            <button
-              type="button"
-              className="btn-sm ghost"
-              onClick={() => setConfirmingDelete(false)}
-              disabled={busy || inProgress}
-            >
-              Cancel
-            </button>
-          </>
-        ) : (
+        {inProgress && (
           <button
             type="button"
-            className="btn-sm ghost"
-            onClick={() => setConfirmingDelete(true)}
-            disabled={busy || inProgress}
+            className="btn-sm danger qe-scenario-end-call"
+            onClick={() => onEndCall(latestRun)}
+            disabled={busy}
           >
-            Delete
-          </button>
-        )}
-        {inProgress && (
-          <button type="button" className="btn-sm danger" onClick={() => onEndCall(latestRun)} disabled={busy}>
             ■ End call
           </button>
         )}
       </div>
 
-      {inProgress ? (
-        <LiveCallPanel run={latestRun} autoListen={autoListen} />
-      ) : (
-        latestRun &&
-        latestRun.verdict !== "pass" &&
-        latestRun.verdict !== "fail" && (
-          <div className="call-row">
-            <span className={`finding-status ${status.cls}`}>{status.text}</span>
-          </div>
-        )
+      {(expanded || inProgress) && (
+        <div id={bodyId} className="qe-scenario-body" hidden={!expanded}>
+          {!expanded ? null : editing ? (
+            <EditScenarioForm
+              scenario={scenario}
+              busy={busy}
+              onCancel={() => setEditing(false)}
+              onSaved={async (fields) => {
+                await onEdit(scenario, fields);
+                setEditing(false);
+              }}
+            />
+          ) : (
+            <>
+              {(scenario.persona || scenario.situation || scenario.callerObjectives || scenario.expectedBehavior) && (
+                <div className="qe-scenario-meta-grid">
+                  {scenario.persona && (
+                    <div>
+                      <div className="qe-meta-k">Persona</div>
+                      <div className="qe-meta-v">{scenario.persona}</div>
+                    </div>
+                  )}
+                  {scenario.situation && (
+                    <div>
+                      <div className="qe-meta-k">Situation</div>
+                      <div className="qe-meta-v">{scenario.situation}</div>
+                    </div>
+                  )}
+                  {scenario.callerObjectives && (
+                    <div>
+                      <div className="qe-meta-k">Caller objectives</div>
+                      <div className="qe-meta-v">{scenario.callerObjectives}</div>
+                    </div>
+                  )}
+                  {scenario.expectedBehavior && (
+                    <div>
+                      <div className="qe-meta-k">Expected behavior</div>
+                      <div className="qe-meta-v">{scenario.expectedBehavior}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {scenario.evaluationCriteria?.length > 0 && (
+                <ul className="qe-criteria-list">
+                  {scenario.evaluationCriteria.map((c, i) => (
+                    <li key={i}>{c}</li>
+                  ))}
+                </ul>
+              )}
+
+              <div className="qe-scenario-actions">
+                {scenario.status !== "approved" && (
+                  <button
+                    type="button"
+                    className="btn-sm primary"
+                    onClick={() => onApprove(scenario)}
+                    disabled={busy || inProgress}
+                  >
+                    Approve
+                  </button>
+                )}
+                {scenario.status !== "rejected" && (
+                  <button
+                    type="button"
+                    className="btn-sm ghost"
+                    onClick={() => onReject(scenario)}
+                    disabled={busy || inProgress}
+                  >
+                    Reject
+                  </button>
+                )}
+                {scenario.status === "approved" && (
+                  <button
+                    type="button"
+                    className="btn-sm primary"
+                    onClick={() => onRun(scenario)}
+                    disabled={busy || inProgress}
+                  >
+                    ▶ Run
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn-sm ghost"
+                  onClick={() => setEditing(true)}
+                  disabled={busy || inProgress}
+                >
+                  Edit
+                </button>
+                {confirmingDelete ? (
+                  <>
+                    <span className="qe-delete-confirm-text">Delete this scenario?</span>
+                    <button
+                      type="button"
+                      className="btn-sm danger"
+                      onClick={() => onDelete(scenario)}
+                      disabled={busy || inProgress}
+                    >
+                      Confirm delete
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-sm ghost"
+                      onClick={() => setConfirmingDelete(false)}
+                      disabled={busy || inProgress}
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-sm ghost"
+                    onClick={() => setConfirmingDelete(true)}
+                    disabled={busy || inProgress}
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+
+              {!inProgress && latestRun && latestRun.verdict !== "pass" && latestRun.verdict !== "fail" && (
+                <div className="call-row">
+                  <span className={`finding-status ${status.cls}`}>{status.text}</span>
+                </div>
+              )}
+              <RunResult run={latestRun} />
+            </>
+          )}
+          {inProgress && <LiveCallPanel run={latestRun} autoListen={autoListen} />}
+        </div>
       )}
-      <RunResult run={latestRun} />
     </div>
   );
 }
@@ -1059,6 +1116,7 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
   const [deletingAllTab, setDeletingAllTab] = useState(false);
   const [approvingAllTab, setApprovingAllTab] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [expandedScenarioId, setExpandedScenarioId] = useState(null);
   const [autoListen, setAutoListen] = useState(() => getLiveAudioPreference());
   const tour = useTour();
   const summaryRef = useRef(null);
@@ -1149,6 +1207,7 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
   const onRun = async (scenario) => {
     setActionError(null);
     setBusyScenarioId(scenario.id);
+    setExpandedScenarioId(scenario.id);
     try {
       const run = await createRun(scenario.id);
       await getRun(run.id);
@@ -1202,7 +1261,7 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
     setActionError(null);
     setExporting(true);
     try {
-      await exportScenariosXlsx(evaluationId);
+      await exportScenariosXlsx(evaluationId, "approved");
     } catch (err) {
       setActionError(err.message ?? "Could not export these scenarios.");
     } finally {
@@ -1273,7 +1332,13 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
   // Take-a-tour: review -> approve -> run -> results -> regenerate. Scenario
   // card and result steps target the first one in the open tab, so they are
   // skipped when that tab has none.
-  const startTour = () =>
+  const startTour = () => {
+    // The actions and verdict steps point inside a scenario card, so open one
+    // first - preferably one that already has a verdict to show.
+    if (!visibleScenarios.some((s) => s.id === expandedScenarioId) && visibleScenarios.length > 0) {
+      const judged = visibleScenarios.find((s) => ["pass", "fail"].includes(s.runs?.[0]?.verdict));
+      flushSync(() => setExpandedScenarioId((judged ?? visibleScenarios[0]).id));
+    }
     tour.start(
       [
         {
@@ -1303,6 +1368,7 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
         },
       ].filter(resolveTourTarget),
     );
+  };
 
   return (
     <AppShell
@@ -1402,11 +1468,6 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
                   />
                   Auto-play live call audio
                 </label>
-                {scenarios.length > 0 && (
-                  <button type="button" className="btn-sm ghost" onClick={onExport} disabled={exporting}>
-                    {exporting ? "Exporting…" : "Export to Excel"}
-                  </button>
-                )}
               </div>
             </div>
             <div className="qe-tab-bar" ref={tabBarRef}>
@@ -1468,6 +1529,11 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
                     Delete all in this tab
                   </button>
                 )}
+                {activeTab === "approved" && !confirmingDeleteAllTab && (
+                  <button type="button" className="btn-sm ghost" onClick={onExport} disabled={exporting}>
+                    {exporting ? "Exporting…" : "Export to Excel"}
+                  </button>
+                )}
               </div>
             )}
             {actionError && <p className="error-banner">{actionError}</p>}
@@ -1479,6 +1545,8 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
               <ScenarioCard
                 key={scenario.id}
                 scenario={scenario}
+                expanded={expandedScenarioId === scenario.id}
+                onToggle={() => setExpandedScenarioId((id) => (id === scenario.id ? null : scenario.id))}
                 onApprove={onApprove}
                 onReject={onReject}
                 onRun={onRun}

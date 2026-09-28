@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import ExcelJS from "exceljs";
-import { SCENARIO_EXPORT_COLUMNS, buildScenariosWorkbook, scenariosExportFilename } from "./scenarioExport.js";
+import {
+  SCENARIO_EXPORT_COLUMNS,
+  buildScenariosWorkbook,
+  scenariosExportFilename,
+  scenariosWithStatus,
+} from "./scenarioExport.js";
 
 const evaluation = { id: "eval_1", name: "Bank / Teller: v2" };
 const scenarios = [
@@ -94,4 +99,22 @@ test("buildScenariosWorkbook still produces a header-only sheet for an evaluatio
 test("scenariosExportFilename strips characters that are unsafe in a download filename", () => {
   assert.equal(scenariosExportFilename(evaluation), "Bank Teller v2 - scenarios.xlsx");
   assert.equal(scenariosExportFilename({ name: "   " }), "scenarios.xlsx");
+});
+
+test("scenariosWithStatus keeps only one status tab's scenarios, or all when no status is given", async () => {
+  const rejected = { ...scenarios[1], id: "sc_3", name: "Wrong number", status: "rejected" };
+  const all = [...scenarios, rejected];
+  assert.deepEqual(
+    scenariosWithStatus(all, "approved").map((s) => s.id),
+    ["sc_1"],
+  );
+  assert.deepEqual(
+    scenariosWithStatus(all, "rejected").map((s) => s.id),
+    ["sc_3"],
+  );
+  assert.equal(scenariosWithStatus(all, undefined), all);
+
+  const sheet = await readBack(await buildScenariosWorkbook(evaluation, scenariosWithStatus(all, "approved")));
+  assert.equal(sheet.rowCount, 2);
+  assert.equal(sheet.getRow(2).getCell(1).value, "Lost card");
 });
