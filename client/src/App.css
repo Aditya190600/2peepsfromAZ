@@ -726,11 +726,16 @@ button.site-nav-link {
   border-top: none;
 }
 
-.qualeval-review {
+.qe-top-grid {
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 24px;
   align-items: start;
+  margin-bottom: 24px;
+}
+
+.qualeval-review {
+  min-width: 0;
 }
 
 .qualeval-review-scenarios {
@@ -776,7 +781,7 @@ button.site-nav-link {
 }
 
 @media (max-width: 900px) {
-  .qualeval-review {
+  .qe-top-grid {
     grid-template-columns: 1fr;
   }
 }

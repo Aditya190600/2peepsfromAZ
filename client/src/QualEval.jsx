@@ -1363,7 +1363,7 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
   const tabCounts = Object.fromEntries(STATUS_TABS.map((t) => [t.key, scenarios.filter((s) => s.status === t.key).length]));
   const visibleScenarios = scenarios.filter((s) => s.status === activeTab);
 
-  // Take-a-tour: review -> approve -> run -> results -> regenerate. Scenario
+  // Take-a-tour: regenerate -> review -> approve -> run -> results. Scenario
   // card and result steps target the first one in the open tab, so they are
   // skipped when that tab has none.
   const startTour = () => {
@@ -1381,6 +1381,11 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
           body: "The phone number QualEval calls, plus the description and requirements every scenario is generated from and judged against. Edit evaluation changes them.",
         },
         {
+          ref: generatePanelRef,
+          title: "Generate more",
+          body: "Ask for a new batch here, optionally with feedback on what to cover. Accepted scenarios are kept; generated and rejected ones are replaced.",
+        },
+        {
           ref: tabBarRef,
           title: "Review scenarios",
           body: "New scenarios land in Generated. Approve the ones worth running (they move to Accepted) and reject the rest - Approve all does a whole batch at once.",
@@ -1394,11 +1399,6 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
           find: () => scenarioListRef.current?.querySelector(".qe-run-result"),
           title: "Read the verdict",
           body: "When the call ends, the transcript is judged pass/fail per criterion, with the evidence for every failure. Play the recording and click a timestamp to jump to that moment.",
-        },
-        {
-          ref: generatePanelRef,
-          title: "Generate more",
-          body: "Ask for a new batch here, optionally with feedback on what to cover. Accepted scenarios are kept; generated and rejected ones are replaced.",
         },
       ].filter(resolveTourTarget),
     );
@@ -1448,40 +1448,62 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
         </div>
         {deleteError && <p className="error-banner">{deleteError}</p>}
 
-        {editing ? (
-          <EditEvaluationForm
-            evaluation={evaluation}
-            demoAgents={demoAgents}
-            onSaved={(updated) => {
-              setEvaluation((prev) => ({ ...prev, ...updated }));
-              setEditing(false);
-            }}
-            onCancel={() => setEditing(false)}
-          />
-        ) : (
-          <ul className="qe-eval-summary" ref={summaryRef}>
-            <li>
-              <strong>Target agent:</strong> {evaluation.agentPhoneNumber ?? "no phone number set"}
-            </li>
-            {evaluation.demoAgentKey && (
+        <div className="qe-top-grid">
+          {editing ? (
+            <EditEvaluationForm
+              evaluation={evaluation}
+              demoAgents={demoAgents}
+              onSaved={(updated) => {
+                setEvaluation((prev) => ({ ...prev, ...updated }));
+                setEditing(false);
+              }}
+              onCancel={() => setEditing(false)}
+            />
+          ) : (
+            <ul className="qe-eval-summary" ref={summaryRef}>
               <li>
-                <strong>Demo agent that answers:</strong> {demoAgentLabel(demoAgents, evaluation.demoAgentKey)}
+                <strong>Target agent:</strong> {evaluation.agentPhoneNumber ?? "no phone number set"}
               </li>
-            )}
-            {evaluation.description && (
-              <li>
-                <strong>Description:</strong>
-                <MarkdownText text={evaluation.description} />
-              </li>
-            )}
-            {evaluation.requirements && (
-              <li>
-                <strong>Requirements:</strong>
-                <MarkdownText text={evaluation.requirements} />
-              </li>
-            )}
-          </ul>
-        )}
+              {evaluation.demoAgentKey && (
+                <li>
+                  <strong>Demo agent that answers:</strong> {demoAgentLabel(demoAgents, evaluation.demoAgentKey)}
+                </li>
+              )}
+              {evaluation.description && (
+                <li>
+                  <strong>Description:</strong>
+                  <MarkdownText text={evaluation.description} />
+                </li>
+              )}
+              {evaluation.requirements && (
+                <li>
+                  <strong>Requirements:</strong>
+                  <MarkdownText text={evaluation.requirements} />
+                </li>
+              )}
+            </ul>
+          )}
+
+          <div className="qe-feedback-panel" ref={generatePanelRef}>
+            <h4>{scenarios.length === 0 ? "Generate scenarios" : "Regenerate with feedback"}</h4>
+            <p className="qe-feedback-hint">
+              Regenerating replaces every pending/rejected scenario with a new batch; already-approved
+              scenarios are kept as-is.
+            </p>
+            <textarea
+              rows={5}
+              className="qe-feedback-box"
+              placeholder="What should the next batch of scenarios cover differently? e.g. add more edge cases around cancellations."
+              value={feedback}
+              onChange={(e) => setFeedback(e.target.value)}
+            />
+            <ScenarioCountStepper count={scenarioCount} onChange={setScenarioCount} />
+            {genError && <p className="error-banner">{genError}</p>}
+            <button type="button" className="qe-btn-regen" onClick={onGenerate} disabled={generating || anyCallInProgress}>
+              {generating ? "Generating…" : scenarios.length === 0 ? "Generate scenarios" : "Regenerate scenarios"}
+            </button>
+          </div>
+        </div>
 
         <div className="qualeval-review">
           <div className="qualeval-review-scenarios" ref={scenarioListRef}>
@@ -1591,26 +1613,6 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
                 autoListen={autoListen}
               />
             ))}
-          </div>
-
-          <div className="qe-feedback-panel" ref={generatePanelRef}>
-            <h4>{scenarios.length === 0 ? "Generate scenarios" : "Regenerate with feedback"}</h4>
-            <p className="qe-feedback-hint">
-              Regenerating replaces every pending/rejected scenario with a new batch; already-approved
-              scenarios are kept as-is.
-            </p>
-            <textarea
-              rows={5}
-              className="qe-feedback-box"
-              placeholder="What should the next batch of scenarios cover differently? e.g. add more edge cases around cancellations."
-              value={feedback}
-              onChange={(e) => setFeedback(e.target.value)}
-            />
-            <ScenarioCountStepper count={scenarioCount} onChange={setScenarioCount} />
-            {genError && <p className="error-banner">{genError}</p>}
-            <button type="button" className="qe-btn-regen" onClick={onGenerate} disabled={generating || anyCallInProgress}>
-              {generating ? "Generating…" : scenarios.length === 0 ? "Generate scenarios" : "Regenerate scenarios"}
-            </button>
           </div>
         </div>
       </div>
