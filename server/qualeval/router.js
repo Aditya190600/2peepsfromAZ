@@ -10,6 +10,12 @@ import { endCall } from "./twilioClient.js";
 import { getObjectByKey, sendRecording } from "../recordingsStore.js";
 import { qualevalCallAudioKey, productionCallAudioKey } from "./callRecorder.js";
 import { getProductionCallBySid, isPhoneEvalCall, listPhoneEvalCalls } from "./productionCalls.js";
+import {
+  canAccessPhoneEvals,
+  canViewPhoneEvalCall,
+  listOwnedInboundNumbers,
+  ownedNumberDigits,
+} from "./phoneEvalAccess.js";
 import { analyzeFinishedCall } from "./postCallAnalysis.js";
 import * as liveCallHub from "./liveCallHub.js";
 import { buildScenariosWorkbook, scenariosExportFilename } from "./scenarioExport.js";
@@ -102,6 +108,7 @@ async function listScenariosWithRuns(evaluationId, visitor) {
 export function qualevalRouter({
   visitorId = () => "anon",
   isOperator = async () => false,
+  telephonyStore = null,
   liveCalls = liveCallHub,
   heartbeatMs = 15000,
   // Longest a listener waits for a ringing call to be answered and bridged.
@@ -115,6 +122,39 @@ export function qualevalRouter({
     if (!(await isOperator(req))) return res.status(403).json({ error: "Operator access required." });
     next();
   });
+
+  async function phoneEvalAccessFor(req) {
+    const ownerId = visitorId(req);
+    const operator = await isOperator(req);
+    const ownedNumbers = await listOwnedInboundNumbers(telephonyStore, ownerId);
+    return {
+      operator,
+      ownerId,
+      ownedNumbers,
+      ownedDigits: ownedNumberDigits(ownedNumbers),
+      canAccess: await canAccessPhoneEvals({ isOperator: operator, telephonyStore, ownerId }),
+    };
+  }
+
+  const requirePhoneEvalAccess = wrap(async (req, res, next) => {
+    const access = await phoneEvalAccessFor(req);
+    if (!access.canAccess) {
+      return res.status(403).json({
+        error: "Phone Evals requires operator access or a configured phone number in Settings.",
+      });
+    }
+    req.phoneEvalAccess = access;
+    next();
+  });
+
+  async function assertCanViewPhoneEvalCall(req, call) {
+    const access = req.phoneEvalAccess ?? (await phoneEvalAccessFor(req));
+    if (!canViewPhoneEvalCall({ isOperator: access.operator, ownedDigits: access.ownedDigits, call })) {
+      return false;
+    }
+    req.phoneEvalAccess = access;
+    return true;
+  }
 
   router.post(
     "/evaluations",
@@ -147,26 +187,33 @@ export function qualevalRouter({
   router.get(
     "/config",
     wrap(async (req, res) => {
-      const operator = await isOperator(req);
+      const access = await phoneEvalAccessFor(req);
       res.json({
         agentPhoneNumber: process.env.QUALEVAL_AGENT_NUMBER || null,
-        isOperator: operator,
-        ...(operator && { personaPhoneNumber: process.env.QUALEVAL_PERSONA_NUMBER || null }),
+        isOperator: access.operator,
+        canAccessPhoneEvals: access.canAccess,
+        phoneEvalsConfigured: access.ownedNumbers.length > 0,
+        ownedPhoneNumbers: access.ownedNumbers,
+        ...(access.operator && { personaPhoneNumber: process.env.QUALEVAL_PERSONA_NUMBER || null }),
       });
     }),
   );
 
-  // Phone Evals (client/src/PhoneEvals.jsx): real calls that dialed
-  // QUALEVAL_AGENT_NUMBER directly, scored by phoneEvaluation.js (pass/fail) and
-  // phoneCompliance.js (compliance findings). Kept apart
-  // from evaluations on purpose - only QualEval-placed scenario runs belong to
-  // an evaluation. Operator-only: the number is shared, so every caller's
-  // number and transcript would otherwise reach every signed-in visitor.
+  // Phone Evals (client/src/PhoneEvals.jsx): real calls that dialed an agent
+  // number directly, scored by phoneEvaluation.js (pass/fail) and
+  // phoneCompliance.js (compliance findings). Kept apart from evaluations on
+  // purpose - only QualEval-placed scenario runs belong to an evaluation.
+  // Operators see every call; other visitors see only calls to numbers they
+  // registered in Settings (server/telephony/store.js).
   router.get(
     "/phone-evals",
-    requireOperator,
+    requirePhoneEvalAccess,
     wrap(async (req, res) => {
-      res.json({ calls: await listPhoneEvalCalls() });
+      const { operator, ownedDigits } = req.phoneEvalAccess;
+      const calls = await listPhoneEvalCalls(process.env, undefined, {
+        toNumberDigits: operator ? null : ownedDigits,
+      });
+      res.json({ calls });
     }),
   );
 
@@ -175,13 +222,16 @@ export function qualevalRouter({
   // at once; the page's poll picks the results up like it does at hangup.
   router.post(
     "/phone-evals/:callSid/analyze",
-    requireOperator,
+    requirePhoneEvalAccess,
     wrap(async (req, res) => {
       if (!TWILIO_CALL_SID.test(req.params.callSid)) {
         return res.status(400).json({ error: "invalid call sid" });
       }
       const call = await getProductionCall(req.params.callSid);
       if (!call || !isPhoneEvalCall(call)) return res.status(404).json({ error: "Call not found" });
+      if (!(await assertCanViewPhoneEvalCall(req, call))) {
+        return res.status(404).json({ error: "Call not found" });
+      }
       if (!call.endedAt) return res.status(409).json({ error: "The call is still in progress." });
       analyzeCall(call).catch((err) => {
         console.error(`Phone Evals: re-run failed for ${call.twilioCallSid}: ${err.message}`);
@@ -435,18 +485,20 @@ export function qualevalRouter({
     }),
   );
 
-  // Inbound call to QUALEVAL_AGENT_NUMBER, played on the Phone Evals page.
-  // There is no per-visitor owner (the number is shared), so it is
-  // operator-only like /phone-evals itself.
+  // Inbound call recording, played on the Phone Evals page. Same visibility
+  // rules as /phone-evals: operators see every call; others only their numbers.
   router.get(
     "/production-calls/:callSid/audio",
-    requireOperator,
+    requirePhoneEvalAccess,
     wrap(async (req, res) => {
       if (!TWILIO_CALL_SID.test(req.params.callSid)) {
         return res.status(400).json({ error: "invalid call sid" });
       }
       const call = await getProductionCallBySid(req.params.callSid);
-      if (!call?.audioRef) return res.status(404).json({ error: "No recording for this call" });
+      if (!call || !(await assertCanViewPhoneEvalCall(req, call))) {
+        return res.status(404).json({ error: "No recording for this call" });
+      }
+      if (!call.audioRef) return res.status(404).json({ error: "No recording for this call" });
       const recording = await getObjectByKey(productionCallAudioKey(req.params.callSid), req.headers.range);
       if (!recording) return res.status(404).json({ error: "Recording not found" });
       sendRecording(res, recording);

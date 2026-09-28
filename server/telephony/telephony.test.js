@@ -122,6 +122,61 @@ test("unreachable SIP gateway fails loudly and Twilio rejection hides the token"
   assert.equal((await request(server, "/v1/telephony/numbers")).body.length, 0);
 });
 
+test("Twilio import points the number at Phone Evals and keeps the auth token for that webhook", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "telephony-"));
+  const store = new TelephonyStore(path.join(root, "store.json"));
+  const calls = [];
+  const voiceUrl = "https://app.example.com/v1/qualeval/demo-agent-voice";
+  const fetchImpl = async (url, opts = {}) => {
+    calls.push({ url, opts });
+    if (url.endsWith(`/Accounts/${SID}.json`)) return { ok: true, status: 200 };
+    if (url.includes("IncomingPhoneNumbers.json?")) {
+      const found = url.includes(encodeURIComponent("+15557650000"));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          incoming_phone_numbers: found ? [{ sid: "PN1", voice_url: "", voice_method: "GET" }] : [],
+        }),
+      };
+    }
+    return { ok: true, status: 200, json: async () => ({}) };
+  };
+  const app = express();
+  app.use(express.json());
+  app.use("/v1/telephony", telephonyRouter({
+    store,
+    fetchImpl,
+    ownerOf,
+    env: { RAILWAY_PUBLIC_DOMAIN: "app.example.com" },
+  }));
+  const server = await listen(app);
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const twilio = await request(server, "/v1/telephony/imports/twilio", {
+    method: "POST",
+    body: { accountSid: SID, authToken: TOKEN, e164: "+15557650000", label: "Desk" },
+  });
+  assert.equal(twilio.status, 201);
+  assert.equal(twilio.body.voiceWebhookConfigured, true);
+  assert.equal(twilio.text.includes(TOKEN), false);
+  const update = calls.find((call) => call.url.endsWith("/IncomingPhoneNumbers/PN1.json"));
+  assert.ok(update, "voice webhook update was not sent");
+  const params = new URLSearchParams(update.opts.body);
+  assert.equal(params.get("VoiceUrl"), voiceUrl);
+  assert.equal(params.get("VoiceMethod"), "POST");
+  assert.equal(await store.twilioAuthTokenForE164("+1 (555) 765-0000"), TOKEN);
+  assert.equal(await store.twilioAuthTokenForE164("+19998887777"), null);
+
+  const missing = await request(server, "/v1/telephony/imports/twilio", {
+    method: "POST",
+    body: { accountSid: SID, authToken: TOKEN, e164: "+15557650009" },
+  });
+  assert.equal(missing.status, 400);
+  assert.match(missing.body.error, /not found on the Twilio account/);
+  assert.equal((await request(server, "/v1/telephony/numbers")).body.length, 1);
+});
+
 test("Twilio and Telnyx API imports store the number and hide the key", async (t) => {
   const probed = [];
   const { app } = await appFor(async (host) => { probed.push(host); });

@@ -19,6 +19,12 @@ function ownedBy(ownerId) {
   return (record) => (record.ownerId ?? LEGACY_OWNER) === ownerId;
 }
 
+function last10Digits(value) {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  if (digits.length < 10) return "";
+  return digits.slice(-10);
+}
+
 // Every read and write is scoped to one owner (a Clerk user id, or "anon").
 // The one cross-owner lookup is findNumberOwner, which routes a
 // webhook-delivered call to whoever registered the dialed number.
@@ -61,6 +67,19 @@ export class TelephonyStore {
   async findNumberOwner(e164) {
     const number = (await this.read()).numbers.find((n) => n.e164 === e164);
     return number ? (number.ownerId ?? LEGACY_OWNER) : null;
+  }
+
+  // Auth token Twilio will sign with when this imported number is called.
+  // demo-agent-voice needs it: the deployment token does not validate a
+  // webhook from the caller's own account.
+  async twilioAuthTokenForE164(e164) {
+    const key = last10Digits(e164);
+    if (!key) return null;
+    const data = await this.read();
+    const number = data.numbers.find((n) => n.provider === "twilio" && last10Digits(n.e164) === key);
+    if (!number?.credentialId) return null;
+    const credential = data.credentials.find((c) => c.id === number.credentialId);
+    return credential?.secret || null;
   }
 
   async updateNumber(ownerId, id, patch) {

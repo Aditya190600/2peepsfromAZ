@@ -222,17 +222,38 @@ export function isPhoneEvalCall(call, env = process.env) {
   return call?.direction === "inbound" && !call.qualevalRunId && !isPersonaNumber(call.fromNumber, env);
 }
 
-export async function listPhoneEvalCalls(env = process.env, pool = getPool(env)) {
+export async function listPhoneEvalCalls(
+  env = process.env,
+  pool = getPool(env),
+  { toNumberDigits = null } = {},
+) {
   if (!pool) return [];
+  // Tenant scope has to run in the query, before LIMIT. A shared window of
+  // the latest 50 inbound rows lets busier numbers (including the demo line)
+  // crowd out a visitor's own calls, which the in-memory filter then drops.
+  // Last-10-digit match is the same rule as phoneDigits / canViewPhoneEvalCall.
+  const params = [];
+  let tenantSql = "";
+  if (toNumberDigits) {
+    params.push([...toNumberDigits]);
+    tenantSql = `and right(regexp_replace(coalesce(to_number, ''), '\\D', '', 'g'), 10) = any($${params.length}::text[])`;
+  }
   const { rows } = await pool.query(
     `select ${RETURNING} from production_calls
      where direction = 'inbound'
        and qualeval_run_id is null
+       ${tenantSql}
      order by started_at desc
      limit 50`,
+    params,
   );
   return rows
     .map(callRow)
     .filter((call) => isPhoneEvalCall(call, env))
+    .filter((call) => {
+      if (!toNumberDigits) return true;
+      const digits = phoneDigits(call.toNumber);
+      return digits && toNumberDigits.has(digits);
+    })
     .map((call) => ({ ...call, transcript: transcriptForClient(call.transcript) }));
 }
