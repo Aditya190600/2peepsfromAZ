@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { agentTurnStartMs, shouldDropEchoUserTurn } from "./liveCallTranscript.js";
 import { PERSONAS, resolvePersonaCallConfig } from "./personas";
 
 const SAMPLE_RATE = 24000;
@@ -38,20 +39,29 @@ export function useVoiceAgent() {
   const lastAudibleAtRef = useRef(0);
   const silenceCheckIntervalRef = useRef(null);
   const recordCallRef = useRef(false);
-  // Single MediaStreamAudioDestinationNode, in the output AudioContext, that both
-  // the mic and the agent-reply audio are mixed into - see startRecorder's comment
-  // for why this can't be two destination nodes combined at the MediaRecorder level.
+  // Stereo record path: mic -> merger input 0, agent reply -> merger input 1.
+  const recordMergerRef = useRef(null);
   const recordDestRef = useRef(null);
   const recordMicSourceRef = useRef(null); // mic stream re-tapped into the output context for mixing
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
+  // Session-relative ms when the current reply's first audio chunk is scheduled.
+  const replyAudioStartMsRef = useRef(null);
+  // Session-relative ms through which agent audio is (or will be) playing.
+  const agentPlaybackUntilMsRef = useRef(0);
+  const lastAgentTextRef = useRef("");
 
-  const appendTranscript = useCallback((role, text) => {
+  const appendTranscriptTurn = useCallback((role, text, tMs) => {
     setTranscript((prev) => [...prev, { role, text }]);
     const session = sessionRef.current;
     if (session) {
-      session.turns.push({ role, text, tMs: Date.now() - session.startedAtMs });
+      session.turns.push({ role, text, tMs });
     }
+  }, []);
+
+  const sessionRelativeMs = useCallback(() => {
+    const session = sessionRef.current;
+    return session ? Date.now() - session.startedAtMs : 0;
   }, []);
 
   const flushPlayback = useCallback(() => {
@@ -64,7 +74,9 @@ export function useVoiceAgent() {
     }
     pendingSourcesRef.current = [];
     nextPlaybackTimeRef.current = audioCtxOutRef.current?.currentTime ?? 0;
-  }, []);
+    replyAudioStartMsRef.current = null;
+    agentPlaybackUntilMsRef.current = sessionRelativeMs();
+  }, [sessionRelativeMs]);
 
   const playReplyAudio = useCallback((base64Pcm16) => {
     const ctx = audioCtxOutRef.current;
@@ -84,11 +96,17 @@ export function useVoiceAgent() {
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(ctx.destination);
-    if (recordDestRef.current) source.connect(recordDestRef.current);
+    if (recordMergerRef.current) source.connect(recordMergerRef.current, 0, 1);
 
     // Schedule back-to-back against context time (no sleep-based timing) so the
     // browser's own audio buffer absorbs network jitter between chunks.
     const startAt = Math.max(nextPlaybackTimeRef.current, ctx.currentTime);
+    const delayMs = Math.max(0, (startAt - ctx.currentTime) * 1000);
+    const audioStartMs = sessionRelativeMs() + delayMs;
+    const audioEndMs = audioStartMs + buffer.duration * 1000;
+    if (replyAudioStartMsRef.current == null) replyAudioStartMsRef.current = audioStartMs;
+    agentPlaybackUntilMsRef.current = Math.max(agentPlaybackUntilMsRef.current, audioEndMs);
+
     source.start(startAt);
     nextPlaybackTimeRef.current = startAt + buffer.duration;
 
@@ -96,7 +114,7 @@ export function useVoiceAgent() {
     source.onended = () => {
       pendingSourcesRef.current = pendingSourcesRef.current.filter((s) => s !== source);
     };
-  }, []);
+  }, [sessionRelativeMs]);
 
   const connect = useCallback(
     async (persona = PERSONAS[0], seedViolation = false, recordCall = false) => {
@@ -107,6 +125,9 @@ export function useVoiceAgent() {
       setRecordedBlob(null);
       recordCallRef.current = recordCall;
       recordedChunksRef.current = [];
+      replyAudioStartMsRef.current = null;
+      agentPlaybackUntilMsRef.current = 0;
+      lastAgentTextRef.current = "";
 
       const startedAtMs = Date.now();
       const session = {
@@ -142,7 +163,9 @@ export function useVoiceAgent() {
       audioCtxOutRef.current = new AudioContext({ sampleRate: SAMPLE_RATE });
       nextPlaybackTimeRef.current = 0;
       if (recordCall) {
+        recordMergerRef.current = audioCtxOutRef.current.createChannelMerger(2);
         recordDestRef.current = audioCtxOutRef.current.createMediaStreamDestination();
+        recordMergerRef.current.connect(recordDestRef.current);
       }
 
       ws.onopen = () => {
@@ -180,17 +203,36 @@ export function useVoiceAgent() {
             if (sessionRef.current) sessionRef.current.sessionId = msg.session_id;
             await startMic(ws);
             break;
-          case "transcript.user":
-            appendTranscript("user", msg.text ?? "");
+          case "transcript.user": {
+            const text = msg.text ?? "";
+            const tMs = sessionRelativeMs();
+            if (
+              shouldDropEchoUserTurn(
+                text,
+                tMs,
+                agentPlaybackUntilMsRef.current,
+                lastAgentTextRef.current,
+              )
+            ) {
+              break;
+            }
+            appendTranscriptTurn("user", text, tMs);
             break;
-          case "transcript.agent":
-            appendTranscript("agent", msg.text ?? "");
+          }
+          case "transcript.agent": {
+            const text = msg.text ?? "";
+            const tMs = agentTurnStartMs(replyAudioStartMsRef.current, sessionRelativeMs());
+            appendTranscriptTurn("agent", text, tMs);
+            lastAgentTextRef.current = text;
+            replyAudioStartMsRef.current = null;
             break;
+          }
           case "reply.audio":
             playReplyAudio(msg.data);
             break;
           case "reply.done":
             if (msg.status === "interrupted") flushPlayback();
+            replyAudioStartMsRef.current = null;
             break;
           case "session.ended":
             finishSession();
@@ -215,7 +257,7 @@ export function useVoiceAgent() {
         if (session.turns.length > 0) finishSession();
       };
     },
-    [appendTranscript, flushPlayback, playReplyAudio]
+    [appendTranscriptTurn, flushPlayback, playReplyAudio, sessionRelativeMs]
   );
 
   const startMic = useCallback(async (ws) => {
@@ -267,7 +309,7 @@ export function useVoiceAgent() {
       // in a MediaStreamAudioSourceNode in any context - it isn't tied to the context
       // that captured it.
       recordMicSourceRef.current = audioCtxOutRef.current.createMediaStreamSource(stream);
-      if (recordDestRef.current) recordMicSourceRef.current.connect(recordDestRef.current);
+      if (recordMergerRef.current) recordMicSourceRef.current.connect(recordMergerRef.current, 0, 0);
       startRecorder();
     }
 
@@ -278,12 +320,8 @@ export function useVoiceAgent() {
     }, 1000);
   }, []);
 
-  // Records recordDestRef's single mixed track (mic + agent reply, both routed
-  // into it above and in connect()) - a copy of what's already flowing through
-  // the live call, not a second capture path. This has to be ONE audio track:
-  // MediaRecorder only encodes the first audio track of a MediaStream, silently
-  // dropping the rest, so combining two separate destination-node streams into
-  // one MediaStream at record time (the previous approach) recorded mic-only.
+  // Records recordDestRef's stereo track (mic on channel 0, agent on channel 1)
+  // so the waveform can split speakers from audio instead of turn timestamps.
   const startRecorder = useCallback(() => {
     const tracks = recordDestRef.current?.stream.getAudioTracks() ?? [];
     if (tracks.length === 0) return;
@@ -338,6 +376,7 @@ export function useVoiceAgent() {
     audioCtxOutRef.current?.close();
     audioCtxOutRef.current = null;
     recordDestRef.current = null;
+    recordMergerRef.current = null;
     setStatus("idle");
   }, [stopMic]);
 
