@@ -1363,7 +1363,7 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
   const tabCounts = Object.fromEntries(STATUS_TABS.map((t) => [t.key, scenarios.filter((s) => s.status === t.key).length]));
   const visibleScenarios = scenarios.filter((s) => s.status === activeTab);
 
-  // Take-a-tour: review -> approve -> run -> results -> regenerate. Scenario
+  // Take-a-tour: regenerate -> review -> approve -> run -> results. Scenario
   // card and result steps target the first one in the open tab, so they are
   // skipped when that tab has none.
   const startTour = () => {
@@ -1381,6 +1381,11 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
           body: "The phone number QualEval calls, plus the description and requirements every scenario is generated from and judged against. Edit evaluation changes them.",
         },
         {
+          ref: generatePanelRef,
+          title: "Generate more",
+          body: "Ask for a new batch here, optionally with feedback on what to cover. Accepted scenarios are kept; generated and rejected ones are replaced.",
+        },
+        {
           ref: tabBarRef,
           title: "Review scenarios",
           body: "New scenarios land in Generated. Approve the ones worth running (they move to Accepted) and reject the rest - Approve all does a whole batch at once.",
@@ -1394,11 +1399,6 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
           find: () => scenarioListRef.current?.querySelector(".qe-run-result"),
           title: "Read the verdict",
           body: "When the call ends, the transcript is judged pass/fail per criterion, with the evidence for every failure. Play the recording and click a timestamp to jump to that moment.",
-        },
-        {
-          ref: generatePanelRef,
-          title: "Generate more",
-          body: "Ask for a new batch here, optionally with feedback on what to cover. Accepted scenarios are kept; generated and rejected ones are replaced.",
         },
       ].filter(resolveTourTarget),
     );
