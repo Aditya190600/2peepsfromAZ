@@ -264,7 +264,11 @@ export function ExamplesPanels({ navigate, topTabBar = null, onShowLiveCall = nu
                           {sampleLoadingKey === key ? "Analyzing…" : "Analyze"}
                         </button>
                       </div>
-                      <AudioPlayer src={SAMPLE_AUDIO_URLS[key]} turns={SAMPLE_SESSIONS[key]?.turns} />
+                      <AudioPlayer
+                        src={SAMPLE_AUDIO_URLS[key]}
+                        turns={SAMPLE_SESSIONS[key]?.turns}
+                        downloadFilenameBase={`sample-${key}`}
+                      />
                     </div>
                   ))}
                 </div>

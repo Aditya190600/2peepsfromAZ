@@ -53,6 +53,16 @@ function CallTab({ entry, audioUrl, audioRef, onSeek }) {
             offsetMs={entry.recordingOffsetMs ?? 0}
             turns={entry.turns}
             markers={callMarkers(entry)}
+            downloadFilenameBase={`session-${entry.sessionId ?? "export"}`}
+            downloadJson={{
+              sessionId: entry.sessionId,
+              label: entry.label,
+              startedAt: entry.startedAt,
+              durationMs: entry.durationMs,
+              turns: entry.turns ?? [],
+              markers: callMarkers(entry),
+              findings: entry.report?.findings ?? entry.findings ?? [],
+            }}
           />
         </div>
       ) : entry.source === "live" ? (

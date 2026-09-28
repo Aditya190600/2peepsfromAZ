@@ -498,6 +498,15 @@ export function Report({
             offsetMs={audioOffsetMs}
             turns={turns}
             markers={audioMarkers}
+            downloadFilenameBase={report.sessionId ? `session-${report.sessionId}` : "recording"}
+            downloadJson={{
+              sessionId: report.sessionId ?? null,
+              generatedAt: report.generatedAt,
+              verdict: verdict.label,
+              turns: turns ?? [],
+              markers: audioMarkers,
+              findings: sortedFindings,
+            }}
           />
           <p className="hint">
             Findings with a ▶ timestamp are clickable - click one to jump the player there, or
@@ -1077,6 +1086,15 @@ export default function Dashboard({ navigate, path }) {
                       offsetMs={lastSession?.recordingOffsetMs ?? 0}
                       markers={recordingReport ? findingsToMarkers(recordingReport.findings) : []}
                       waveformBlob={recordedBlob}
+                      downloadFilenameBase={
+                        lastSession?.sessionId ? `session-${lastSession.sessionId}` : "recording"
+                      }
+                      downloadJson={{
+                        sessionId: lastSession?.sessionId ?? null,
+                        turns: lastSession?.turns ?? [],
+                        markers: recordingReport ? findingsToMarkers(recordingReport.findings) : [],
+                        findings: recordingReport?.findings ?? [],
+                      }}
                     />
                     <p className="hint">
                       {recordingReport
