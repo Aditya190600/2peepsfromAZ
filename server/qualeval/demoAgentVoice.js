@@ -10,8 +10,9 @@ import { productionCallFromTwilioBody, recordProductionCall } from "./production
 // which is what an MVP-verification run does today since there is no real
 // customer target agent yet).
 //
-// Bridges to a real AssemblyAI Voice Agent session playing whichever target-
-// agent variant is currently active (server/qualeval/demoAgentConfig.js),
+// Bridges to a real AssemblyAI Voice Agent session playing the answering
+// target-agent variant (server/qualeval/demoAgentConfig.js's
+// getAnsweringVariant),
 // via the same bidirectional <Connect><Stream> pattern as the outbound/
 // persona side's twilioVoice.js - see server/qualeval/targetAgentStream.js
 // for the WebSocket half and server/qualeval/bridgeSession.js's header
@@ -19,8 +20,9 @@ import { productionCallFromTwilioBody, recordProductionCall } from "./production
 //
 // Not tied to a specific run (unlike twilioVoice.js's per-run webhook, whose
 // runId travels as a <Stream> Custom Parameter) - which variant to bridge
-// with is a global runtime setting read at connect time by
-// targetAgentStream.js, not something this call needs to know - so it needs
+// with is resolved at connect time by targetAgentStream.js (a placed run's
+// evaluation agent via callBridgeBroker.js, else the Settings toggle), not
+// something this call needs to know - so it needs
 // no run lookup, only the same Twilio-signature verification posture as
 // every other Twilio-originated webhook in this repo.
 export async function demoAgentVoiceRoute(

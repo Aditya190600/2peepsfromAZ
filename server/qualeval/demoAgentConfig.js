@@ -142,9 +142,9 @@ export async function setActiveVariant(key, env = process.env, pool = getPool(en
   return rows[0].active_variant;
 }
 
-// The one call server/qualeval/targetAgentStream.js's bridge needs at
-// connect time: whichever variant is currently active, in full - just its
-// AssemblyAI agent_id, since that's what binds the live session.
+// Settings' Target agents switch, resolved in full: whichever variant is
+// currently active, with its AssemblyAI agent_id, since that's what binds the
+// live session. The default getAnsweringVariant falls back to.
 export async function getActiveVariant(env = process.env, pool = getPool(env)) {
   requirePool(pool);
   const { rows } = await pool.query(
