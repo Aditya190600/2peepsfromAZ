@@ -25,4 +25,4 @@ WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE,
 AND NON-INFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE
 LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY.
 
-For permission requests, contact: adi@lakshminarayanan.dev
+For permission requests, contact: adi@lakshminarayanan.dev OR sujeevraja26@gmail.com
