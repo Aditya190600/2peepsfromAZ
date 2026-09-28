@@ -458,6 +458,16 @@ export function RunResult({ run }) {
             audioRef={audioRef}
             turns={turns}
             markers={runToAudioMarkers(run)}
+            downloadFilenameBase={run.id ? `qualeval-run-${run.id}` : "qualeval-run"}
+            downloadJson={{
+              runId: run.id ?? null,
+              verdict: run.verdict ?? null,
+              turns,
+              markers: runToAudioMarkers(run),
+              criterionResults: run.criterionResults ?? [],
+              assessment: run.assessment ?? null,
+              evidenceQuotes: run.evidenceQuotes ?? [],
+            }}
           />
           <p className="hint">
             Click a transcript timestamp or a waveform marker to seek. Red markers show why a
