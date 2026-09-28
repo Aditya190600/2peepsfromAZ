@@ -35,12 +35,21 @@ export function turnsFromChannelUtterances(utterances, { incomingRole, outgoingR
     .sort((a, b) => a.tMs - b.tMs);
 }
 
-export async function transcribeCallRecording(recorder, { apiKey, incomingRole, outgoingRole, ...transcribeOptions }) {
+// How long a finished call's run may wait on its recording's transcript
+// before falling back to the live session's turns. The run stays
+// in_progress meanwhile, so this is part of store.js's
+// STALE_RUN_AFTER_MS.in_progress budget.
+export const CALL_TRANSCRIPTION_TIMEOUT_MS = 90 * 1000;
+
+export async function transcribeCallRecording(
+  recorder,
+  { apiKey, incomingRole, outgoingRole, timeoutMs = CALL_TRANSCRIPTION_TIMEOUT_MS, ...transcribeOptions },
+) {
   const transcript = await transcribeAudio(
     recorder.toStereoWavBuffer(),
     apiKey,
     { multichannel: true },
-    transcribeOptions,
+    { timeoutMs, ...transcribeOptions },
   );
   return turnsFromChannelUtterances(transcript.utterances, { incomingRole, outgoingRole });
 }

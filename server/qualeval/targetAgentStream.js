@@ -90,11 +90,16 @@ export function attachTargetAgentStreamServer(
 
     // Same as the persona leg (server/qualeval/twilioStream.js): the call is
     // scored on the recording's per-leg transcript, with the live session's
-    // turns as the fallback. Here the far end is the caller.
+    // turns as the fallback. Here the far end is the caller. A leg claimed by
+    // a QualEval run keeps its live turns: Phone Evals excludes it, and the
+    // persona leg already transcribes the same call.
     async function transcriptOf(liveTurns) {
-      if (!recorder.hasAudio()) return liveTurns;
+      if (claimedRunId || !recorder.hasAudio()) return liveTurns;
       try {
-        return await transcribeCall(recorder, { incomingRole: "user", outgoingRole: "agent" });
+        const turns = await transcribeCall(recorder, { incomingRole: "user", outgoingRole: "agent" });
+        if (turns.length > 0) return turns;
+        console.error(`QualEval target-agent bridge: the recording's transcript was empty; using the live turns`);
+        return liveTurns;
       } catch (err) {
         console.error(`QualEval target-agent bridge: transcribing the recording failed: ${err.message}`);
         return liveTurns;

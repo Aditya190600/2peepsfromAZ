@@ -203,6 +203,17 @@ test("falls back to the live session's transcript when transcribing the recordin
   assert.deepEqual(errors, []);
 });
 
+test("falls back to the live session's transcript when the recording's transcript is empty", async () => {
+  const liveTurns = [{ role: "agent", text: "Hello", tMs: 100 }];
+  const { awaiting, finished, errors } = await finishBridgedCall({
+    liveTurns,
+    transcribeCall: async () => [],
+  });
+  assert.deepEqual(awaiting, [liveTurns]);
+  assert.deepEqual(finished[0].transcript, liveTurns);
+  assert.deepEqual(errors, []);
+});
+
 test("keeps the live session's transcript when nothing was recorded", async () => {
   const liveTurns = [{ role: "agent", text: "Hello", tMs: 100 }];
   const { awaiting } = await finishBridgedCall({

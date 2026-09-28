@@ -124,7 +124,10 @@ export function attachTwilioStreamServer(
     async function transcriptOf(liveTurns) {
       if (!recorder.hasAudio()) return liveTurns;
       try {
-        return await transcribeCall(recorder, { incomingRole: "agent", outgoingRole: "user" });
+        const turns = await transcribeCall(recorder, { incomingRole: "agent", outgoingRole: "user" });
+        if (turns.length > 0) return turns;
+        console.error(`QualEval call bridge: the recording's transcript was empty for run ${runId}; using the live turns`);
+        return liveTurns;
       } catch (err) {
         console.error(`QualEval call bridge: transcribing the recording failed for run ${runId}: ${err.message}`);
         return liveTurns;
