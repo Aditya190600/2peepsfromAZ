@@ -4,11 +4,105 @@ import { callLlmGateway, parseJsonResponse } from "../checks/llmGateway.js";
 // behavior and criteria. Only ever called with a real transcript (see
 // server/qualeval/store.js's attachTranscript) - never fabricates a verdict
 // for a run that hasn't actually been placed.
-const SYSTEM_PROMPT = `You are a strict qualitative acceptance-test evaluator for an AI voice agent. You are given a test scenario (persona, situation, caller objectives, expected behavior, evaluation criteria) and the transcript of a real phone call a simulated caller placed against the target agent to run that scenario. Judge whether the target agent's behavior in the transcript satisfies the expected behavior and each evaluation criterion. Respond with ONLY a JSON object, no other text: {"verdict": "pass"|"fail", "assessment": string, "criterionResults": [{"criterion": string, "met": boolean, "explanation": string}], "evidenceQuotes": [{"quote": string, "turnIndex": number}]}. "assessment" is a short overall summary of why the call passed or failed. Quote exact text from the transcript in evidenceQuotes, and reference the turnIndex it came from.`;
+//
+// The model's verdict and assessment are authoritative: the verdict also
+// covers the expected behavior, which the listed criteria may not (a Phone
+// Evals call is scored with no listed criteria at all). The one thing fixed
+// up in code is the original contradiction: when the model wrote its overall
+// assessment first (as this prompt's JSON shape used to ask), it reasoned
+// inside the assessment and could cite a criterion as a failure and then
+// concede it was met in the same sentence ("failed to disclose within 10
+// seconds (it took 1120ms ... so this criterion is actually met)"), while its
+// criterion results correctly marked that criterion met. The prompt now asks
+// for the criterion results first, and withoutConcededCriteria() below drops
+// any clause of a failing assessment that concedes a criterion was met.
+const SYSTEM_PROMPT = `You are a strict qualitative acceptance-test evaluator for an AI voice agent. You are given a test scenario (persona, situation, caller objectives, expected behavior, evaluation criteria) and the transcript of a real phone call a simulated caller placed against the target agent to run that scenario. Judge whether the target agent's behavior in the transcript satisfies the expected behavior and each evaluation criterion. Respond with ONLY a JSON object, no other text, with the keys in this order: {"criterionResults": [{"criterion": string, "met": boolean, "explanation": string}], "evidenceQuotes": [{"quote": string, "turnIndex": number}], "verdict": "pass"|"fail", "assessment": string}. Judge every criterion first. "verdict" is "fail" if any criterion is not met or the expected behavior is not satisfied, otherwise "pass". "assessment" is a short overall summary of why the call passed or failed, written after judging the criteria: for a fail, give only the reasons that made it fail and never name a criterion you marked met. Quote exact text from the transcript in evidenceQuotes, and reference the turnIndex it came from.`;
+
+const MET = String.raw`(?:is|was)\s+(?:actually\s+)?(?:met|satisfied)\b(?!\s+with)`;
+const CONCESSION = new RegExp(
+  String.raw`\b(?:criterion|requirement|this|it)\s+${MET}|\b(?:actually|which is)\s+(?:met|satisfied)\b(?!\s+with)|\bso\b[^.]*?\b${MET}`,
+  "i",
+);
+
+const STOPWORDS = new Set(["agent", "caller", "call", "that", "this", "with", "within", "first", "their", "them", "they", "from", "does", "should", "must", "criterion", "criteria", "actually", "which", "took"]);
+
+function terms(text) {
+  const words = String(text ?? "").toLowerCase().match(/[a-z]{4,}/g) ?? [];
+  return new Set(words.filter((w) => !STOPWORDS.has(w)).map((w) => w.slice(0, 5)));
+}
+
+function references(clauseTerms, criterion) {
+  let shared = 0;
+  for (const t of terms(criterion.criterion)) if (clauseTerms.has(t)) shared += 1;
+  return shared >= 2;
+}
+
+// Splits prose into clauses at sentence ends and ", and"/", but" joins, never
+// inside parentheses (where the model tends to argue with itself). Each
+// clause keeps the separator that led into it, so dropping clauses leaves the
+// surviving text exactly as written.
+function clauses(text) {
+  const out = [];
+  let depth = 0;
+  let lead = "";
+  let start = 0;
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === "(") depth += 1;
+    if (ch === ")") depth = Math.max(0, depth - 1);
+    const rest = text.slice(i);
+    const join = depth === 0 && /^,\s+(?:and|but)\s+/i.exec(rest);
+    const sentenceEnd = depth === 0 && /^[.!?]\s+/.exec(rest);
+    if (join || sentenceEnd) {
+      const end = join ? i : i + 1;
+      out.push({ lead, body: text.slice(start, end) });
+      lead = join ? join[0] : sentenceEnd[0].slice(1);
+      i = end + lead.length;
+      start = i;
+      continue;
+    }
+    i += 1;
+  }
+  out.push({ lead, body: text.slice(start) });
+  return out.filter((c) => c.body.trim());
+}
+
+// A failing assessment with every clause removed that concedes a specific
+// criterion criterionResults marks met, and references no unmet one. Falls back to
+// listing the unmet criteria only when nothing of the assessment is left.
+function withoutConcededCriteria(assessment, criterionResults) {
+  const judged = criterionResults.filter((c) => c && typeof c === "object" && typeof c.met === "boolean");
+  const met = judged.filter((c) => c.met);
+  const unmet = judged.filter((c) => !c.met);
+  if (!assessment || met.length === 0) return assessment;
+  const all = clauses(assessment);
+  const kept = all.filter((c) => {
+    if (!CONCESSION.test(c.body)) return true;
+    const clauseTerms = terms(c.body);
+    return !met.some((m) => references(clauseTerms, m)) || unmet.some((u) => references(clauseTerms, u));
+  });
+  if (kept.length === all.length) return assessment;
+  if (kept.length === 0) {
+    const reasons = unmet.map((c) => String(c.criterion ?? "").trim()).filter(Boolean);
+    return reasons.length ? `Failed ${unmet.length} of ${judged.length} criteria: ${reasons.join("; ")}.` : assessment;
+  }
+  let text = kept.map((c, i) => (i === 0 ? c.body : c.lead + c.body)).join("").trim();
+  const ending = /[.!?]$/.exec(all[all.length - 1].body.trim());
+  if (ending && !/[.!?]$/.test(text)) text += ending[0];
+  return text[0].toUpperCase() + text.slice(1);
+}
+
+// Turn times go to the model in seconds, the unit criteria are written in
+// ("within the first 10 seconds"). Given raw milliseconds it compared
+// t=1440ms against 10 seconds and marked a disclosure at 1.44 s as late.
+function turnTime(tMs) {
+  return Number.isFinite(tMs) ? `${(tMs / 1000).toFixed(1)}s` : "?";
+}
 
 function transcriptForPrompt(transcript) {
   const turns = transcript?.turns ?? [];
-  return turns.map((t, i) => `Turn ${i} (${t.role}, t=${t.tMs ?? "?"}ms): "${t.text}"`).join("\n");
+  return turns.map((t, i) => `Turn ${i} (${t.role}, t=${turnTime(t.tMs)}): "${t.text}"`).join("\n");
 }
 
 export async function evaluateTranscript(scenario, transcript, { llmGateway = callLlmGateway } = {}) {
@@ -43,10 +137,12 @@ export async function evaluateTranscript(scenario, transcript, { llmGateway = ca
   if (!parsed || (parsed.verdict !== "pass" && parsed.verdict !== "fail")) {
     throw new Error("LLM Gateway did not return a usable verdict.");
   }
+  const criterionResults = Array.isArray(parsed.criterionResults) ? parsed.criterionResults : [];
+  const assessment = parsed.assessment ? String(parsed.assessment) : "";
   return {
     verdict: parsed.verdict,
-    assessment: parsed.assessment ? String(parsed.assessment) : "",
-    criterionResults: Array.isArray(parsed.criterionResults) ? parsed.criterionResults : [],
+    assessment: parsed.verdict === "fail" ? withoutConcededCriteria(assessment, criterionResults) : assessment,
+    criterionResults,
     evidenceQuotes: Array.isArray(parsed.evidenceQuotes) ? parsed.evidenceQuotes : [],
   };
 }

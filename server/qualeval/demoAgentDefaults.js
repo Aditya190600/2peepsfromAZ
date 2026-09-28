@@ -25,6 +25,21 @@
 // itself rather than being set per-connection.
 const TELEPHONY_FORMAT = { format: { encoding: "audio/pcmu" } };
 
+// How the target agent takes turns (AssemblyAI input.turn_detection, set on
+// the stored agent since `agent_id` can't be combined with inline input).
+// With AssemblyAI's adaptive defaults the target ended the caller's turn at
+// the ~0.4-0.9 s pause between two of its sentences and answered over the
+// rest - the same collision twilioStream.js's CALLER_TURN_DETECTION fixed on
+// the caller side, left on this side. It showed up most at wind-down, where a
+// caller's closing is several short sentences ("Thank you. I will do that.
+// Please make sure they get this message."): the target's farewell started
+// inside the first pause, the caller talked over it, and once the caller cut
+// its own reply short and hung up mid-sentence (reproduced on real calls
+// 2026-09-28 with Twilio dual-channel recordings). Matching the caller's
+// min_silence makes the target wait out a between-sentence pause too.
+export const TARGET_TURN_DETECTION = { min_silence: 1200 };
+const TELEPHONY_INPUT = { ...TELEPHONY_FORMAT, turn_detection: TARGET_TURN_DETECTION };
+
 const NO_TRANSFER =
   "You cannot transfer calls: if the caller asks for a human, a live agent, or an operator, clearly say you can't transfer them to a human right now, then offer to keep helping with what you can - never go silent or stall.";
 
@@ -34,7 +49,7 @@ function telephonyAgent({ name, systemPrompt, greeting, voice }) {
     system_prompt: systemPrompt,
     greeting,
     voice: { voice_id: voice },
-    input: TELEPHONY_FORMAT,
+    input: TELEPHONY_INPUT,
     output: TELEPHONY_FORMAT,
   };
 }
