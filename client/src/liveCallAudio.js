@@ -11,13 +11,15 @@
 export const SAMPLE_RATE = 8000;
 export const LIVE_AUDIO_STORAGE_KEY = "qualeval_live_audio_v1";
 
-// Off unless the viewer opted in: a page running many scenarios in
-// parallel shouldn't open every call's audio stream at once.
+// On by default; a viewer running many scenarios in parallel can opt out
+// per-run via the "Stop listening" control or turn off auto-play here.
 export function getLiveAudioPreference(storage = globalThis.localStorage) {
   try {
-    return storage.getItem(LIVE_AUDIO_STORAGE_KEY) === "on";
+    const stored = storage.getItem(LIVE_AUDIO_STORAGE_KEY);
+    if (stored === null) return true;
+    return stored === "on";
   } catch {
-    return false;
+    return true;
   }
 }
 
