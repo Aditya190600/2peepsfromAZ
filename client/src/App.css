@@ -2914,6 +2914,118 @@ button.site-nav-link {
   color: var(--flag);
 }
 
+/* Scenario accordion: a collapsed card is one clickable summary row. */
+.qe-scenario-card.is-collapsed,
+.qe-scenario-card.is-expanded {
+  padding: 0;
+}
+
+.qe-scenario-card.is-collapsed {
+  margin-bottom: 8px;
+}
+
+.qe-scenario-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 16px;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.qe-scenario-summary:hover {
+  background: var(--na-soft);
+}
+
+.qe-scenario-summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.qe-scenario-chevron {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  margin: 0 3px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+
+.qe-scenario-card.is-expanded .qe-scenario-chevron {
+  transform: rotate(45deg);
+}
+
+.qe-scenario-summary-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.qe-scenario-title {
+  font-family: var(--qe-heading);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.qe-scenario-oneliner {
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.qe-scenario-body {
+  padding: 0 20px 18px 38px;
+}
+
+.qe-run-chip {
+  font-size: 11px;
+  font-family: var(--mono);
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--na-soft);
+  color: var(--na);
+}
+
+.qe-run-chip.is-pass {
+  background: var(--pass-soft);
+  color: var(--pass);
+}
+
+.qe-run-chip.is-flag {
+  background: var(--flag-soft);
+  color: var(--flag);
+}
+
+@media (max-width: 640px) {
+  .qe-scenario-summary {
+    flex-wrap: wrap;
+  }
+
+  .qe-scenario-summary .qe-scenario-badges {
+    flex-wrap: wrap;
+    margin-left: 22px;
+  }
+
+  .qe-scenario-body {
+    padding: 0 16px 16px;
+  }
+}
+
 .qe-scenario-meta-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
