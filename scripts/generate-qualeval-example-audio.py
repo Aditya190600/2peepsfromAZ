@@ -25,9 +25,11 @@ AGENT_VOICE = "en-US-GuyNeural"
 USER_VOICE = "en-US-JennyNeural"
 TAIL_PAD_MS = 800
 
-# Mirrors client/src/qualevalExampleData.js's EXAMPLE_RUN.transcript.turns
-# and EXAMPLE_RUN_PASS.transcript.turns - keep these two in sync by hand if
-# either changes (this script has no import bridge into the JS module).
+# Turn text mirrors client/src/qualevalExampleData.js's EXAMPLE_RUN and
+# EXAMPLE_RUN_PASS transcripts (no import bridge into the JS module, so keep
+# the text in sync by hand). The tMs values here are first-draft targets only:
+# TTS turn lengths push later turns out, and the manifest.json this script
+# writes holds the real tMs values, which the JS module must copy.
 EXAMPLES = {
     "fail": [
         {"role": "agent", "text": "Hi, Lakeside Family Clinic, I'm the clinic's AI assistant. What can I do for you?", "tMs": 800},
