@@ -18,16 +18,16 @@ function memoryStorage() {
   return { getItem: (k) => map.get(k) ?? null, setItem: (k, v) => map.set(k, String(v)) };
 }
 
-test("live audio preference defaults off and round-trips", () => {
+test("live audio preference defaults on and round-trips", () => {
   const storage = memoryStorage();
-  assert.equal(getLiveAudioPreference(storage), false);
-  setLiveAudioPreference(true, storage);
   assert.equal(getLiveAudioPreference(storage), true);
   setLiveAudioPreference(false, storage);
   assert.equal(getLiveAudioPreference(storage), false);
+  setLiveAudioPreference(true, storage);
+  assert.equal(getLiveAudioPreference(storage), true);
 });
 
-test("live audio preference reads as off when storage throws", () => {
+test("live audio preference reads as on when storage throws", () => {
   const broken = {
     getItem: () => {
       throw new Error("blocked");
@@ -36,7 +36,7 @@ test("live audio preference reads as off when storage throws", () => {
       throw new Error("blocked");
     },
   };
-  assert.equal(getLiveAudioPreference(broken), false);
+  assert.equal(getLiveAudioPreference(broken), true);
   assert.doesNotThrow(() => setLiveAudioPreference(true, broken));
 });
 
