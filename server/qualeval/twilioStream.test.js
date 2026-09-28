@@ -65,10 +65,10 @@ test("resolves runId from the start event's customParameters, not the connection
   // The persona's speech reaches the target over the phone line only - no
   // server-side copy (see bridgeSession.js's header comment).
   assert.equal(sessionArgs.onReplyAudio, undefined);
-  // Registered with the broker so the target-agent leg can link its
-  // production call to this run.
-  assert.equal(broker.claimPendingRunForTarget(), "run_1");
-  broker.releaseRun("run_1");
+  // The persona leg never registers the run: only placeCall does, and only
+  // for a number our demo agent answers (callBridgeBroker.js), so a run
+  // dialing an outside number can't be claimed by a direct caller.
+  assert.equal(broker.claimPendingRun(), null);
 });
 
 test("closes the stream instead of hanging when the start event carries no runId", async () => {

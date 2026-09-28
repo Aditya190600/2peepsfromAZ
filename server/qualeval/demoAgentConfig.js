@@ -142,9 +142,9 @@ export async function setActiveVariant(key, env = process.env, pool = getPool(en
   return rows[0].active_variant;
 }
 
-// The one call server/qualeval/targetAgentStream.js's bridge needs at
-// connect time: whichever variant is currently active, in full - just its
-// AssemblyAI agent_id, since that's what binds the live session.
+// Settings' Target agents switch, resolved in full: whichever variant is
+// currently active, with its AssemblyAI agent_id, since that's what binds the
+// live session. The default getAnsweringVariant falls back to.
 export async function getActiveVariant(env = process.env, pool = getPool(env)) {
   requirePool(pool);
   const { rows } = await pool.query(
@@ -156,6 +156,22 @@ export async function getActiveVariant(env = process.env, pool = getPool(env)) {
   if (rows.length === 0) throw new Error("No active demo-agent variant configured");
   const variant = variantRow(rows[0]);
   if (!variant.agentId) throw new Error(`Active demo-agent variant "${variant.key}" has no AssemblyAI agent_id yet.`);
+  return variant;
+}
+
+// The agent a target-agent leg (server/qualeval/targetAgentStream.js)
+// answers as: the one its QualEval evaluation asked for
+// (qualeval_evaluations.demo_agent_key, handed over by callBridgeBroker.js),
+// else Settings' Target agents switch - which is all a direct Phone Evals
+// caller, with no evaluation behind the call, ever gets. An evaluation's
+// agent that isn't provisioned yet fails the call rather than quietly
+// answering as the Settings default, the exact wrong-agent answer this
+// assignment exists to prevent.
+export async function getAnsweringVariant(demoAgentKey, env = process.env, pool = getPool(env)) {
+  if (!demoAgentKey) return getActiveVariant(env, pool);
+  const variant = await getVariant(demoAgentKey, env, pool);
+  if (!variant) throw new Error(`Demo-agent variant "${demoAgentKey}" not found.`);
+  if (!variant.agentId) throw new Error(`Demo-agent variant "${demoAgentKey}" has no AssemblyAI agent_id yet.`);
   return variant;
 }
 

@@ -42,13 +42,14 @@ function fakePool() {
     const rows = tables[table];
 
     if (sql.startsWith("insert into qualeval_evaluations")) {
-      const [name, agent_phone_number, description, requirements, clerk_user_id] = params;
+      const [name, agent_phone_number, description, requirements, demo_agent_key, clerk_user_id] = params;
       const row = {
         id: genId(),
         name,
         agent_phone_number,
         description,
         requirements,
+        demo_agent_key,
         clerk_user_id,
         created_at: new Date().toISOString(),
       };
@@ -266,6 +267,41 @@ test("updateEvaluation edits the evaluation's own fields, scoped by clerkUserId"
   assert.equal(updated.agentPhoneNumber, "+15555550100");
 
   await assert.rejects(() => updateEvaluation(evaluation.id, "user_2", { name: "Hijacked" }, {}, pool));
+});
+
+test("an evaluation carries its demo target agent through create and update", async () => {
+  const pool = fakePool();
+  const evaluation = await createEvaluation(
+    { clerkUserId: "user_1", name: "Clinic eval", demoAgentKey: "healthcare-compliant" },
+    {},
+    pool,
+  );
+  assert.equal(evaluation.demoAgentKey, "healthcare-compliant");
+  assert.equal((await getEvaluation(evaluation.id, "user_1", {}, pool)).demoAgentKey, "healthcare-compliant");
+
+  const switched = await updateEvaluation(evaluation.id, "user_1", { demoAgentKey: "flight-flawed" }, {}, pool);
+  assert.equal(switched.demoAgentKey, "flight-flawed");
+  // Cleared back to the Settings default.
+  const cleared = await updateEvaluation(evaluation.id, "user_1", { demoAgentKey: "" }, {}, pool);
+  assert.equal(cleared.demoAgentKey, null);
+});
+
+test("an evaluation without a demo target agent uses the Settings default", async () => {
+  const evaluation = await createEvaluation({ clerkUserId: "user_1", name: "Eval" }, {}, fakePool());
+  assert.equal(evaluation.demoAgentKey, null);
+});
+
+test("an evaluation rejects a demo target agent outside the catalog", async () => {
+  const pool = fakePool();
+  await assert.rejects(
+    () => createEvaluation({ clerkUserId: "user_1", name: "Eval", demoAgentKey: "retired-agent" }, {}, pool),
+    /Unknown demo target agent/,
+  );
+  const evaluation = await createEvaluation({ clerkUserId: "user_1", name: "Eval" }, {}, pool);
+  await assert.rejects(
+    () => updateEvaluation(evaluation.id, "user_1", { demoAgentKey: "retired-agent" }, {}, pool),
+    /Unknown demo target agent/,
+  );
 });
 
 test("updateEvaluation rejects a blank name", async () => {
