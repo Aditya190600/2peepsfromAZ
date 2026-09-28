@@ -57,7 +57,9 @@ architecture, which supersedes the "Stubbed, honestly" section below.
   opening the detail page, which surfaces a generation failure there rather
   than blocking creation; description/requirements render as markdown on
   the detail page), and a combined generation-review page (scenario cards split into
-  Generated/Accepted/Rejected tabs, each card individually editable -
+  Generated/Accepted/Rejected tabs, each card a collapsed summary row that
+  expands accordion-style with one open at a time - an in-progress run's
+  live listener and End call stay active while collapsed - each card individually editable -
   persona/situation/objectives/expected behavior/evaluation criteria - and
   deletable, each tab with its own "delete all in this tab" bulk action, the
   Generated tab also with an "Approve all" bulk action that approves every
