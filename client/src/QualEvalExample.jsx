@@ -1,8 +1,7 @@
 import { AppShell } from "./Chrome";
-import { ExampleScorecard } from "./QualEval";
-import { EXAMPLE_EVALUATION } from "./qualevalExampleData";
+import { ExampleScorecards } from "./QualEval";
 
-// Public, sign-in-free page for the static example, linked from the splash
+// Public, sign-in-free page for the static examples, linked from the splash
 // page. Signed-in users also reach the same content through the Examples tab
 // on /qualeval.
 export default function QualEvalExample({ navigate, path }) {
@@ -10,7 +9,7 @@ export default function QualEvalExample({ navigate, path }) {
     <AppShell
       path={path}
       navigate={navigate}
-      title={EXAMPLE_EVALUATION.name}
+      title="QualEval examples"
       actions={
         <button type="button" className="btn btn-outline" onClick={() => navigate("/qualeval")}>
           Run your own evaluation
@@ -18,7 +17,7 @@ export default function QualEvalExample({ navigate, path }) {
       }
     >
       <div className="qualeval-page">
-        <ExampleScorecard />
+        <ExampleScorecards showName />
       </div>
     </AppShell>
   );
