@@ -1,7 +1,9 @@
 import { phoneDigits } from "./productionCalls.js";
 
-// Phone Evals visibility: operators see every call; everyone else sees only
-// calls to numbers they registered via server/telephony/store.js.
+// Phone Evals visibility:
+// - QUALEVAL_ADMIN_EMAILS (isPhoneEvalAdmin): every call + page access without Twilio setup.
+// - Everyone else with an inbound number in server/telephony/store.js: page access and only
+//   calls whose to_number matches a number they registered.
 
 export async function listOwnedInboundNumbers(telephonyStore, ownerId) {
   if (!telephonyStore || !ownerId) return [];
@@ -19,14 +21,14 @@ export async function phoneEvalsConfigured(telephonyStore, ownerId) {
   return (await listOwnedInboundNumbers(telephonyStore, ownerId)).length > 0;
 }
 
-export async function canAccessPhoneEvals({ isOperator, telephonyStore, ownerId }) {
-  const operator = typeof isOperator === "function" ? await isOperator() : Boolean(isOperator);
-  if (operator) return true;
+export async function canAccessPhoneEvals({ isPhoneEvalAdmin, telephonyStore, ownerId }) {
+  const admin = typeof isPhoneEvalAdmin === "function" ? await isPhoneEvalAdmin() : Boolean(isPhoneEvalAdmin);
+  if (admin) return true;
   return phoneEvalsConfigured(telephonyStore, ownerId);
 }
 
-export function canViewPhoneEvalCall({ isOperator, ownedDigits, call }) {
-  if (isOperator) return true;
+export function canViewPhoneEvalCall({ isPhoneEvalAdmin, ownedDigits, call }) {
+  if (isPhoneEvalAdmin) return true;
   const toDigits = phoneDigits(call?.toNumber);
   return Boolean(toDigits && ownedDigits.has(toDigits));
 }

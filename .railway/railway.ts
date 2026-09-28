@@ -8,6 +8,8 @@ export default defineRailway(() => {
     start: "npm start",
     env: {
       DATABASE_URL: db.env.DATABASE_URL,
+      QUALEVAL_ADMIN_EMAILS:
+        "sujeevraja26@gmail.com,sai.9500@gmail.com",
     },
   });
 

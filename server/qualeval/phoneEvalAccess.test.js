@@ -31,21 +31,21 @@ test("phoneEvalsConfigured is true once the owner has an inbound number", async 
   assert.equal(await phoneEvalsConfigured(store, "user_b"), false);
 });
 
-test("canAccessPhoneEvals opens for operators or configured non-operators", async () => {
-  assert.equal(await canAccessPhoneEvals({ isOperator: true, telephonyStore: store, ownerId: "user_b" }), true);
-  assert.equal(await canAccessPhoneEvals({ isOperator: false, telephonyStore: store, ownerId: "user_a" }), true);
-  assert.equal(await canAccessPhoneEvals({ isOperator: false, telephonyStore: store, ownerId: "user_b" }), false);
+test("canAccessPhoneEvals opens for admins or configured non-admins", async () => {
+  assert.equal(await canAccessPhoneEvals({ isPhoneEvalAdmin: true, telephonyStore: store, ownerId: "user_b" }), true);
+  assert.equal(await canAccessPhoneEvals({ isPhoneEvalAdmin: false, telephonyStore: store, ownerId: "user_a" }), true);
+  assert.equal(await canAccessPhoneEvals({ isPhoneEvalAdmin: false, telephonyStore: store, ownerId: "user_b" }), false);
   assert.equal(
-    await canAccessPhoneEvals({ isOperator: async () => true, telephonyStore: store, ownerId: "user_b" }),
+    await canAccessPhoneEvals({ isPhoneEvalAdmin: async () => true, telephonyStore: store, ownerId: "user_b" }),
     true,
   );
 });
 
-test("canViewPhoneEvalCall scopes non-operators to their registered to_number", () => {
+test("canViewPhoneEvalCall scopes non-admins to their registered to_number", () => {
   const ownedDigits = ownedNumberDigits(["+18038245760"]);
   assert.equal(
     canViewPhoneEvalCall({
-      isOperator: false,
+      isPhoneEvalAdmin: false,
       ownedDigits,
       call: { toNumber: "+1 (803) 824-5760" },
     }),
@@ -53,7 +53,7 @@ test("canViewPhoneEvalCall scopes non-operators to their registered to_number", 
   );
   assert.equal(
     canViewPhoneEvalCall({
-      isOperator: false,
+      isPhoneEvalAdmin: false,
       ownedDigits,
       call: { toNumber: "+19998887777" },
     }),
@@ -61,7 +61,7 @@ test("canViewPhoneEvalCall scopes non-operators to their registered to_number", 
   );
   assert.equal(
     canViewPhoneEvalCall({
-      isOperator: true,
+      isPhoneEvalAdmin: true,
       ownedDigits,
       call: { toNumber: "+19998887777" },
     }),

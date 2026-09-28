@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AppShell } from "./Chrome";
+import { AppShell, refreshProductNav } from "./Chrome";
 import { getQualevalConfig, listDemoAgents, setActiveDemoAgent } from "./qualevalClient";
 import {
   buildPhoneNumberOptions,
@@ -181,10 +181,16 @@ export default function Settings({ path, navigate }) {
   const liveAgent = agents?.find((a) => a.key === activeKey);
 
   const isOperator = Boolean(config?.isOperator);
+  // Phone Evals admins already have page access. Other visitors, including
+  // deployment operators, register a Twilio number here.
+  const isPhoneEvalAdmin = Boolean(config?.isPhoneEvalAdmin);
 
   const reloadConfig = () =>
     getQualevalConfig()
-      .then(setConfig)
+      .then((body) => {
+        refreshProductNav(body);
+        setConfig(body);
+      })
       .catch((err) => setError(err.message ?? "Could not reload settings."));
 
   return (
@@ -234,7 +240,7 @@ export default function Settings({ path, navigate }) {
           )}
         </section>
 
-        {!isOperator && (
+        {!isPhoneEvalAdmin && (
           <PhoneEvalsSetupSection ownedNumbers={config?.ownedPhoneNumbers} onConfigured={reloadConfig} />
         )}
 

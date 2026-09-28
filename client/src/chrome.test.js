@@ -3,13 +3,17 @@ import assert from "node:assert/strict";
 import { PRODUCT_NAV, PRODUCT_NAV_ALL, productNav } from "./chromeNav.js";
 
 describe("PRODUCT_NAV", () => {
-  it("includes Phone Evals for every visitor (page gates setup separately)", () => {
+  it("hides Phone Evals until the visitor can access it", () => {
     assert.deepEqual(
       PRODUCT_NAV.map((item) => item.label),
+      ["Voice Compliance", "Qualitative Evals", "Settings"]
+    );
+    assert.deepEqual(
+      productNav({ canAccessPhoneEvals: true }).map((item) => item.label),
       ["Voice Compliance", "Qualitative Evals", "Phone Evals", "Settings"]
     );
     assert.deepEqual(
-      productNav({ isOperator: true }).map((item) => item.label),
+      productNav({ isOperator: true, canAccessPhoneEvals: true }).map((item) => item.label),
       ["Voice Compliance", "Qualitative Evals", "Phone Evals", "Settings"]
     );
   });

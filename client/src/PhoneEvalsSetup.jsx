@@ -114,8 +114,8 @@ export function PhoneEvalsSetupGate({ navigate }) {
       >
         <h2>Set up Phone Evals first</h2>
         <p>
-          Import your Twilio number under Settings before viewing call reports. Operators of this
-          deployment can skip this step.
+          Import your Twilio number under Settings before viewing call reports. Deployment admins can
+          skip this step.
         </p>
         <div className="modal-actions">
           <button type="button" className="btn btn-primary" onClick={() => navigate("/settings")}>
