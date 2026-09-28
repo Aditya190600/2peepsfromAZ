@@ -765,7 +765,9 @@ function EditScenarioForm({ scenario, onSaved, onCancel, busy }) {
 
 // One accordion item: collapsed it is a single summary row (name, persona
 // and situation one-liner, latest run status) so many scenarios fit on
-// screen; the parent keeps at most one expanded at a time.
+// screen; the parent keeps at most one expanded at a time. A call in progress
+// stays live while collapsed: its End call button sits on the summary row and
+// its LiveCallPanel stays mounted (hidden), so listening doesn't stop.
 function ScenarioCard({
   scenario,
   expanded,
@@ -787,30 +789,56 @@ function ScenarioCard({
   const bodyId = `qe-scenario-body-${scenario.id}`;
   const oneLiner = [scenario.persona, scenario.situation].filter(Boolean).join(" · ");
 
+  useEffect(() => {
+    if (!expanded) {
+      setEditing(false);
+      setConfirmingDelete(false);
+    }
+  }, [expanded]);
+
   return (
     <div className={`qe-scenario-card is-${scenario.status} ${expanded ? "is-expanded" : "is-collapsed"}`}>
-      <button
-        type="button"
-        className="qe-scenario-summary"
-        aria-expanded={expanded}
-        aria-controls={bodyId}
-        onClick={onToggle}
-      >
-        <span className="qe-scenario-chevron" aria-hidden="true" />
-        <span className="qe-scenario-summary-text">
-          <span className="qe-scenario-title">{scenario.name}</span>
-          {!expanded && oneLiner && <span className="qe-scenario-oneliner">{oneLiner}</span>}
-        </span>
-        <span className="qe-scenario-badges">
-          {scenario.category && <span className="qe-cat-badge">{scenario.category}</span>}
-          {latestRun && <span className={`qe-run-chip ${status.cls}`}>{runChipText(latestRun)}</span>}
-          <span className={`qe-status-chip is-${scenario.status}`}>{scenario.status}</span>
-        </span>
-      </button>
+      <div className="qe-scenario-summary-row">
+        <button
+          type="button"
+          className="qe-scenario-summary"
+          aria-expanded={expanded}
+          aria-controls={bodyId}
+          onClick={onToggle}
+        >
+          <span className="qe-scenario-chevron" aria-hidden="true" />
+          <span className="qe-scenario-summary-text">
+            <span className="qe-scenario-title">{scenario.name}</span>
+            {!expanded && oneLiner && <span className="qe-scenario-oneliner">{oneLiner}</span>}
+          </span>
+          <span className="qe-scenario-badges">
+            {scenario.category && <span className="qe-cat-badge">{scenario.category}</span>}
+            {inProgress ? (
+              <span className="qe-live-badge">
+                <span className="qe-live-dot" />
+                Live
+              </span>
+            ) : (
+              latestRun && <span className={`qe-run-chip ${status.cls}`}>{runChipText(latestRun)}</span>
+            )}
+            <span className={`qe-status-chip is-${scenario.status}`}>{scenario.status}</span>
+          </span>
+        </button>
+        {inProgress && (
+          <button
+            type="button"
+            className="btn-sm danger qe-scenario-end-call"
+            onClick={() => onEndCall(latestRun)}
+            disabled={busy}
+          >
+            ■ End call
+          </button>
+        )}
+      </div>
 
-      {expanded && (
-        <div id={bodyId} className="qe-scenario-body">
-          {editing ? (
+      {(expanded || inProgress) && (
+        <div id={bodyId} className="qe-scenario-body" hidden={!expanded}>
+          {!expanded ? null : editing ? (
             <EditScenarioForm
               scenario={scenario}
               busy={busy}
@@ -928,27 +956,17 @@ function ScenarioCard({
                     Delete
                   </button>
                 )}
-                {inProgress && (
-                  <button type="button" className="btn-sm danger" onClick={() => onEndCall(latestRun)} disabled={busy}>
-                    ■ End call
-                  </button>
-                )}
               </div>
 
-              {inProgress ? (
-                <LiveCallPanel run={latestRun} autoListen={autoListen} />
-              ) : (
-                latestRun &&
-                latestRun.verdict !== "pass" &&
-                latestRun.verdict !== "fail" && (
-                  <div className="call-row">
-                    <span className={`finding-status ${status.cls}`}>{status.text}</span>
-                  </div>
-                )
+              {!inProgress && latestRun && latestRun.verdict !== "pass" && latestRun.verdict !== "fail" && (
+                <div className="call-row">
+                  <span className={`finding-status ${status.cls}`}>{status.text}</span>
+                </div>
               )}
               <RunResult run={latestRun} />
             </>
           )}
+          {inProgress && <LiveCallPanel run={latestRun} autoListen={autoListen} />}
         </div>
       )}
     </div>
@@ -1242,7 +1260,7 @@ function EvaluationDetail({ evaluationId, navigate, path }) {
     setActionError(null);
     setExporting(true);
     try {
-      await exportScenariosXlsx(evaluationId);
+      await exportScenariosXlsx(evaluationId, "approved");
     } catch (err) {
       setActionError(err.message ?? "Could not export these scenarios.");
     } finally {

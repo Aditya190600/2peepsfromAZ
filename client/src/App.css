@@ -2924,11 +2924,23 @@ button.site-nav-link {
   margin-bottom: 8px;
 }
 
+.qe-scenario-summary-row {
+  display: flex;
+  align-items: center;
+  border-radius: inherit;
+}
+
+.qe-scenario-end-call {
+  flex-shrink: 0;
+  margin-right: 16px;
+}
+
 .qe-scenario-summary {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 11px 16px;
   border: 0;
   border-radius: inherit;

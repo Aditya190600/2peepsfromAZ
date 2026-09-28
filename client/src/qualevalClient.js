@@ -132,10 +132,12 @@ export async function setActiveDemoAgent(key) {
 }
 
 // Downloads an evaluation's scenario set as .xlsx (GET
-// /evaluations/:id/scenarios.xlsx). Fetched as a blob rather than a plain
-// link so a failure surfaces as an error instead of a downloaded JSON body.
-export async function exportScenariosXlsx(evaluationId) {
-  const resp = await fetch(`/v1/qualeval/evaluations/${encodeURIComponent(evaluationId)}/scenarios.xlsx`);
+// /evaluations/:id/scenarios.xlsx), optionally only one status tab's
+// scenarios. Fetched as a blob rather than a plain link so a failure surfaces
+// as an error instead of a downloaded JSON body.
+export async function exportScenariosXlsx(evaluationId, status) {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  const resp = await fetch(`/v1/qualeval/evaluations/${encodeURIComponent(evaluationId)}/scenarios.xlsx${query}`);
   if (!resp.ok) {
     const body = await resp.json().catch(() => ({}));
     throw new Error(body.error ?? "Could not export these scenarios.");
