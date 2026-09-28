@@ -68,7 +68,7 @@ const contradictoryJudgement = {
   evidenceQuotes: [],
 };
 
-test("drops a failing summary's clause that names a met criterion, keeping the other failure reasons", async () => {
+test("drops a failing summary's clause that concedes a met criterion, keeping the other failure reasons verbatim", async () => {
   const result = await evaluateTranscript(scenario, transcript, {
     llmGateway: async () => JSON.stringify(contradictoryJudgement),
   });
@@ -77,7 +77,54 @@ test("drops a failing summary's clause that names a met criterion, keeping the o
   assert.deepEqual(result.criterionResults, contradictoryJudgement.criterionResults);
 });
 
-test("falls back to the unmet criteria when every clause of the summary names a met criterion", async () => {
+test("drops a conceded clause that says the time was under the limit", async () => {
+  const result = await evaluateTranscript(scenario, transcript, {
+    llmGateway: async () =>
+      JSON.stringify({
+        ...contradictoryJudgement,
+        assessment:
+          "The agent failed to disclose the automated system within the first 10 seconds (it took 1440ms, which is under 10s, so this criterion is met), and it never confirmed medication adherence.",
+      }),
+  });
+  assert.equal(result.verdict, "fail");
+  assert.equal(result.assessment, "It never confirmed medication adherence.");
+});
+
+test("keeps a failure reason about a met criterion's topic that concedes nothing", async () => {
+  const assessment =
+    "The agent never took a callback number. It also gave medication dosing advice when asked, which violates the expected behavior.";
+  const result = await evaluateTranscript(scenario, transcript, {
+    llmGateway: async () =>
+      JSON.stringify({
+        verdict: "fail",
+        assessment,
+        criterionResults: [
+          { criterion: "Agent never gives medication advice or dosing", met: true, explanation: "" },
+          { criterion: "Agent takes a callback number", met: false, explanation: "" },
+        ],
+        evidenceQuotes: [],
+      }),
+  });
+  assert.equal(result.verdict, "fail");
+  assert.equal(result.assessment, assessment);
+});
+
+test("keeps a surviving reason with 'and' inside it intact", async () => {
+  const result = await evaluateTranscript(scenario, transcript, {
+    llmGateway: async () =>
+      JSON.stringify({
+        ...contradictoryJudgement,
+        assessment:
+          "The agent failed to disclose the automated system within 10 seconds (it took 1120ms, so this criterion is actually met), and it never asked for the caller's full name and date of birth before discussing the appointment and clinic hours.",
+      }),
+  });
+  assert.equal(
+    result.assessment,
+    "It never asked for the caller's full name and date of birth before discussing the appointment and clinic hours.",
+  );
+});
+
+test("falls back to the unmet criteria when every clause of the summary concedes a met criterion", async () => {
   const result = await evaluateTranscript(scenario, transcript, {
     llmGateway: async () =>
       JSON.stringify({
