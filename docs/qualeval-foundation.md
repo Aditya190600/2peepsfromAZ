@@ -38,9 +38,11 @@ architecture, which supersedes the "Stubbed, honestly" section below.
   scenarios but keeps approved ones), approve/reject/edit/delete a scenario,
   bulk-delete every scenario in one evaluation by status (`DELETE
   /v1/qualeval/evaluations/:id/scenarios?status=pending|approved|rejected`,
-  `server/qualeval/store.js`'s `deleteScenariosByStatus`), download every
-  scenario in one evaluation as an .xlsx workbook (`GET
-  /v1/qualeval/evaluations/:id/scenarios.xlsx`, columns in
+  `server/qualeval/store.js`'s `deleteScenariosByStatus`), download one
+  evaluation's scenarios as an .xlsx workbook (`GET
+  /v1/qualeval/evaluations/:id/scenarios.xlsx`, optionally narrowed by
+  `?status=pending|approved|rejected` - the UI's Export to Excel button sits
+  in the Accepted tab and passes `approved`; columns in
   `server/qualeval/scenarioExport.js`), create a run for
   an approved scenario, list runs, get one run. `GET /v1/qualeval/config`
   exposes the deployment's `QUALEVAL_AGENT_NUMBER` so the client can prefill
