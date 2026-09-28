@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { SignedIn, SignedOut, SignInButton, useClerk, useUser } from "@clerk/clerk-react";
 import { productNav } from "./chromeNav.js";
 import { getQualevalConfig } from "./qualevalClient.js";
@@ -11,32 +11,60 @@ function go(navigate, href, event) {
   navigate(href);
 }
 
+let navAccess = { isOperator: false, canAccessPhoneEvals: false };
 let configPromise = null;
+let configGeneration = 0;
+const navAccessListeners = new Set();
 
-// Operator flag and Phone Evals access from /v1/qualeval/config. Cached per
-// page load once known; a failure (e.g. signed out) counts as no access and
-// is retried on the next mount.
-function useProductNav() {
-  const [navAccess, setNavAccess] = useState({ isOperator: false, canAccessPhoneEvals: false });
-  useEffect(() => {
-    configPromise ??= getQualevalConfig()
-      .then((config) => ({
-        isOperator: Boolean(config.isOperator),
-        canAccessPhoneEvals: Boolean(config.canAccessPhoneEvals),
-      }))
-      .catch(() => {
-        configPromise = null;
-        return { isOperator: false, canAccessPhoneEvals: false };
-      });
-    let cancelled = false;
-    configPromise.then((value) => {
-      if (!cancelled) setNavAccess(value);
+function publishNavAccess(generation, next) {
+  if (generation !== configGeneration) return navAccess;
+  navAccess = next;
+  for (const listener of navAccessListeners) listener();
+  return navAccess;
+}
+
+function loadNavAccess() {
+  if (configPromise) return configPromise;
+  const generation = configGeneration;
+  let promise;
+  promise = getQualevalConfig()
+    .then((config) => publishNavAccess(generation, navFlags(config)))
+    .catch(() => {
+      if (generation === configGeneration && configPromise === promise) configPromise = null;
+      return publishNavAccess(generation, navFlags(null));
     });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  return productNav(navAccess);
+  configPromise = promise;
+  return promise;
+}
+
+function navFlags(config) {
+  return {
+    isOperator: Boolean(config?.isOperator),
+    canAccessPhoneEvals: Boolean(config?.canAccessPhoneEvals),
+  };
+}
+
+// Operator flag and Phone Evals access from /v1/qualeval/config. Cached once
+// known; a failure (e.g. signed out) counts as no access and is retried on
+// the next subscribe. refreshProductNav() replaces that cache from a config
+// the caller already loaded, so a Twilio import can reveal Phone Evals
+// without a full reload.
+export function refreshProductNav(config) {
+  configGeneration += 1;
+  const next = navFlags(config);
+  configPromise = Promise.resolve(publishNavAccess(configGeneration, next));
+  return configPromise;
+}
+
+function subscribeNavAccess(listener) {
+  navAccessListeners.add(listener);
+  loadNavAccess();
+  return () => navAccessListeners.delete(listener);
+}
+
+function useProductNav() {
+  const access = useSyncExternalStore(subscribeNavAccess, () => navAccess);
+  return productNav(access);
 }
 
 function ProductLinks({ path, navigate }) {
