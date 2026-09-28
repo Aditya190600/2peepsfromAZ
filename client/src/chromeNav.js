@@ -21,14 +21,25 @@ export const PRODUCT_NAV_ALL = [
     match: (path) => path === "/qualeval" || path.startsWith("/qualeval/"),
   },
   // Direct dials to an agent number, kept apart from Qualitative Evals'
-  // scenario runs. Page gates non-operators until Settings telephony setup.
-  { href: "/phone-evals", label: "Phone Evals", match: (path) => path === "/phone-evals" },
+  // scenario runs. Hidden from the rail until canAccessPhoneEvals (operator
+  // or a Twilio number registered in Settings).
+  {
+    href: "/phone-evals",
+    label: "Phone Evals",
+    match: (path) => path === "/phone-evals",
+    requiresPhoneEvalAccess: true,
+  },
   { href: "/settings", label: "Settings", match: (path) => path === "/settings" },
 ];
 
 // Visible left-rail entries only.
-export function productNav({ isOperator = false } = {}) {
-  return PRODUCT_NAV_ALL.filter((item) => !item.hidden && (isOperator || !item.operatorOnly));
+export function productNav({ isOperator = false, canAccessPhoneEvals = false } = {}) {
+  return PRODUCT_NAV_ALL.filter((item) => {
+    if (item.hidden) return false;
+    if (item.operatorOnly && !isOperator) return false;
+    if (item.requiresPhoneEvalAccess && !canAccessPhoneEvals) return false;
+    return true;
+  });
 }
 
 export const PRODUCT_NAV = productNav();

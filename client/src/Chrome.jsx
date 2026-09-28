@@ -11,29 +11,32 @@ function go(navigate, href, event) {
   navigate(href);
 }
 
-let operatorPromise = null;
+let configPromise = null;
 
-// Whether the signed-in visitor may use the operator-only Settings page.
-// Cached per page load once known; a failure (e.g. signed out) counts as no
-// and is retried on the next mount.
+// Operator flag and Phone Evals access from /v1/qualeval/config. Cached per
+// page load once known; a failure (e.g. signed out) counts as no access and
+// is retried on the next mount.
 function useProductNav() {
-  const [isOperator, setIsOperator] = useState(false);
+  const [navAccess, setNavAccess] = useState({ isOperator: false, canAccessPhoneEvals: false });
   useEffect(() => {
-    operatorPromise ??= getQualevalConfig()
-      .then((config) => Boolean(config.isOperator))
+    configPromise ??= getQualevalConfig()
+      .then((config) => ({
+        isOperator: Boolean(config.isOperator),
+        canAccessPhoneEvals: Boolean(config.canAccessPhoneEvals),
+      }))
       .catch(() => {
-        operatorPromise = null;
-        return false;
+        configPromise = null;
+        return { isOperator: false, canAccessPhoneEvals: false };
       });
     let cancelled = false;
-    operatorPromise.then((value) => {
-      if (!cancelled) setIsOperator(value);
+    configPromise.then((value) => {
+      if (!cancelled) setNavAccess(value);
     });
     return () => {
       cancelled = true;
     };
   }, []);
-  return productNav({ isOperator });
+  return productNav(navAccess);
 }
 
 function ProductLinks({ path, navigate }) {
