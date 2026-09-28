@@ -67,9 +67,13 @@ export function decodeMuLawBase64(base64) {
 //   close to real time from the bridge itself (Twilio media in 20 ms
 //   frames, AssemblyAI reply.audio in ~40 ms chunks), so a real backlog
 //   this size never comes from the call.
+// Every start lands exactly on a SAMPLE_RATE sample, so back-to-back frames
+// abut sample for sample in the 8 kHz context listenToLiveCall plays them
+// through (see there).
 export function createLiveScheduler({ leadSec = 0.25, minLeadSec = 0.05, maxLeadSec = 1, maxBacklogSec = 1.5 } = {}) {
   let offsetSec = null; // context time = tMs/1000 + offsetSec
   const cursors = { agent: 0, caller: 0 };
+  const onSampleGrid = (sec) => Math.round(sec * SAMPLE_RATE) / SAMPLE_RATE;
 
   function schedule(track, tMs, durationSec, nowSec) {
     if (offsetSec === null || tMs / 1000 + offsetSec > nowSec + maxLeadSec) {
@@ -83,17 +87,34 @@ export function createLiveScheduler({ leadSec = 0.25, minLeadSec = 0.05, maxLead
     }
     const cursor = cursors[track] ?? 0;
     const flush = cursor - position > maxBacklogSec;
-    const start = flush ? position : Math.max(cursor, position);
-    cursors[track] = start + durationSec;
+    const start = onSampleGrid(flush ? position : Math.max(cursor, position));
+    cursors[track] = onSampleGrid(start + durationSec);
     return { start, flush };
   }
 
   // Barge-in: this track's queued speech was cancelled.
   function clear(track, nowSec) {
-    cursors[track] = nowSec;
+    cursors[track] = onSampleGrid(nowSec);
   }
 
   return { schedule, clear };
+}
+
+// The context runs at the frames' own 8 kHz rate. At the hardware rate
+// (44.1/48 kHz) the browser resamples each 20-40 ms frame's buffer on its
+// own, and every frame edge clicks - 50 clicks a second on the agent track,
+// which is what made listening in sound scratchy even though the call
+// audio itself is clean (measured in Chrome on a real call's frames: ~98%
+// of the difference from one continuous buffer sat on frame edges). At
+// 8 kHz the frames play sample for sample and only the mixed output is
+// resampled, once, continuously. A browser that can't open an 8 kHz
+// context still gets working, if clickier, audio.
+function createContext(AudioContextImpl) {
+  try {
+    return new AudioContextImpl({ sampleRate: SAMPLE_RATE });
+  } catch {
+    return new AudioContextImpl();
+  }
 }
 
 // Opens the live stream for one run and plays it. Returns { stop, resume,
@@ -106,7 +127,7 @@ export function listenToLiveCall(
   runId,
   { onOpen, onTurn, onEnd, onStateChange, EventSourceImpl = globalThis.EventSource, AudioContextImpl = globalThis.AudioContext } = {},
 ) {
-  const ctx = new AudioContextImpl();
+  const ctx = createContext(AudioContextImpl);
   const scheduler = createLiveScheduler();
   const sources = { agent: new Set(), caller: new Set() };
   const source = new EventSourceImpl(`/v1/qualeval/runs/${encodeURIComponent(runId)}/live`);

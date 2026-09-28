@@ -25,3 +25,9 @@ test("buildCallerSystemPrompt tells the caller to hang up with end_call once bot
   assert.match(prompt, /end_call/);
   assert.match(prompt, /goodbye/i);
 });
+
+test("buildCallerSystemPrompt asks for each reply in one go, without spoken hesitation pauses", () => {
+  const prompt = buildCallerSystemPrompt({});
+  assert.match(prompt, /one go/);
+  assert.match(prompt, /'\.\.\.'/);
+});

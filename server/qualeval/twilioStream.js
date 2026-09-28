@@ -1,6 +1,7 @@
 import { WebSocketServer } from "ws";
 import { createBridgeSession, DEFAULT_MAX_DURATION_MS } from "./bridgeSession.js";
 import { createCallRecorder, qualevalCallAudioKey } from "./callRecorder.js";
+import { transcribeCallRecording } from "./callTranscription.js";
 import { buildCallerSystemPrompt } from "./callerPrompt.js";
 import { mintAssemblyAiToken } from "./assemblyaiToken.js";
 import * as store from "./store.js";
@@ -11,6 +12,19 @@ import { finishProductionCall } from "./productionCalls.js";
 import { recordingsConfigured, uploadObject } from "../recordingsStore.js";
 
 const STREAM_PATH = "/v1/qualeval/twilio-stream";
+
+// How the simulated caller takes turns (AssemblyAI session.input.
+// turn_detection, docs/voice-agents/voice-agent-api/turn-detection-and-
+// interruptions). With AssemblyAI's adaptive defaults it ended the target
+// agent's turn at the ~0.5-0.9 s pause between two of its sentences - e.g.
+// after "You are speaking with an AI assistant." and before "Can I get your
+// name to get started?" - and answered straight over the rest. Each such
+// collision left both sides with a stale reply in flight, so the call kept
+// talking over itself after that (reproduced on real calls 2026-09-27 with
+// Twilio dual-channel recordings). min_silence makes the caller wait out a
+// pause that long before its turn, and interruption_delay 0 has it stop as
+// soon as the agent talks over it, the way a polite caller yields.
+export const CALLER_TURN_DETECTION = { min_silence: 1200, interruption_delay: 0 };
 
 // Attaches the ws upgrade handler that receives Twilio's Media Streams
 // connection (server/qualeval/twilioVoice.js's <Connect><Stream> target) to
@@ -28,6 +42,8 @@ export function attachTwilioStreamServer(
     dispatch = dispatchEvaluation,
     createSession = createBridgeSession,
     finishCall = finishProductionCall,
+    transcribeCall = (recorder, roles) =>
+      transcribeCallRecording(recorder, { apiKey: process.env.ASSEMBLYAI_API_KEY, ...roles }),
   } = {},
 ) {
   const wss = new WebSocketServer({ noServer: true });
@@ -100,9 +116,25 @@ export function attachTwilioStreamServer(
       }
     }
 
-    async function onFinished({ turns, callSid, reason }) {
+    // The run is judged on what the call recording says each side said
+    // (server/qualeval/callTranscription.js explains why the live session's
+    // own transcript can't be trusted where the two parties overlapped). The
+    // live turns stay the fallback if there is no recording or it can't be
+    // transcribed.
+    async function transcriptOf(liveTurns) {
+      if (!recorder.hasAudio()) return liveTurns;
+      try {
+        return await transcribeCall(recorder, { incomingRole: "agent", outgoingRole: "user" });
+      } catch (err) {
+        console.error(`QualEval call bridge: transcribing the recording failed for run ${runId}: ${err.message}`);
+        return liveTurns;
+      }
+    }
+
+    async function onFinished({ turns: liveTurns, callSid, reason }) {
       broker.releaseRun(runId);
       liveCallHub.endCall(runId);
+      const turns = await transcriptOf(liveTurns);
       await finishCall({
         twilioCallSid: callSid,
         direction: "outbound",
@@ -170,6 +202,7 @@ export function attachTwilioStreamServer(
         // Our simulated caller hangs up once both sides have wrapped up,
         // instead of every run holding the line to the max-duration cap.
         endCallTool: true,
+        turnDetection: CALLER_TURN_DETECTION,
         // This leg carries both sides of the call: incoming is the target
         // agent over the phone, outgoing is our simulated caller. Each frame
         // goes to the recorder and to any live listener (liveCallHub.js).

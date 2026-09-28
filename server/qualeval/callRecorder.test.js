@@ -72,6 +72,25 @@ test("createCallRecorder.clearOutgoingFrom drops outgoing audio queued past a ba
   assert.ok(samples.slice(2 * MS).every((v) => v > 900 && v < 1100), "only the incoming leg remains after the clear");
 });
 
+test("createCallRecorder.toStereoWavBuffer keeps each leg on its own channel for per-speaker transcription", () => {
+  const recorder = createCallRecorder(1000);
+  recorder.addIncomingFrame(frame(Array(2 * MS).fill(1000)), 0);
+  recorder.addOutgoingFrame(frame(Array(4 * MS).fill(-3000)), 1);
+  recorder.clearOutgoingFrom(3);
+
+  const wav = recorder.toStereoWavBuffer();
+  assert.equal(wav.readUInt16LE(22), 2, "two channels");
+  assert.equal(wav.readUInt16LE(32), 4, "block align of two 16-bit samples");
+  const samples = wavSamples(wav);
+  const incoming = samples.filter((_, i) => i % 2 === 0);
+  const outgoing = samples.filter((_, i) => i % 2 === 1);
+  assert.equal(incoming.length, 3 * MS);
+  assert.ok(incoming.slice(0, 2 * MS).every((v) => v > 900 && v < 1100), "channel 1 is the incoming leg alone");
+  assert.ok(incoming.slice(2 * MS).every((v) => v === 0));
+  assert.ok(outgoing.slice(0, MS).every((v) => v === 0));
+  assert.ok(outgoing.slice(MS, 3 * MS).every((v) => v < -2500), "channel 2 is the outgoing leg alone, as played");
+});
+
 test("createCallRecorder ignores empty payloads", () => {
   const recorder = createCallRecorder(1000);
   recorder.addIncomingFrame(null, 0);

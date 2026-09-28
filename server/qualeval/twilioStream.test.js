@@ -58,6 +58,9 @@ test("resolves runId from the start event's customParameters, not the connection
   assert.equal(sessionArgs.token, "tok");
   // The simulated caller can hang up once the conversation is over.
   assert.equal(sessionArgs.endCallTool, true);
+  // ...and waits out the target agent's pauses between sentences before
+  // taking its turn (see CALLER_TURN_DETECTION).
+  assert.deepEqual(sessionArgs.turnDetection, { min_silence: 1200, interruption_delay: 0 });
 
   // The persona's speech reaches the target over the phone line only - no
   // server-side copy (see bridgeSession.js's header comment).
@@ -127,4 +130,87 @@ test("publishes both sides' audio and each turn to live listeners, and ends the 
     { type: "end" },
   ]);
   assert.equal(liveCallHub.isLive("run_live"), false);
+});
+
+async function finishBridgedCall({ transcribeCall, liveTurns, frames = true }) {
+  const twilioWs = new FakeSocket();
+  const httpServer = new EventEmitter();
+  let sessionArgs;
+  const awaiting = [];
+  const finished = [];
+  const errors = [];
+  const wss = attachTwilioStreamServer(httpServer, {
+    getRun: async (id) => ({ id, scenarioId: "scn_1" }),
+    getScenario: async () => ({ id: "scn_1", name: "test" }),
+    mintToken: async () => "tok",
+    createSession: (args) => {
+      sessionArgs = args;
+      return {};
+    },
+    markRunAwaitingEvaluation: async (runId, { turns }) => awaiting.push(turns),
+    markRunError: async (runId, message) => errors.push(message),
+    dispatch: async () => {},
+    finishCall: async (fields) => finished.push(fields),
+    transcribeCall,
+  });
+  connect(wss, twilioWs);
+  twilioWs.emit(
+    "message",
+    JSON.stringify({ event: "start", start: { streamSid: "MZ1", callSid: "CA1", customParameters: { runId: "run_rec" } } }),
+  );
+  for (let i = 0; i < 3; i++) await new Promise((resolve) => setImmediate(resolve));
+  if (frames) {
+    sessionArgs.onIncomingAudio(Buffer.alloc(160, 0x10).toString("base64"), 0);
+    sessionArgs.onOutgoingAudio(Buffer.alloc(160, 0x90).toString("base64"), 20);
+  }
+  await sessionArgs.onFinished({ turns: liveTurns, callSid: "CA1", reason: "end_call" });
+  return { awaiting, finished, errors };
+}
+
+test("judges the run on the recording's per-leg transcript, not the live session's", async () => {
+  const recorded = [
+    { role: "agent", text: "Can I get your full name to get started?", tMs: 1500 },
+    { role: "user", text: "Hello?", tMs: 6800 },
+  ];
+  const seen = [];
+  const { awaiting, finished } = await finishBridgedCall({
+    // The live session misheard the overlapped question and kept a reply
+    // that was cut off before it was ever played.
+    liveTurns: [
+      { role: "agent", text: "Can I get you a doctor?", tMs: 7750 },
+      { role: "user", text: "Hello? Is this", tMs: 7039 },
+    ],
+    transcribeCall: async (recorder, roles) => {
+      seen.push({ stereo: recorder.toStereoWavBuffer().readUInt16LE(22), ...roles });
+      return recorded;
+    },
+  });
+  // Incoming is the target agent over the phone; outgoing is our caller.
+  assert.deepEqual(seen, [{ stereo: 2, incomingRole: "agent", outgoingRole: "user" }]);
+  assert.deepEqual(awaiting, [recorded]);
+  assert.deepEqual(finished[0].transcript, recorded);
+});
+
+test("falls back to the live session's transcript when transcribing the recording fails", async () => {
+  const liveTurns = [{ role: "agent", text: "Hello", tMs: 100 }];
+  const { awaiting, errors } = await finishBridgedCall({
+    liveTurns,
+    transcribeCall: async () => {
+      throw new Error("AssemblyAI transcription timed out");
+    },
+  });
+  assert.deepEqual(awaiting, [liveTurns]);
+  assert.deepEqual(errors, []);
+});
+
+test("keeps the live session's transcript when nothing was recorded", async () => {
+  const liveTurns = [{ role: "agent", text: "Hello", tMs: 100 }];
+  const { awaiting } = await finishBridgedCall({
+    liveTurns,
+    frames: false,
+    transcribeCall: async () => {
+      throw new Error("should not transcribe an empty recording");
+    },
+  });
+  assert.deepEqual(awaiting, [liveTurns]);
 });
