@@ -1,10 +1,10 @@
-// Permanent, hardcoded QualEval example for the splash page scorecard and
-// the public /examples/qualeval page. Deliberately static client data, not a
-// qualeval_* DB row: it has no id any delete/cleanup route can reach, needs
-// no sign-in, and never mixes with a real account's evaluations. Every
-// surface that renders it labels it "Example".
+// Permanent, hardcoded QualEval examples for the splash page scorecard and
+// the public /examples/qualeval page. Deliberately static client data, not
+// qualeval_* DB rows: they have no id any delete/cleanup route can reach,
+// need no sign-in, and never mix with a real account's evaluations. Every
+// surface that renders them labels them "Example".
 //
-// It mirrors one scenario against the seeded-gap clinic receptionist
+// The first (fail) example mirrors one scenario against the seeded-gap clinic receptionist
 // (server/qualeval/demoAgentDefaults.js's `healthcare-flawed` agent), in the
 // same shapes generator.js (scenario) and evaluator.js (run verdict) produce.
 
