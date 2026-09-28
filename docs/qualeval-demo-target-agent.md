@@ -39,14 +39,19 @@ same phone-only fallbacks so a call never stalls: asked for a human, it says
 it can't transfer right now (none has a transfer tool); compliant agents
 asked for real record/account data say they don't have access on this call.
 
-Each body has `input`/`output.format` fixed to `audio/pcmu`, since that has
-to live on the stored agent (it can't be set inline once `agent_id` is used).
-On every boot `server/qualeval/demoAgentAgentsProvision.js` inserts a row for
-any catalog key that doesn't have one yet, then creates the AssemblyAI agent
-for any row with no `agent_id` and persists the id - it never recreates an
-already-provisioned agent. So adding a `DEMO_AGENTS` entry makes a new agent
-appear after the next deploy, but changing an existing entry's prompt does
-not reach its live agent - push the new text with `PATCH
+Each body has `input`/`output.format` fixed to `audio/pcmu`, and `input`
+also carries `TARGET_TURN_DETECTION` (the target's own wait-out-pauses
+setting), since both have to live on the stored agent (they can't be set
+inline once `agent_id` is used). On every boot
+`server/qualeval/demoAgentAgentsProvision.js` inserts a row for any catalog
+key that doesn't have one yet, then creates the AssemblyAI agent for any row
+with no `agent_id` and persists the id - it never recreates an
+already-provisioned agent. For an already-provisioned agent it only
+reconciles `input` to the catalog (telephony plumbing, not operator-edited
+content). So adding a `DEMO_AGENTS` entry makes a new agent appear after the
+next deploy, and a catalog `input` change reaches every live agent, but
+changing an existing entry's prompt does not reach its live agent - push the
+new text with `PATCH
 /v1/qualeval/demo-agent/variants/:key` (or `PUT /v1/agents/{agent_id}`
 directly) too.
 
