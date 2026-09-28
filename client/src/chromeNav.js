@@ -21,7 +21,7 @@ export const PRODUCT_NAV_ALL = [
     match: (path) => path === "/qualeval" || path.startsWith("/qualeval/"),
   },
   // Direct dials to an agent number, kept apart from Qualitative Evals'
-  // scenario runs. Hidden from the rail until canAccessPhoneEvals (operator
+  // scenario runs. Hidden from the rail until canAccessPhoneEvals (admin
   // or a Twilio number registered in Settings).
   {
     href: "/phone-evals",

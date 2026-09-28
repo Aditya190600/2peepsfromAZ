@@ -108,6 +108,7 @@ async function listScenariosWithRuns(evaluationId, visitor) {
 export function qualevalRouter({
   visitorId = () => "anon",
   isOperator = async () => false,
+  isPhoneEvalAdmin = async () => false,
   telephonyStore = null,
   liveCalls = liveCallHub,
   heartbeatMs = 15000,
@@ -125,14 +126,15 @@ export function qualevalRouter({
 
   async function phoneEvalAccessFor(req) {
     const ownerId = visitorId(req);
-    const operator = await isOperator(req);
+    const [operator, admin] = await Promise.all([isOperator(req), isPhoneEvalAdmin(req)]);
     const ownedNumbers = await listOwnedInboundNumbers(telephonyStore, ownerId);
     return {
       operator,
+      admin,
       ownerId,
       ownedNumbers,
       ownedDigits: ownedNumberDigits(ownedNumbers),
-      canAccess: await canAccessPhoneEvals({ isOperator: operator, telephonyStore, ownerId }),
+      canAccess: await canAccessPhoneEvals({ isPhoneEvalAdmin: admin, telephonyStore, ownerId }),
     };
   }
 
@@ -140,7 +142,7 @@ export function qualevalRouter({
     const access = await phoneEvalAccessFor(req);
     if (!access.canAccess) {
       return res.status(403).json({
-        error: "Phone Evals requires operator access or a configured phone number in Settings.",
+        error: "Phone Evals requires admin access or a configured phone number in Settings.",
       });
     }
     req.phoneEvalAccess = access;
@@ -149,7 +151,7 @@ export function qualevalRouter({
 
   async function assertCanViewPhoneEvalCall(req, call) {
     const access = req.phoneEvalAccess ?? (await phoneEvalAccessFor(req));
-    if (!canViewPhoneEvalCall({ isOperator: access.operator, ownedDigits: access.ownedDigits, call })) {
+    if (!canViewPhoneEvalCall({ isPhoneEvalAdmin: access.admin, ownedDigits: access.ownedDigits, call })) {
       return false;
     }
     req.phoneEvalAccess = access;
@@ -191,6 +193,7 @@ export function qualevalRouter({
       res.json({
         agentPhoneNumber: process.env.QUALEVAL_AGENT_NUMBER || null,
         isOperator: access.operator,
+        isPhoneEvalAdmin: access.admin,
         canAccessPhoneEvals: access.canAccess,
         phoneEvalsConfigured: access.ownedNumbers.length > 0,
         ownedPhoneNumbers: access.ownedNumbers,
@@ -203,15 +206,15 @@ export function qualevalRouter({
   // number directly, scored by phoneEvaluation.js (pass/fail) and
   // phoneCompliance.js (compliance findings). Kept apart from evaluations on
   // purpose - only QualEval-placed scenario runs belong to an evaluation.
-  // Operators see every call; other visitors see only calls to numbers they
+  // Admins see every call; other visitors see only calls to numbers they
   // registered in Settings (server/telephony/store.js).
   router.get(
     "/phone-evals",
     requirePhoneEvalAccess,
     wrap(async (req, res) => {
-      const { operator, ownedDigits } = req.phoneEvalAccess;
+      const { admin, ownedDigits } = req.phoneEvalAccess;
       const calls = await listPhoneEvalCalls(process.env, undefined, {
-        toNumberDigits: operator ? null : ownedDigits,
+        toNumberDigits: admin ? null : ownedDigits,
       });
       res.json({ calls });
     }),
@@ -486,7 +489,7 @@ export function qualevalRouter({
   );
 
   // Inbound call recording, played on the Phone Evals page. Same visibility
-  // rules as /phone-evals: operators see every call; others only their numbers.
+  // rules as /phone-evals: admins see every call; others only their numbers.
   router.get(
     "/production-calls/:callSid/audio",
     requirePhoneEvalAccess,

@@ -1,8 +1,9 @@
 // Operator allowlist for QUALEVAL_AGENT_NUMBER's shared controls: the
-// Settings page's /v1/qualeval/demo-agent/* routes, the Phone Evals routes
-// (/phone-evals, its re-run endpoint, /production-calls/:callSid/audio), and
+// Settings page's /v1/qualeval/demo-agent/* routes, the provider registry, and
 // the persona number on /v1/qualeval/config. router.js's requireOperator runs
 // this on each of those route handlers - the client hiding them is cosmetic.
+// Phone Evals call scope (all calls vs one registered number) uses a separate
+// QUALEVAL_ADMIN_EMAILS allowlist - see phoneEvalAccess.js.
 // The public demo lets any visitor sign in, so a signed-in Clerk user is not
 // enough to flip which agent answers the shared number, read every agent's
 // system prompt, or read every caller's transcript.
