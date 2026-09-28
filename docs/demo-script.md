@@ -1,19 +1,16 @@
 # Demo Script (4 min)
 
-## Intro (0:00-0:30)
-ComplyLine solves two problems for anyone building or buying voice agents: did this call stay compliant, and does this agent actually work the way it's supposed to? We'll show both in the next four minutes - real calls, real transcripts, real verdicts, nothing scripted or faked.
+0:00-0:30 - Intro
+'ComplyLine is the independent trust layer for voice agents. Every AI voice agent says things it shouldn't eventually - the question is whether anyone's watching. We built three ways to catch that: automatic compliance checks on real calls, scripted evaluations before you ship, and live monitoring on your own test line. Let's see all three.'
 
-## Voice Compliance - live call (0:30-1:30)
-Place a real call against a sample agent. While it runs: This is a real phone call happening right now - no canned transcript. ComplyLine listens in real time and checks it against regulatory packs: HIPAA, TCPA, GDPR, eight in total, plus your own custom policies. Call ends, report appears: Here's the verdict - pass, fail, or N/A per check, with the exact quote and timestamp behind every finding.
+0:30-1:30 - ComplyLine live call (60s)
+Place or play a live call against a demo agent (banking or healthcare persona). While it runs: 'This call is being transcribed in real time. The moment it ends, ComplyLine checks it against the relevant regulatory packs - TCPA consent, HIPAA disclosure, PII exposure - and flags anything that's a real citable violation, not just a vibe check.' Show the resulting report: severity-ranked findings, each with a regulatory citation and an exact quote from the transcript.
 
-## Compliance Examples (1:30-2:00)
-If you don't want to wait on a live call, we ship scripted violation demos too - a clean call, a TCPA violation, a late disclosure - pick one, see the same severity-ranked report instantly.
+1:30-2:30 - QualEval (60s)
+'Compliance is pass/fail against the law. QualEval is pass/fail against your own bar for quality.' Show writing a scenario in plain language (e.g. 'caller asks for someone else's medical results'), generating personas automatically, running the test call, and the resulting verdict with quoted evidence from the transcript. Mention the Examples tab as a permanent reference case.
 
-## Qualitative Evals - scenario generation (2:00-2:30)
-Now the second half: what if you're not checking compliance, you're checking whether the agent actually does its job? Describe your agent once - phone number, what it's supposed to do - and QualEval writes a batch of realistic test scenarios: personas, situations, pass criteria.
+2:30-3:30 - Phone Evals (60s)
+'Sometimes you just want to call the thing yourself.' Dial the demo agent live from a phone. Show the Phone Evals page: Outlook-style call history on the left, click a call to see its full report on the right - both the compliance findings and the pass/fail verdict, generated automatically the moment the call ends.
 
-## Qualitative Evals - live test (2:30-3:30)
-Run one approved scenario live. This places a real outbound call to the target agent, has a full conversation as that persona, and judges the transcript against the scenario's own success criteria - here's a compliant agent verifying identity correctly, and here's the same test against a flawed variant that skips it. That's a genuine pass/fail on agent behavior, not just compliance.
-
-## Outro / next steps (3:30-4:00)
-Two tools, one platform: prove your agent is compliant, and prove it actually works - before your customers find out the hard way. Next: expand scenario coverage, add more target-agent domains beyond banking, and open this up as a testing layer anyone can point at their own deployed agent.
+3:30-4:00 - Outro (30s)
+'One agent, three ways to know if it's actually behaving: real calls, planned tests, and a phone number anyone on the team can dial. That's ComplyLine.'
