@@ -18,7 +18,12 @@ import {
 } from "./phoneEvalAccess.js";
 import { analyzeFinishedCall } from "./postCallAnalysis.js";
 import * as liveCallHub from "./liveCallHub.js";
-import { buildScenariosWorkbook, scenariosExportFilename } from "./scenarioExport.js";
+import {
+  SCENARIO_EXPORT_STATUSES,
+  buildScenariosWorkbook,
+  scenariosExportFilename,
+  scenariosWithStatus,
+} from "./scenarioExport.js";
 
 const TWILIO_CALL_SID = /^CA[0-9a-f]{32}$/i;
 
@@ -267,15 +272,20 @@ export function qualevalRouter({
     }),
   );
 
-  // Downloads the evaluation's whole scenario set (every status tab) as an
-  // .xlsx workbook - see scenarioExport.js for the columns.
+  // Downloads the evaluation's scenario set as an .xlsx workbook - every
+  // status tab, or just one with ?status=pending|approved|rejected. See
+  // scenarioExport.js for the columns.
   router.get(
     "/evaluations/:id/scenarios.xlsx",
     wrap(async (req, res) => {
+      const { status } = req.query;
+      if (status !== undefined && !SCENARIO_EXPORT_STATUSES.includes(status)) {
+        return res.status(400).json({ error: `status must be one of ${SCENARIO_EXPORT_STATUSES.join(", ")}` });
+      }
       const evaluation = await store.getEvaluation(req.params.id, visitorId(req));
       if (!evaluation) return res.status(404).json({ error: "Evaluation not found" });
       await reconcileStaleRuns();
-      const scenarios = await listScenariosWithRuns(evaluation.id, visitorId(req));
+      const scenarios = scenariosWithStatus(await listScenariosWithRuns(evaluation.id, visitorId(req)), status);
       const workbook = await buildScenariosWorkbook(evaluation, scenarios);
       res.attachment(scenariosExportFilename(evaluation));
       res.type("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");

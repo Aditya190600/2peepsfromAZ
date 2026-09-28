@@ -338,3 +338,11 @@ test("operator and admin allowlists gate deployment controls vs Phone Evals sepa
     });
   }
 });
+
+test("the scenario export rejects an unknown status filter before touching the evaluation", async () => {
+  await withRouter(false, async (base) => {
+    const resp = await fetch(`${base}/evaluations/eval_1/scenarios.xlsx?status=accepted`);
+    assert.equal(resp.status, 400);
+    assert.match((await resp.json()).error, /status must be one of pending, approved, rejected/);
+  });
+});
