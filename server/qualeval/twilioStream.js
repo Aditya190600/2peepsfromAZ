@@ -182,12 +182,6 @@ export function attachTwilioStreamServer(
       return;
     }
 
-    // Register immediately so the target-agent leg's waitForClaimableRun finds
-    // this run while getRun/scenario/token lookups run below (server/qualeval/
-    // callBridgeBroker.js - it links that leg's production-call record to
-    // this run; no audio passes through it).
-    broker.registerPersonaLeg(runId);
-
     try {
       const run = await getRun(runId, null);
       if (!run) throw new Error("Run not found");

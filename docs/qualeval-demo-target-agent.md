@@ -147,11 +147,12 @@ once in real time over the phone - and the two agents talked over each other
 from the first seconds of every call (reproduced live 2026-09-27 with
 Twilio dual-channel recordings). The audio relay was removed.
 `server/qualeval/callBridgeBroker.js` now only links the target-agent leg to
-the QualEval run that placed the call, so its production-call record and
-inbound evaluation carry `qualevalRunId`: the persona side registers its
-`runId` up front, and the target side (which also answers real external
-callers, who have no run) claims it via `waitForClaimableRun()` after its
-bridge session already exists, so a real caller's greeting is never delayed.
+the QualEval run that placed the call, so its production-call record carries
+`qualevalRunId` and the leg answers as the evaluation's demo agent:
+`placeCall` registers the run before dialing a number our demo agent
+answers, and the target side claims it synchronously on connect (see "Which
+agent answers" above). The persona leg does not register, so a run dialing
+an outside number is never claimable by a real caller.
 
 When the far end barges in, AssemblyAI cancels the reply (`reply.done` with
 `status: "interrupted"`) but Twilio keeps playing whatever `reply.audio` it

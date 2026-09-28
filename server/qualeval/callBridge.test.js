@@ -253,7 +253,6 @@ test("a direct caller to the demo number while an outside-number run is in fligh
       sessionArgs = args;
       return {};
     },
-    waitForClaimableRun: async () => null,
     finishCall: async (fields) => {
       finished = fields;
       return null;

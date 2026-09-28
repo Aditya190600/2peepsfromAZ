@@ -38,9 +38,12 @@ test("bridges immediately using the active variant, without waiting for a start 
     sessionArgs = args;
     return {};
   };
-  const waitForClaimableRun = async () => null;
-
-  const wss = attachTargetAgentStreamServer(httpServer, { getAnsweringVariant, mintToken, createSession, waitForClaimableRun });
+  const wss = attachTargetAgentStreamServer(httpServer, {
+    getAnsweringVariant,
+    mintToken,
+    createSession,
+    claimPendingRun: () => null,
+  });
   connect(wss, twilioWs);
 
   await new Promise((resolve) => setImmediate(resolve));
@@ -67,7 +70,6 @@ test("closes the stream instead of hanging when loading the active variant fails
     createSession: () => {
       throw new Error("createSession should never be called when variant loading fails");
     },
-    waitForClaimableRun: async () => null,
   });
   connect(wss, twilioWs);
 
@@ -87,7 +89,7 @@ test("reply audio goes only to this call's own Twilio leg, never cross-fed to an
       sessionArgs = args;
       return {};
     },
-    waitForClaimableRun: async () => "run_xyz",
+    claimPendingRun: () => ({ runId: "run_xyz", demoAgentKey: null }),
   });
   connect(wss, twilioWs);
   await new Promise((resolve) => setImmediate(resolve));
@@ -113,7 +115,7 @@ test("a claimed QualEval run is linked onto the production call and its evaluati
       sessionArgs = args;
       return {};
     },
-    waitForClaimableRun: async () => "run_xyz",
+    claimPendingRun: () => ({ runId: "run_xyz", demoAgentKey: null }),
     releaseRun: (runId) => released.push(runId),
     finishCall: async (fields) => {
       finished = fields;
@@ -157,7 +159,6 @@ test("Twilio start event arriving during async setup still reaches the bridge, s
     getAnsweringVariant: async () => ({ key: "compliant", agentId: "agent_compliant" }),
     mintToken: async () => "tok",
     createSession,
-    waitForClaimableRun: async () => null,
     transcribeCall: async () => [],
     finishCall: async () => null,
     analyzeCall: async () => {},
@@ -199,7 +200,6 @@ test("does not open an AssemblyAI session when the caller hangs up during setup"
       created = true;
       return {};
     },
-    waitForClaimableRun: async () => null,
   });
   connect(wss, twilioWs);
   twilioWs.close();
@@ -222,7 +222,6 @@ test("writes the transcript onto the production call when the inbound bridge end
       sessionArgs = args;
       return {};
     },
-    waitForClaimableRun: async () => null,
     finishCall: async (fields) => {
       finished = fields;
       return { toNumber: "+18038245760", fromNumber: "+13128003792", startedAt: "2026-09-27T20:00:00.000Z" };
@@ -270,7 +269,6 @@ test("uploads a mixed WAV for an inbound call and stores its audio path", async 
       sessionArgs = args;
       return {};
     },
-    waitForClaimableRun: async () => null,
     createRecorder: () => ({
       addIncomingFrame() {},
       addOutgoingFrame() {},
@@ -325,7 +323,6 @@ test("scores an inbound call on the recording's per-leg transcript, with the cal
       sessionArgs = args;
       return {};
     },
-    waitForClaimableRun: async () => null,
     transcribeCall: async (recorder, r) => {
       roles = r;
       return recorded;
@@ -368,7 +365,7 @@ async function finishInboundCall({ claimedRunId = null, transcribeCall, liveTurn
       sessionArgs = args;
       return {};
     },
-    waitForClaimableRun: async () => claimedRunId,
+    claimPendingRun: () => (claimedRunId ? { runId: claimedRunId, demoAgentKey: null } : null),
     releaseRun: () => {},
     transcribeCall,
     recordingsReady: () => false,
@@ -429,7 +426,6 @@ test("a QualEval run placed for a healthcare evaluation answers as that agent, w
       sessionArgs = args;
       return {};
     },
-    waitForClaimableRun: async () => assert.fail("the run was already claimed at connect"),
     releaseRun: () => {},
     finishCall: async (fields) => {
       finished = fields;
@@ -461,7 +457,6 @@ test("a direct caller with no placed run answers as the Settings default", async
     },
     mintToken: async () => "tok",
     createSession: () => ({}),
-    waitForClaimableRun: async () => null,
   });
   connect(wss, twilioWs);
   await new Promise((resolve) => setImmediate(resolve));

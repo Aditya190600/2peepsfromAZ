@@ -48,10 +48,9 @@ const STREAM_PATH = "/v1/qualeval/target-agent-stream";
 //
 // The bridge session is created immediately regardless of whether this call
 // turns out to be a QualEval-placed run or a real external caller, so a real
-// caller's greeting is never delayed. A run registered only by its persona
-// leg (no placement registration) is still claimed afterwards, concurrently,
-// and then only links this call's production-call record to that run - audio
-// always travels over the phone line itself.
+// caller's greeting is never delayed. Audio always travels over the phone
+// line itself; the claim only picks the agent and links this call's
+// production-call record to the run.
 export function attachTargetAgentStreamServer(
   httpServer,
   {
@@ -59,7 +58,6 @@ export function attachTargetAgentStreamServer(
     getAnsweringVariant = demoAgentConfig.getAnsweringVariant,
     claimPendingRun = broker.claimPendingRun,
     createSession = createBridgeSession,
-    waitForClaimableRun = broker.waitForClaimableRun,
     releaseRun = broker.releaseRun,
     finishCall = finishProductionCall,
     analyzeCall = analyzeFinishedCall,
@@ -77,8 +75,7 @@ export function attachTargetAgentStreamServer(
     // evaluation's agent, and the AssemblyAI session's agent can't change
     // after it opens.
     const placedRun = claimPendingRun();
-    let claimedRunId = placedRun?.runId ?? null;
-    let sessionFinished = false;
+    const claimedRunId = placedRun?.runId ?? null;
     let activeVariant = null;
     const recorder = createRecorder();
 
@@ -89,7 +86,6 @@ export function attachTargetAgentStreamServer(
     twilioWs.on("message", bufferMessage);
 
     function onFinished({ turns, callSid, reason }) {
-      sessionFinished = true;
       console.log(
         `QualEval target-agent bridge [${callSid ?? "no-call-sid"}]: call ended (${reason}) with ${turns.length} transcript turns`,
       );
@@ -149,7 +145,6 @@ export function attachTargetAgentStreamServer(
       });
     }
     function onError(message) {
-      sessionFinished = true;
       console.error(`QualEval target-agent bridge: ${message}`);
       if (claimedRunId) releaseRun(claimedRunId);
     }
@@ -196,17 +191,6 @@ export function attachTargetAgentStreamServer(
       // plus any caller media that arrived during setup.
       for (const raw of buffered) twilioWs.emit("message", raw);
       buffered.length = 0;
-
-      if (claimedRunId) return;
-      const runId = await waitForClaimableRun();
-      if (runId && !sessionFinished) {
-        claimedRunId = runId;
-        console.log(`QualEval target-agent bridge: linked to QualEval run ${runId}`);
-      } else if (runId) {
-        // The session already ended while we were still waiting to claim -
-        // release immediately so this run's entry doesn't leak.
-        releaseRun(runId);
-      }
     } catch (err) {
       twilioWs.off("message", bufferMessage);
       if (claimedRunId) releaseRun(claimedRunId);
