@@ -7,48 +7,46 @@
 // (server/qualeval/targetAgentStream.js) can be tied to the QualEval run
 // that placed the call.
 //
-// The persona side (server/qualeval/twilioStream.js) always knows its runId
-// up front (carried as a Twilio Custom Parameter) and registers first. The
-// target-agent side is NOT tied to any run - it answers
-// QUALEVAL_AGENT_NUMBER for real external callers too, who have no runId at
-// all - so it claims whichever run is currently "persona registered, not yet
-// claimed" rather than being told a runId directly. Only one QualEval call is
+// placeCall (server/qualeval/callBridge.js) registers the run just before
+// it asks Twilio to dial, carrying the evaluation's demo target agent key -
+// and only when the dialed number is one our own demo-agent-voice route
+// answers, so a run ringing an outside number can never be claimed by a real
+// caller dialing ours. The target-agent side is NOT tied to any run - it
+// answers real external callers too, who have no runId at all - so it claims
+// whichever run is registered and not yet claimed, synchronously, the
+// instant its socket connects: before it opens its AssemblyAI session, whose
+// agent is fixed on the first session.update. Only one QualEval call is
 // realistically in flight against this single demo number at a time (see
 // AGENTS.md's "Out of scope: number-pool rotation" note), so a single
-// first-match claim is enough; a real external caller with no matching
-// pending run simply finds nothing to claim.
-const pending = new Map(); // runId -> { claimed: boolean }
+// first-match claim is enough; a real external caller with no pending run
+// simply finds nothing to claim and answers as Settings' Target agents
+// switch. The persona leg does not register: it knows its runId only once
+// its "start" arrives, after the target leg has already connected.
+const pending = new Map(); // runId -> { claimed, demoAgentKey, registeredAt }
 
-export function registerPersonaLeg(runId) {
-  if (!pending.has(runId)) pending.set(runId, { claimed: false });
+// A placement registration whose call never reached a target leg we bridge
+// (it rang an outside number, went unanswered, or the persona leg never
+// connected) must not be claimed later by an unrelated caller. Longer than
+// Twilio's default 60 s ring timeout plus Media Streams connect time.
+export const UNCLAIMED_RUN_TTL_MS = 2 * 60 * 1000;
+
+export function registerPlacedRun(runId, { demoAgentKey = null } = {}, now = Date.now()) {
+  pending.set(runId, { claimed: false, demoAgentKey, registeredAt: now });
 }
 
-// Finds a run whose persona leg has registered but that no target leg has
-// claimed yet, and marks it claimed so a second concurrent target connection
-// doesn't also claim it. Returns null when there's nothing to claim (a real
-// external caller, or the persona leg hasn't registered yet - see
-// waitForClaimableRun below).
-export function claimPendingRunForTarget() {
+// Finds a run registered but not yet claimed by any target leg, and marks it
+// claimed so a second concurrent target connection doesn't also claim it.
+// Returns { runId, demoAgentKey }, or null when there's nothing to claim (a
+// real external caller).
+export function claimPendingRun(now = Date.now()) {
   for (const [runId, entry] of pending) {
-    if (!entry.claimed) {
-      entry.claimed = true;
-      return runId;
+    if (entry.claimed) continue;
+    if (now - entry.registeredAt > UNCLAIMED_RUN_TTL_MS) {
+      pending.delete(runId);
+      continue;
     }
-  }
-  return null;
-}
-
-// The target-agent leg's WebSocket typically connects before the persona
-// leg has resolved its runId (the persona side waits on a "start" event with
-// Custom Parameters first - see twilioStream.js), so an immediate claim
-// attempt usually finds nothing yet for a genuine QualEval call. Retries
-// briefly before giving up and treating the connection as a real external
-// caller with no run to link to.
-export async function waitForClaimableRun({ attempts = 40, intervalMs = 250 } = {}) {
-  for (let i = 0; i < attempts; i += 1) {
-    const runId = claimPendingRunForTarget();
-    if (runId) return runId;
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    entry.claimed = true;
+    return { runId, demoAgentKey: entry.demoAgentKey };
   }
   return null;
 }

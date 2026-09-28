@@ -7,6 +7,7 @@ import {
   getActiveVariantKey,
   setActiveVariant,
   getActiveVariant,
+  getAnsweringVariant,
   getVariantWithAgent,
   ensureVariantRows,
   NOT_CONFIGURED_ERROR,
@@ -183,4 +184,21 @@ test("getVariantWithAgent reads live prompt/greeting/voice off the AssemblyAI re
 test("every call throws NOT_CONFIGURED_ERROR without a pool", async () => {
   await assert.rejects(listVariants({}, null), { message: NOT_CONFIGURED_ERROR });
   await assert.rejects(getActiveVariant({}, null), { message: NOT_CONFIGURED_ERROR });
+});
+
+test("getAnsweringVariant answers as the evaluation's agent, not the Settings switch", async () => {
+  const pool = fakePool();
+  const variant = await getAnsweringVariant("flawed", {}, pool);
+  assert.equal(variant.key, "flawed");
+  assert.equal(variant.agentId, "agent_flawed");
+  assert.equal(await getActiveVariantKey({}, pool), "compliant");
+});
+
+test("getAnsweringVariant falls back to the Settings switch when the call has no evaluation agent", async () => {
+  const variant = await getAnsweringVariant(null, {}, fakePool());
+  assert.equal(variant.key, "compliant");
+});
+
+test("getAnsweringVariant fails instead of answering as the Settings default for an unprovisioned agent", async () => {
+  await assert.rejects(getAnsweringVariant("healthcare-compliant", {}, fakePool()), /no AssemblyAI agent_id/);
 });

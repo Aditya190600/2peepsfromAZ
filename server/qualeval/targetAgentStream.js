@@ -23,10 +23,13 @@ const STREAM_PATH = "/v1/qualeval/target-agent-stream";
 // "upgrade" event, each on its own pathname, since Express has no WebSocket
 // support.
 //
-// Unlike the persona side, this stream is not tied to a run: which system
-// prompt to bridge with is a global runtime setting (server/qualeval/
-// demoAgentConfig.js's active variant), not something carried on the call
-// via a Custom Parameter, so there's no need to wait for the Media Streams
+// Unlike the persona side, this stream is not tied to a run by a Custom
+// Parameter. Which agent answers is decided the moment the socket connects:
+// a QualEval run that placeCall registered just before dialing
+// (server/qualeval/callBridgeBroker.js) is claimed then and answers as its
+// evaluation's demo target agent; anything else (a real Phone Evals caller)
+// answers as Settings' Target agents switch (demoAgentConfig.js's
+// getAnsweringVariant). So there's no need to wait for the Media Streams
 // "start" event before creating the bridge session - createBridgeSession
 // itself picks up streamSid/callSid whenever "start" arrives, and buffers
 // any reply.audio that AssemblyAI sends before "start" lands (see
@@ -45,17 +48,16 @@ const STREAM_PATH = "/v1/qualeval/target-agent-stream";
 //
 // The bridge session is created immediately regardless of whether this call
 // turns out to be a QualEval-placed run or a real external caller, so a real
-// caller's greeting is never delayed. Claiming a pending QualEval run
-// (server/qualeval/callBridgeBroker.js) happens concurrently and only links
-// this call's production-call record and evaluation to that run - audio
-// always travels over the phone line itself.
+// caller's greeting is never delayed. Audio always travels over the phone
+// line itself; the claim only picks the agent and links this call's
+// production-call record to the run.
 export function attachTargetAgentStreamServer(
   httpServer,
   {
     mintToken = mintAssemblyAiToken,
-    getActiveVariant = demoAgentConfig.getActiveVariant,
+    getAnsweringVariant = demoAgentConfig.getAnsweringVariant,
+    claimPendingRun = broker.claimPendingRun,
     createSession = createBridgeSession,
-    waitForClaimableRun = broker.waitForClaimableRun,
     releaseRun = broker.releaseRun,
     finishCall = finishProductionCall,
     analyzeCall = analyzeFinishedCall,
@@ -69,8 +71,11 @@ export function attachTargetAgentStreamServer(
   const wss = new WebSocketServer({ noServer: true });
 
   wss.on("connection", async (twilioWs) => {
-    let claimedRunId = null;
-    let sessionFinished = false;
+    // Synchronously, before any await: this is the claim that picks the
+    // evaluation's agent, and the AssemblyAI session's agent can't change
+    // after it opens.
+    const placedRun = claimPendingRun();
+    const claimedRunId = placedRun?.runId ?? null;
     let activeVariant = null;
     const recorder = createRecorder();
 
@@ -81,7 +86,6 @@ export function attachTargetAgentStreamServer(
     twilioWs.on("message", bufferMessage);
 
     function onFinished({ turns, callSid, reason }) {
-      sessionFinished = true;
       console.log(
         `QualEval target-agent bridge [${callSid ?? "no-call-sid"}]: call ended (${reason}) with ${turns.length} transcript turns`,
       );
@@ -141,23 +145,29 @@ export function attachTargetAgentStreamServer(
       });
     }
     function onError(message) {
-      sessionFinished = true;
       console.error(`QualEval target-agent bridge: ${message}`);
       if (claimedRunId) releaseRun(claimedRunId);
     }
 
     try {
-      const [variant, token] = await Promise.all([getActiveVariant(), mintToken()]);
+      const [variant, token] = await Promise.all([
+        getAnsweringVariant(placedRun?.demoAgentKey ?? null),
+        mintToken(),
+      ]);
       activeVariant = variant;
       if (twilioWs.readyState !== twilioWs.OPEN) {
         // Caller hung up during setup - don't open an AssemblyAI session
         // nothing will ever close.
         twilioWs.off("message", bufferMessage);
+        if (claimedRunId) releaseRun(claimedRunId);
         console.log("QualEval target-agent bridge: Twilio stream closed before setup finished");
         return;
       }
       twilioWs.off("message", bufferMessage);
-      console.log(`QualEval target-agent bridge: bridging as variant "${variant.key}" (agent ${variant.agentId})`);
+      console.log(
+        `QualEval target-agent bridge: bridging as variant "${variant.key}" (agent ${variant.agentId})` +
+          (claimedRunId ? ` for QualEval run ${claimedRunId}` : ""),
+      );
       createSession({
         twilioWs,
         token,
@@ -181,18 +191,9 @@ export function attachTargetAgentStreamServer(
       // plus any caller media that arrived during setup.
       for (const raw of buffered) twilioWs.emit("message", raw);
       buffered.length = 0;
-
-      const runId = await waitForClaimableRun();
-      if (runId && !sessionFinished) {
-        claimedRunId = runId;
-        console.log(`QualEval target-agent bridge: linked to QualEval run ${runId}`);
-      } else if (runId) {
-        // The session already ended while we were still waiting to claim -
-        // release immediately so this run's entry doesn't leak.
-        releaseRun(runId);
-      }
     } catch (err) {
       twilioWs.off("message", bufferMessage);
+      if (claimedRunId) releaseRun(claimedRunId);
       console.error(`QualEval target-agent bridge: setup failed: ${err.message}`);
       try {
         twilioWs.close();

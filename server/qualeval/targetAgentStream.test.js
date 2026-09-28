@@ -28,7 +28,7 @@ function connect(wss, twilioWs) {
 test("bridges immediately using the active variant, without waiting for a start event", async () => {
   const twilioWs = new FakeSocket();
   const httpServer = new EventEmitter();
-  const getActiveVariant = async () => ({
+  const getAnsweringVariant = async () => ({
     key: "flawed",
     agentId: "agent_flawed",
   });
@@ -38,9 +38,12 @@ test("bridges immediately using the active variant, without waiting for a start 
     sessionArgs = args;
     return {};
   };
-  const waitForClaimableRun = async () => null;
-
-  const wss = attachTargetAgentStreamServer(httpServer, { getActiveVariant, mintToken, createSession, waitForClaimableRun });
+  const wss = attachTargetAgentStreamServer(httpServer, {
+    getAnsweringVariant,
+    mintToken,
+    createSession,
+    claimPendingRun: () => null,
+  });
   connect(wss, twilioWs);
 
   await new Promise((resolve) => setImmediate(resolve));
@@ -60,14 +63,13 @@ test("closes the stream instead of hanging when loading the active variant fails
   const twilioWs = new FakeSocket();
   const httpServer = new EventEmitter();
   const wss = attachTargetAgentStreamServer(httpServer, {
-    getActiveVariant: async () => {
+    getAnsweringVariant: async () => {
       throw new Error("no active variant");
     },
     mintToken: async () => "tok",
     createSession: () => {
       throw new Error("createSession should never be called when variant loading fails");
     },
-    waitForClaimableRun: async () => null,
   });
   connect(wss, twilioWs);
 
@@ -81,13 +83,13 @@ test("reply audio goes only to this call's own Twilio leg, never cross-fed to an
   const httpServer = new EventEmitter();
   let sessionArgs;
   const wss = attachTargetAgentStreamServer(httpServer, {
-    getActiveVariant: async () => ({ key: "compliant", agentId: "agent_compliant" }),
+    getAnsweringVariant: async () => ({ key: "compliant", agentId: "agent_compliant" }),
     mintToken: async () => "tok",
     createSession: (args) => {
       sessionArgs = args;
       return {};
     },
-    waitForClaimableRun: async () => "run_xyz",
+    claimPendingRun: () => ({ runId: "run_xyz", demoAgentKey: null }),
   });
   connect(wss, twilioWs);
   await new Promise((resolve) => setImmediate(resolve));
@@ -107,13 +109,13 @@ test("a claimed QualEval run is linked onto the production call and its evaluati
   let analyzed;
   const released = [];
   const wss = attachTargetAgentStreamServer(httpServer, {
-    getActiveVariant: async () => ({ key: "compliant", agentId: "agent_compliant" }),
+    getAnsweringVariant: async () => ({ key: "compliant", agentId: "agent_compliant" }),
     mintToken: async () => "tok",
     createSession: (args) => {
       sessionArgs = args;
       return {};
     },
-    waitForClaimableRun: async () => "run_xyz",
+    claimPendingRun: () => ({ runId: "run_xyz", demoAgentKey: null }),
     releaseRun: (runId) => released.push(runId),
     finishCall: async (fields) => {
       finished = fields;
@@ -154,10 +156,13 @@ test("Twilio start event arriving during async setup still reaches the bridge, s
   const createSession = (args) => createBridgeSession({ ...args, WebSocketImpl: FakeAaiSocket });
 
   const wss = attachTargetAgentStreamServer(httpServer, {
-    getActiveVariant: async () => ({ key: "compliant", agentId: "agent_compliant" }),
+    getAnsweringVariant: async () => ({ key: "compliant", agentId: "agent_compliant" }),
     mintToken: async () => "tok",
     createSession,
-    waitForClaimableRun: async () => null,
+    transcribeCall: async () => [],
+    finishCall: async () => null,
+    analyzeCall: async () => {},
+    recordingsReady: () => false,
   });
   connect(wss, twilioWs);
   // Same tick as the connection, before any awaited setup resolves.
@@ -189,13 +194,12 @@ test("does not open an AssemblyAI session when the caller hangs up during setup"
   const httpServer = new EventEmitter();
   let created = false;
   const wss = attachTargetAgentStreamServer(httpServer, {
-    getActiveVariant: async () => ({ key: "compliant", agentId: "agent_compliant" }),
+    getAnsweringVariant: async () => ({ key: "compliant", agentId: "agent_compliant" }),
     mintToken: async () => "tok",
     createSession: () => {
       created = true;
       return {};
     },
-    waitForClaimableRun: async () => null,
   });
   connect(wss, twilioWs);
   twilioWs.close();
@@ -212,13 +216,12 @@ test("writes the transcript onto the production call when the inbound bridge end
   let finished;
   let analyzed;
   const wss = attachTargetAgentStreamServer(httpServer, {
-    getActiveVariant: async () => ({ key: "compliant", agentId: "agent_1" }),
+    getAnsweringVariant: async () => ({ key: "compliant", agentId: "agent_1" }),
     mintToken: async () => "tok",
     createSession: (args) => {
       sessionArgs = args;
       return {};
     },
-    waitForClaimableRun: async () => null,
     finishCall: async (fields) => {
       finished = fields;
       return { toNumber: "+18038245760", fromNumber: "+13128003792", startedAt: "2026-09-27T20:00:00.000Z" };
@@ -260,13 +263,12 @@ test("uploads a mixed WAV for an inbound call and stores its audio path", async 
   let finished;
   const wav = Buffer.from("RIFFwav");
   const wss = attachTargetAgentStreamServer(httpServer, {
-    getActiveVariant: async () => ({ key: "compliant", agentId: "agent_1" }),
+    getAnsweringVariant: async () => ({ key: "compliant", agentId: "agent_1" }),
     mintToken: async () => "tok",
     createSession: (args) => {
       sessionArgs = args;
       return {};
     },
-    waitForClaimableRun: async () => null,
     createRecorder: () => ({
       addIncomingFrame() {},
       addOutgoingFrame() {},
@@ -315,13 +317,12 @@ test("scores an inbound call on the recording's per-leg transcript, with the cal
     { role: "user", text: "Maria Lopez.", tMs: 4200 },
   ];
   const wss = attachTargetAgentStreamServer(httpServer, {
-    getActiveVariant: async () => ({ key: "compliant", agentId: "agent_1" }),
+    getAnsweringVariant: async () => ({ key: "compliant", agentId: "agent_1" }),
     mintToken: async () => "tok",
     createSession: (args) => {
       sessionArgs = args;
       return {};
     },
-    waitForClaimableRun: async () => null,
     transcribeCall: async (recorder, r) => {
       roles = r;
       return recorded;
@@ -358,13 +359,13 @@ async function finishInboundCall({ claimedRunId = null, transcribeCall, liveTurn
   let finished;
   let analyzed;
   const wss = attachTargetAgentStreamServer(httpServer, {
-    getActiveVariant: async () => ({ key: "compliant", agentId: "agent_1" }),
+    getAnsweringVariant: async () => ({ key: "compliant", agentId: "agent_1" }),
     mintToken: async () => "tok",
     createSession: (args) => {
       sessionArgs = args;
       return {};
     },
-    waitForClaimableRun: async () => claimedRunId,
+    claimPendingRun: () => (claimedRunId ? { runId: claimedRunId, demoAgentKey: null } : null),
     releaseRun: () => {},
     transcribeCall,
     recordingsReady: () => false,
@@ -406,4 +407,80 @@ test("does not transcribe the recording of a leg claimed by a QualEval run", asy
   assert.equal(transcribed, false);
   assert.deepEqual(finished.transcript, liveTurns);
   assert.equal(finished.qualevalRunId, "run_claimed");
+});
+
+test("a QualEval run placed for a healthcare evaluation answers as that agent, whatever Settings has active", async () => {
+  const twilioWs = new FakeSocket();
+  const httpServer = new EventEmitter();
+  const askedFor = [];
+  let sessionArgs;
+  let finished;
+  const wss = attachTargetAgentStreamServer(httpServer, {
+    claimPendingRun: () => ({ runId: "run_hc", demoAgentKey: "healthcare-compliant" }),
+    getAnsweringVariant: async (key) => {
+      askedFor.push(key);
+      return key ? { key, agentId: "agent_healthcare" } : { key: "compliant", agentId: "agent_compliant" };
+    },
+    mintToken: async () => "tok",
+    createSession: (args) => {
+      sessionArgs = args;
+      return {};
+    },
+    releaseRun: () => {},
+    finishCall: async (fields) => {
+      finished = fields;
+      return {};
+    },
+    analyzeCall: async () => {},
+    recordingsReady: () => false,
+  });
+  connect(wss, twilioWs);
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(askedFor, ["healthcare-compliant"]);
+  assert.equal(sessionArgs.agentId, "agent_healthcare");
+  await sessionArgs.onFinished({ turns: [], callSid: "CA1", reason: "session.ended" });
+  assert.equal(finished.variantKey, "healthcare-compliant");
+  assert.equal(finished.qualevalRunId, "run_hc");
+});
+
+test("a direct caller with no placed run answers as the Settings default", async () => {
+  const twilioWs = new FakeSocket();
+  const httpServer = new EventEmitter();
+  const askedFor = [];
+  const wss = attachTargetAgentStreamServer(httpServer, {
+    claimPendingRun: () => null,
+    getAnsweringVariant: async (key) => {
+      askedFor.push(key);
+      return { key: "compliant", agentId: "agent_compliant" };
+    },
+    mintToken: async () => "tok",
+    createSession: () => ({}),
+  });
+  connect(wss, twilioWs);
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(askedFor, [null]);
+});
+
+test("a claimed run is released when the evaluation's agent can't be loaded", async () => {
+  const twilioWs = new FakeSocket();
+  const httpServer = new EventEmitter();
+  const released = [];
+  const wss = attachTargetAgentStreamServer(httpServer, {
+    claimPendingRun: () => ({ runId: "run_bad", demoAgentKey: "healthcare-compliant" }),
+    getAnsweringVariant: async () => {
+      throw new Error("no AssemblyAI agent_id yet");
+    },
+    mintToken: async () => "tok",
+    createSession: () => assert.fail("no session without an agent"),
+    releaseRun: (runId) => released.push(runId),
+  });
+  connect(wss, twilioWs);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(released, ["run_bad"]);
+  assert.equal(twilioWs.readyState, twilioWs.CLOSED);
 });

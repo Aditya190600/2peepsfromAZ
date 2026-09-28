@@ -1,4 +1,5 @@
 import { getPool, dbConfigured } from "../db.js";
+import { DEMO_AGENT_KEYS } from "./demoAgentDefaults.js";
 
 export const NOT_CONFIGURED_ERROR =
   "QualEval storage requires Postgres configuration (DATABASE_URL). See server/db.js's dbConfigured().";
@@ -16,6 +17,7 @@ function evaluationRow(row) {
     agentPhoneNumber: row.agent_phone_number,
     description: row.description,
     requirements: row.requirements,
+    demoAgentKey: row.demo_agent_key ?? null,
     clerkUserId: row.clerk_user_id,
     createdAt: row.created_at,
   };
@@ -54,21 +56,41 @@ function runRow(row) {
   };
 }
 
+const EVALUATION_COLUMNS =
+  "id, name, agent_phone_number, description, requirements, demo_agent_key, clerk_user_id, created_at";
+
+// Which demo target agent answers this evaluation's scenario calls (see
+// server/migrations/011_qualeval_evaluation_demo_agent.sql). Empty means the
+// Settings default; anything else must be a catalog key.
+function demoAgentKeyColumn(value) {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  if (!DEMO_AGENT_KEYS.includes(value)) throw new Error(`Unknown demo target agent "${value}".`);
+  return value;
+}
+
 const RUN_COLUMNS =
   "id, scenario_id, call_timestamp, transcript, audio_ref, verdict, assessment, criterion_results, evidence_quotes, twilio_call_sid, error, created_at";
 
 export async function createEvaluation(
-  { clerkUserId = "anon", name, agentPhoneNumber, description, requirements },
+  { clerkUserId = "anon", name, agentPhoneNumber, description, requirements, demoAgentKey },
   env = process.env,
   pool = getPool(env),
 ) {
   requirePool(pool);
   if (!name || !name.trim()) throw new Error("name is required");
   const { rows } = await pool.query(
-    `insert into qualeval_evaluations (name, agent_phone_number, description, requirements, clerk_user_id)
-     values ($1, $2, $3, $4, $5)
-     returning id, name, agent_phone_number, description, requirements, clerk_user_id, created_at`,
-    [name.trim(), agentPhoneNumber ?? null, description ?? null, requirements ?? null, clerkUserId],
+    `insert into qualeval_evaluations (name, agent_phone_number, description, requirements, demo_agent_key, clerk_user_id)
+     values ($1, $2, $3, $4, $5, $6)
+     returning ${EVALUATION_COLUMNS}`,
+    [
+      name.trim(),
+      agentPhoneNumber ?? null,
+      description ?? null,
+      requirements ?? null,
+      demoAgentKeyColumn(demoAgentKey) ?? null,
+      clerkUserId,
+    ],
   );
   return evaluationRow(rows[0]);
 }
@@ -76,7 +98,7 @@ export async function createEvaluation(
 export async function listEvaluations(clerkUserId = "anon", env = process.env, pool = getPool(env)) {
   requirePool(pool);
   const { rows } = await pool.query(
-    `select id, name, agent_phone_number, description, requirements, clerk_user_id, created_at
+    `select ${EVALUATION_COLUMNS}
      from qualeval_evaluations where clerk_user_id = $1 order by created_at desc`,
     [clerkUserId],
   );
@@ -84,7 +106,7 @@ export async function listEvaluations(clerkUserId = "anon", env = process.env, p
 }
 
 // Edits the evaluation's own fields (name, target phone, description,
-// requirements) - not a scenario or run. Scoped by clerkUserId same as every
+// requirements, demo target agent) - not a scenario or run. Scoped by clerkUserId same as every
 // other evaluation route.
 export async function updateEvaluation(id, clerkUserId, fields, env = process.env, pool = getPool(env)) {
   requirePool(pool);
@@ -94,6 +116,7 @@ export async function updateEvaluation(id, clerkUserId, fields, env = process.en
     agent_phone_number: fields.agentPhoneNumber !== undefined ? fields.agentPhoneNumber || null : undefined,
     description: fields.description !== undefined ? fields.description || null : undefined,
     requirements: fields.requirements !== undefined ? fields.requirements || null : undefined,
+    demo_agent_key: demoAgentKeyColumn(fields.demoAgentKey),
   };
   const setKeys = Object.keys(columns).filter((k) => columns[k] !== undefined);
   if (setKeys.length === 0) throw new Error("no fields to update");
@@ -101,7 +124,7 @@ export async function updateEvaluation(id, clerkUserId, fields, env = process.en
   const { rows } = await pool.query(
     `update qualeval_evaluations set ${setClause}
      where id = $1 and clerk_user_id = $2
-     returning id, name, agent_phone_number, description, requirements, clerk_user_id, created_at`,
+     returning ${EVALUATION_COLUMNS}`,
     [id, clerkUserId, ...setKeys.map((k) => columns[k])],
   );
   if (rows.length === 0) throw new Error("Evaluation not found");
@@ -122,7 +145,7 @@ export async function deleteEvaluation(id, clerkUserId, env = process.env, pool 
 export async function getEvaluation(id, clerkUserId = "anon", env = process.env, pool = getPool(env)) {
   requirePool(pool);
   const { rows } = await pool.query(
-    `select id, name, agent_phone_number, description, requirements, clerk_user_id, created_at
+    `select ${EVALUATION_COLUMNS}
      from qualeval_evaluations where id = $1 and clerk_user_id = $2`,
     [id, clerkUserId],
   );

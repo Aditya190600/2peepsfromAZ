@@ -13,12 +13,12 @@ export async function listEvaluations() {
   return json(await fetch("/v1/qualeval/evaluations")).then((body) => body.evaluations);
 }
 
-export async function createEvaluation({ name, agentPhoneNumber, description, requirements }) {
+export async function createEvaluation({ name, agentPhoneNumber, description, requirements, demoAgentKey }) {
   return json(
     await fetch("/v1/qualeval/evaluations", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name, agentPhoneNumber, description, requirements }),
+      body: JSON.stringify({ name, agentPhoneNumber, description, requirements, demoAgentKey }),
     }),
   );
 }
