@@ -6,9 +6,6 @@ import ThemeToggle from "./ThemeToggle.jsx";
 
 const CLERK_ENABLED = Boolean(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
 
-// TEMP: hidden for demo recording, restore after (flip back to true)
-const SHOW_USER_IDENTITY = false;
-
 function go(navigate, href, event) {
   event.preventDefault();
   navigate(href);
@@ -197,7 +194,6 @@ export function Footer() {
 // Shows who is signed in, from the real Clerk user only. There is no org or
 // tenant concept in this app, so nothing renders without a signed-in user.
 function TenantIdentity({ name, email }) {
-  if (!SHOW_USER_IDENTITY) return null;
   if (!email) return null;
   return (
     <p className="app-tenant">
