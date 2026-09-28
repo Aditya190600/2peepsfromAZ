@@ -158,6 +158,10 @@ test("Twilio start event arriving during async setup still reaches the bridge, s
     mintToken: async () => "tok",
     createSession,
     waitForClaimableRun: async () => null,
+    transcribeCall: async () => [],
+    finishCall: async () => null,
+    analyzeCall: async () => {},
+    recordingsReady: () => false,
   });
   connect(wss, twilioWs);
   // Same tick as the connection, before any awaited setup resolves.

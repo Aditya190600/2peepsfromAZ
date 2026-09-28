@@ -1,6 +1,6 @@
 import * as twilioClient from "./twilioClient.js";
 import * as store from "./store.js";
-import { recordProductionCall } from "./productionCalls.js";
+import { phoneDigits, recordProductionCall } from "./productionCalls.js";
 import * as broker from "./callBridgeBroker.js";
 
 export { twilioConfigured } from "./twilioClient.js";
@@ -30,6 +30,9 @@ export async function placeCall(
     recordCall = recordProductionCall,
     registerPlacedRun = broker.registerPlacedRun,
     releaseRun = broker.releaseRun,
+    // Imported numbers point at demo-agent-voice too; resolves an owned
+    // number's Twilio auth token (telephony store), null for anything else.
+    importedNumberToken = null,
   } = {},
 ) {
   try {
@@ -44,8 +47,12 @@ export async function placeCall(
     // Before dialing, so the target leg finds it the moment it connects: if
     // the number is answered by our own demo target agent
     // (targetAgentStream.js), this is how that leg knows which agent this
-    // evaluation asked for (see callBridgeBroker.js).
-    registerPlacedRun(run.id, { demoAgentKey: evaluation.demoAgentKey ?? null });
+    // evaluation asked for (see callBridgeBroker.js). Only for a number our
+    // own bridge answers - a run ringing an outside number must never be
+    // claimable by a real caller dialing ours.
+    if (await answeredByDemoAgent(to, { env, importedNumberToken })) {
+      registerPlacedRun(run.id, { demoAgentKey: evaluation.demoAgentKey ?? null });
+    }
     const { sid } = await place(
       {
         to,
@@ -73,5 +80,18 @@ export async function placeCall(
     console.error(`QualEval call bridge: placeCall failed for run ${run.id}: ${err.message}`);
     releaseRun(run.id);
     return await markRunError(run.id, err.message).catch(() => null);
+  }
+}
+
+async function answeredByDemoAgent(to, { env, importedNumberToken }) {
+  const digits = phoneDigits(to);
+  if (!digits) return false;
+  if (digits === phoneDigits(env.QUALEVAL_AGENT_NUMBER)) return true;
+  if (typeof importedNumberToken !== "function") return false;
+  try {
+    return Boolean(await importedNumberToken(to));
+  } catch (err) {
+    console.error(`QualEval call bridge: imported number lookup failed for ${to}: ${err.message}`);
+    return false;
   }
 }

@@ -57,10 +57,16 @@ export function dispatchCallPlacement(
   run,
   scenario,
   visitorId,
-  { baseUrl, getEvaluation = store.getEvaluation, placeCall: place = placeCall, markRunError = store.markRunError } = {},
+  {
+    baseUrl,
+    importedNumberToken = null,
+    getEvaluation = store.getEvaluation,
+    placeCall: place = placeCall,
+    markRunError = store.markRunError,
+  } = {},
 ) {
   return getEvaluation(scenario.evaluationId, visitorId)
-    .then((evaluation) => place(run, scenario, evaluation, { baseUrl }))
+    .then((evaluation) => place(run, scenario, evaluation, { baseUrl, importedNumberToken }))
     .catch((err) => {
       console.error(`QualEval run ${run.id}: call placement dispatch failed: ${err.message}`);
       return markRunError(run.id, err.message).catch(() => {});
@@ -382,7 +388,10 @@ export function qualevalRouter({
 
       if (twilioConfigured()) {
         const baseUrl = `${req.protocol}://${req.get("host")}`;
-        dispatchCallPlacement(run, scenario, visitorId(req), { baseUrl });
+        dispatchCallPlacement(run, scenario, visitorId(req), {
+          baseUrl,
+          importedNumberToken: telephonyStore ? (to) => telephonyStore.twilioAuthTokenForE164(to) : null,
+        });
       }
     }),
   );
