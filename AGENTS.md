@@ -112,7 +112,7 @@ Compliance Examples folded into the Try page as a tab (2026-09-25): `client/src/
 
 ## Splash page examples
 
-The splash page (`client/src/Landing.jsx`) shows two workflow diagrams built from the real pipelines and one example per product. The QualEval example is static client data (`client/src/qualevalExampleData.js`), rendered in full at the public, sign-in-free `/examples/qualeval` (`client/src/QualEvalExample.jsx`) and in the Examples tab of `/qualeval` (both via `QualEval.jsx`'s `ExampleScorecard`), and labeled "Example" everywhere. Keep it out of the `qualeval_*` tables so no delete or cleanup flow can remove it. On macOS's case-insensitive filesystem, a data module can't share a component's name up to case (`qualevalExample.js` vs `QualEvalExample.jsx`), hence the `Data` suffix.
+The splash page (`client/src/Landing.jsx`) shows two workflow diagrams built from the real pipelines and one example per product. The QualEval examples (one fail, one pass) are static client data (`client/src/qualevalExampleData.js`), rendered in full at the public, sign-in-free `/examples/qualeval` (`client/src/QualEvalExample.jsx`) and in the Examples tab of `/qualeval` (both via `QualEval.jsx`'s `ExampleScorecards`), and labeled "Example" everywhere. Keep them out of the `qualeval_*` tables so no delete or cleanup flow can remove them. On macOS's case-insensitive filesystem, a data module can't share a component's name up to case (`qualevalExample.js` vs `QualEvalExample.jsx`), hence the `Data` suffix.
 
 ## Shared visual language across pages
 
