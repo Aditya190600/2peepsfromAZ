@@ -2725,6 +2725,12 @@ button.site-nav-link {
   flex: 0 1 240px;
 }
 
+/* Demo agent names run longer than a name or phone number ("Flawed clinic
+   receptionist (seeded gap)") - size this one to fit them untruncated. */
+.qe-field-row-narrow .qe-field-demo-agent {
+  flex-basis: 340px;
+}
+
 .qe-field-hint {
   margin: 0 0 16px;
   color: var(--muted);
