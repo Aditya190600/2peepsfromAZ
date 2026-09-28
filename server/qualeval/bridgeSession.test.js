@@ -660,3 +660,31 @@ test("end_call is ignored unless endCallTool is enabled", () => {
   aaiWs.emit("message", JSON.stringify({ type: "session.ended" }));
   assert.equal(finished.reason, "session.ended");
 });
+
+test("sends turnDetection as the session's input.turn_detection, and nothing when unset", () => {
+  const withIt = new FakeSocket();
+  createBridgeSession({
+    twilioWs: new FakeSocket(),
+    token: "tok",
+    WebSocketImpl: fakeWebSocketImpl(withIt),
+    systemPrompt: "be a caller",
+    turnDetection: { min_silence: 1200, interruption_delay: 0 },
+    silenceTimeoutMs: 0,
+  });
+  withIt.emit("open");
+  assert.deepEqual(withIt.sent[0].session.input, {
+    format: { encoding: "audio/pcmu" },
+    turn_detection: { min_silence: 1200, interruption_delay: 0 },
+  });
+
+  const without = new FakeSocket();
+  createBridgeSession({
+    twilioWs: new FakeSocket(),
+    token: "tok",
+    WebSocketImpl: fakeWebSocketImpl(without),
+    systemPrompt: "be a caller",
+    silenceTimeoutMs: 0,
+  });
+  without.emit("open");
+  assert.deepEqual(without.sent[0].session.input, { format: { encoding: "audio/pcmu" } });
+});

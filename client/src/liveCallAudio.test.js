@@ -225,3 +225,57 @@ test("real-time frames never flush", () => {
     assert.equal(sched.schedule("agent", i * 20, 0.02, now).flush, false);
   }
 });
+
+// Each 20 ms frame is its own AudioBufferSourceNode. Played through a context
+// at the hardware rate (44.1/48 kHz), the browser resamples every 8 kHz
+// buffer on its own and each one's edges click - 50 clicks a second on the
+// agent track, heard as scratchy audio (measured in Chrome's
+// OfflineAudioContext on a real call's frames: ~98% of the error against one
+// continuous buffer sat on frame boundaries). At the frames' own 8 kHz rate
+// nothing is resampled per frame, as long as every frame starts exactly on a
+// sample.
+test("listenToLiveCall plays through a context at the frames' own 8 kHz rate", () => {
+  let options;
+  const listener = listenToLiveCall("run_3", {
+    EventSourceImpl: FakeEventSource,
+    AudioContextImpl: class extends FakeAudioContext {
+      constructor(opts) {
+        super();
+        options = opts;
+      }
+    },
+  });
+  assert.deepEqual(options, { sampleRate: 8000 });
+  listener.stop();
+});
+
+test("listenToLiveCall falls back to the default context where 8 kHz isn't supported", () => {
+  const created = [];
+  const listener = listenToLiveCall("run_4", {
+    EventSourceImpl: FakeEventSource,
+    AudioContextImpl: class extends FakeAudioContext {
+      constructor(opts) {
+        if (opts) throw new Error("NotSupportedError");
+        super();
+        created.push(this);
+      }
+    },
+  });
+  assert.equal(created.length, 1);
+  listener.stop();
+});
+
+test("scheduler keeps jittery frames back to back on the 8 kHz sample grid", () => {
+  const sched = createLiveScheduler();
+  let prevEnd = null;
+  for (let i = 0; i < 500; i++) {
+    const now = 3.0001234 + i * 0.02 + ((i * 7919) % 13) * 0.0031;
+    const { start } = sched.schedule("agent", i * 20, 0.02, now);
+    const sample = start * 8000;
+    assert.ok(Math.abs(sample - Math.round(sample)) < 1e-6, `frame ${i} start ${start} is off the sample grid`);
+    if (prevEnd !== null && start - prevEnd < 0.001) {
+      assert.ok(Math.abs(start - prevEnd) < 1e-9, `frame ${i} doesn't abut the previous one`);
+    }
+    prevEnd = start + 0.02;
+  }
+});

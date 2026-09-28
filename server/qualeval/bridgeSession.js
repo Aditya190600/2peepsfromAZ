@@ -120,6 +120,10 @@ export function createBridgeSession({
   // twilioStream.js) sets it; the target-agent side binds a stored agent
   // (agentId), which can't carry inline tools anyway.
   endCallTool = false,
+  // AssemblyAI `session.input.turn_detection` for an inline session (see
+  // twilioStream.js's CALLER_TURN_DETECTION); unset leaves AssemblyAI's
+  // adaptive defaults.
+  turnDetection,
   hangupTimeoutMs = DEFAULT_HANGUP_TIMEOUT_MS,
   maxDurationMs = DEFAULT_MAX_DURATION_MS,
   silenceTimeoutMs = DEFAULT_SILENCE_TIMEOUT_MS,
@@ -336,7 +340,7 @@ export function createBridgeSession({
           system_prompt: systemPrompt,
           ...(greeting ? { greeting } : {}),
           ...(endCallTool ? { tools: [END_CALL_TOOL] } : {}),
-          input: { format: { encoding: "audio/pcmu" } },
+          input: { format: { encoding: "audio/pcmu" }, ...(turnDetection ? { turn_detection: turnDetection } : {}) },
           // `voice` is a plain string nested under `output` on the WS
           // session.update payload - NOT the top-level `{voice: {voice_id}}`
           // shape used by the separate REST /v1/agents "create agent"
