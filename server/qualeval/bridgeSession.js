@@ -361,6 +361,10 @@ export function createBridgeSession({
         aaiReady = true;
         onReady?.();
         armMaxDurationCap();
+        // Belt-and-suspenders for inbound legs (targetAgentStream.js): Twilio
+        // "start" is usually replayed after async setup, but if it was missed
+        // the silence watchdog would never arm and the call would run open.
+        armSilenceWatchdog();
         break;
       case "transcript.user":
         addTurn(transcriptUserRole, msg.text);

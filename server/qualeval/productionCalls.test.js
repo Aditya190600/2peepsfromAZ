@@ -186,6 +186,28 @@ test("listPhoneEvalCalls lists only direct inbound calls, never QualEval run leg
   assert.deepEqual(await listPhoneEvalCalls({}, null), []);
 });
 
+test("listPhoneEvalCalls filters by to_number when toNumberDigits is set", async () => {
+  const stored = [
+    {
+      twilio_call_sid: "CA_match",
+      direction: "inbound",
+      from_number: "+13128003792",
+      to_number: "+18038245760",
+      transcript: [{ role: "user", text: "hi" }],
+    },
+    {
+      twilio_call_sid: "CA_other",
+      direction: "inbound",
+      from_number: "+13128003792",
+      to_number: "+19998887777",
+      transcript: [{ role: "user", text: "bye" }],
+    },
+  ];
+  const pool = { query: async () => ({ rows: stored }) };
+  const calls = await listPhoneEvalCalls({}, pool, { toNumberDigits: new Set(["8038245760"]) });
+  assert.deepEqual(calls.map((c) => c.twilioCallSid), ["CA_match"]);
+});
+
 test("stores a call's compliance report and returns it on the call", async () => {
   let seen;
   const report = { findings: [{ check: "pii_scan", status: "flag" }], violationCount: 1 };

@@ -52,6 +52,8 @@ test("bridges immediately using the active variant, without waiting for a start 
   // No swap on this side - see bridgeSession.js's header comment.
   assert.equal(sessionArgs.transcriptUserRole, "user");
   assert.equal(sessionArgs.transcriptAgentRole, "agent");
+  assert.equal(sessionArgs.silenceTimeoutMs, 30_000);
+  assert.equal(sessionArgs.maxDurationMs, 5 * 60 * 1000);
 });
 
 test("closes the stream instead of hanging when loading the active variant fails", async () => {
@@ -270,7 +272,7 @@ test("uploads a mixed WAV for an inbound call and stores its audio path", async 
       addOutgoingFrame() {},
       clearOutgoingFrom() {},
       hasAudio: () => true,
-      toWavBuffer: () => wav,
+      toStereoWavBuffer: () => wav,
     }),
     recordingsReady: () => true,
     uploadRecording: async (key, body, contentType) => {

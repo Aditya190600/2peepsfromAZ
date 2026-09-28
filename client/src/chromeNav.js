@@ -20,9 +20,9 @@ export const PRODUCT_NAV_ALL = [
     label: "Qualitative Evals",
     match: (path) => path === "/qualeval" || path.startsWith("/qualeval/"),
   },
-  // Direct dials to the agent number, kept apart from Qualitative Evals'
-  // scenario runs. Operator-only (see PhoneEvals.jsx).
-  { href: "/phone-evals", label: "Phone Evals", match: (path) => path === "/phone-evals", operatorOnly: true },
+  // Direct dials to an agent number, kept apart from Qualitative Evals'
+  // scenario runs. Page gates non-operators until Settings telephony setup.
+  { href: "/phone-evals", label: "Phone Evals", match: (path) => path === "/phone-evals" },
   { href: "/settings", label: "Settings", match: (path) => path === "/settings" },
 ];
 

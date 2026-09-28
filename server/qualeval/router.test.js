@@ -61,12 +61,24 @@ test("dispatchCallPlacement swallows a markRunError failure instead of rejecting
   );
 });
 
+const telephonyStoreWithNumber = {
+  listNumbers: async (ownerId) =>
+    ownerId === "user_configured" ? [{ e164: "+18038245760", direction: "inbound" }] : [],
+};
+
 async function withRouter(isOperator, fn, options = {}) {
   const { default: express } = await import("express");
   const { qualevalRouter } = await import("./router.js");
   const app = express();
   app.use(express.json());
-  app.use(qualevalRouter({ isOperator: async () => isOperator, ...options }));
+  app.use(
+    qualevalRouter({
+      isOperator: async () => isOperator,
+      visitorId: (req) => req.get("x-test-user") ?? "anon",
+      telephonyStore: telephonyStoreWithNumber,
+      ...options,
+    }),
+  );
   const server = app.listen(0);
   await new Promise((resolve) => server.once("listening", resolve));
   try {
@@ -99,12 +111,18 @@ test("non-operators get 403 from every demo-agent route and no persona number fr
       assert.deepEqual(await (await fetch(`${base}/config`)).json(), {
         agentPhoneNumber: "+15550000001",
         isOperator: false,
+        canAccessPhoneEvals: false,
+        phoneEvalsConfigured: false,
+        ownedPhoneNumbers: [],
       });
     });
     await withRouter(true, async (base) => {
       assert.deepEqual(await (await fetch(`${base}/config`)).json(), {
         agentPhoneNumber: "+15550000001",
         isOperator: true,
+        canAccessPhoneEvals: true,
+        phoneEvalsConfigured: false,
+        ownedPhoneNumbers: [],
         personaPhoneNumber: "+15550000002",
       });
     });
@@ -116,11 +134,16 @@ test("non-operators get 403 from every demo-agent route and no persona number fr
   }
 });
 
-test("Phone Evals calls and their recordings are operator-only, and evaluations have no inbound-call feed", async () => {
+test("Phone Evals requires operator access or a configured number, and evaluations have no inbound-call feed", async () => {
   await withRouter(false, async (base) => {
     assert.equal((await fetch(`${base}/phone-evals`)).status, 403);
     assert.equal((await fetch(`${base}/production-calls/CA0123456789abcdef0123456789abcdef/audio`)).status, 403);
     assert.equal((await fetch(`${base}/evaluations/eval_1/inbound-calls`)).status, 404);
+  });
+  await withRouter(false, async (base) => {
+    const resp = await fetch(`${base}/phone-evals`, { headers: { "x-test-user": "user_configured" } });
+    assert.equal(resp.status, 200);
+    assert.deepEqual(await resp.json(), { calls: [] });
   });
   // No DATABASE_URL in tests: an operator gets an empty list, not an error.
   await withRouter(true, async (base) => {
@@ -168,10 +191,12 @@ test("an operator can re-run a finished Phone Evals call's analyses", async () =
     getProductionCall: async (callSid) => calls[callSid] ?? null,
     analyzeCall: async (call) => analyzed.push(call.twilioCallSid),
   };
-  const rerun = (base, callSid) => fetch(`${base}/phone-evals/${callSid}/analyze`, { method: "POST" });
+  const rerun = (base, callSid, headers = {}) =>
+    fetch(`${base}/phone-evals/${callSid}/analyze`, { method: "POST", headers });
 
   await withRouter(false, async (base) => {
     assert.equal((await rerun(base, sid)).status, 403);
+    assert.equal((await rerun(base, sid, { "x-test-user": "user_configured" })).status, 404);
   }, options);
   await withRouter(true, async (base) => {
     assert.equal((await rerun(base, "not-a-sid")).status, 400);
@@ -200,13 +225,15 @@ test("an email allowlist blocks a signed-in non-listed user from every operator 
     analyzeCall: async () => {},
   };
   const json = { "content-type": "application/json" };
-  const operatorRoutes = [
-    ["GET", "/phone-evals"],
-    ["POST", `/phone-evals/${sid}/analyze`],
-    ["GET", `/production-calls/${sid}/audio`],
+  const operatorOnlyRoutes = [
     ["GET", "/demo-agent/variants"],
     ["PATCH", "/demo-agent/variants/compliant", { systemPrompt: "x" }],
     ["POST", "/demo-agent/active", { variant: "flawed" }],
+  ];
+  const phoneEvalRoutes = [
+    ["GET", "/phone-evals"],
+    ["POST", `/phone-evals/${sid}/analyze`],
+    ["GET", `/production-calls/${sid}/audio`],
   ];
   const hit = (base, user, [method, path, body]) =>
     fetch(`${base}${path}`, {
@@ -220,7 +247,14 @@ test("an email allowlist blocks a signed-in non-listed user from every operator 
     const { qualevalRouter } = await import("./router.js");
     const app = express();
     app.use(express.json());
-    app.use(qualevalRouter({ isOperator: operatorCheck(raw), ...options }));
+    app.use(
+      qualevalRouter({
+        isOperator: operatorCheck(raw),
+        visitorId: (req) => req.get("x-test-user") ?? "anon",
+        telephonyStore: telephonyStoreWithNumber,
+        ...options,
+      }),
+    );
     const server = app.listen(0);
     await new Promise((resolve) => server.once("listening", resolve));
     try {
@@ -232,16 +266,21 @@ test("an email allowlist blocks a signed-in non-listed user from every operator 
 
   await serve("captain@example.com", async (base) => {
     for (const user of ["user_stranger", undefined]) {
-      for (const route of operatorRoutes) {
+      for (const route of operatorOnlyRoutes) {
         const resp = await hit(base, user, route);
         assert.equal(resp.status, 403, `${user ?? "signed-out"} ${route[0]} ${route[1]}`);
         assert.deepEqual(await resp.json(), { error: "Operator access required." });
       }
+      for (const route of phoneEvalRoutes) {
+        const resp = await hit(base, user, route);
+        assert.equal(resp.status, 403, `${user ?? "signed-out"} ${route[0]} ${route[1]}`);
+        assert.match((await resp.json()).error, /Phone Evals requires/);
+      }
       assert.equal((await (await hit(base, user, ["GET", "/config"])).json()).isOperator, false);
     }
-    // The listed user passes the gate on each route (no DB/bucket in tests, so
-    // later handler steps may 404/500 - but never the operator 403).
-    for (const route of operatorRoutes) {
+    // The listed user passes every gate (no DB/bucket in tests, so later
+    // handler steps may 404/500 - but never the access 403).
+    for (const route of [...operatorOnlyRoutes, ...phoneEvalRoutes]) {
       const resp = await hit(base, "user_captain", route);
       assert.notEqual(resp.status, 403, `captain ${route[0]} ${route[1]}`);
     }

@@ -222,7 +222,11 @@ export function isPhoneEvalCall(call, env = process.env) {
   return call?.direction === "inbound" && !call.qualevalRunId && !isPersonaNumber(call.fromNumber, env);
 }
 
-export async function listPhoneEvalCalls(env = process.env, pool = getPool(env)) {
+export async function listPhoneEvalCalls(
+  env = process.env,
+  pool = getPool(env),
+  { toNumberDigits = null } = {},
+) {
   if (!pool) return [];
   const { rows } = await pool.query(
     `select ${RETURNING} from production_calls
@@ -234,5 +238,10 @@ export async function listPhoneEvalCalls(env = process.env, pool = getPool(env))
   return rows
     .map(callRow)
     .filter((call) => isPhoneEvalCall(call, env))
+    .filter((call) => {
+      if (!toNumberDigits) return true;
+      const digits = phoneDigits(call.toNumber);
+      return digits && toNumberDigits.has(digits);
+    })
     .map((call) => ({ ...call, transcript: transcriptForClient(call.transcript) }));
 }

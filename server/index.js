@@ -11,6 +11,7 @@ import { parsePackEvalRequest } from "./evals/wire.js";
 import { evaluatePacks } from "./evals/runPackEvals.js";
 import { evalRouter } from "./evals/router.js";
 import { telephonyRouter } from "./telephony/router.js";
+import { TelephonyStore } from "./telephony/store.js";
 import { requestCacheKey, warmNorthstarCache } from "./warmCache.js";
 import { loadReportCache, dbConfigured, upsertReportCache } from "./reportCache.js";
 import { runMigrations } from "./migrate.js";
@@ -248,13 +249,16 @@ app.post(
   (req, res) => demoAgentVoiceRoute(req, res),
 );
 
-app.use("/v1/qualeval", requireVisitor, qualevalRouter({ visitorId, isOperator }));
+// Shared telephony store: Phone Evals visibility (server/qualeval/
+// phoneEvalAccess.js) and /v1/telephony/* both read numbers registered here.
+const telephonyStore = new TelephonyStore();
+app.use("/v1/qualeval", requireVisitor, qualevalRouter({ visitorId, isOperator, telephonyStore }));
 
 // Numbers, trunks, and inbound sessions are scoped to the signed-in visitor
 // (server/telephony/store.js). A carrier webhook carrying
 // TELEPHONY_WEBHOOK_SECRET has no visitor, so its call lands with whoever
 // registered the dialed number.
-const telephony = telephonyRouter({ ownerOf: visitorId });
+const telephony = telephonyRouter({ store: telephonyStore, ownerOf: visitorId });
 app.post("/v1/telephony/inbound", (req, res, next) => {
   const expected = process.env.TELEPHONY_WEBHOOK_SECRET;
   if (expected && req.get("x-complyline-hook-secret") === expected) {
