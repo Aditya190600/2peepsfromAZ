@@ -114,7 +114,10 @@ The agent is fixed on the AssemblyAI session's first `session.update`, so it
 has to be known the moment the Media Stream connects. `placeCall`
 (`server/qualeval/callBridge.js`) registers each run with
 `server/qualeval/callBridgeBroker.js` just before asking Twilio to dial,
-carrying the evaluation's `demoAgentKey`; `targetAgentStream.js` claims that
+carrying the evaluation's `demoAgentKey` - but only when the dialed number is
+one our own bridge answers (`QUALEVAL_AGENT_NUMBER` or an imported number
+pointed at demo-agent-voice), so a run ringing an outside number can never be
+claimed by a real caller dialing ours; `targetAgentStream.js` claims that
 registration synchronously on connect and answers as that agent. No claim (a
 direct Phone Evals caller) or no key on the evaluation means the Settings
 toggle. An unclaimed registration expires after `UNCLAIMED_RUN_TTL_MS` so a
