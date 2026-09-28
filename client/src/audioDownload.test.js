@@ -16,6 +16,7 @@ describe("audioDownload", () => {
 
   it("guesses audio extensions from blob type or URL", () => {
     assert.equal(guessAudioExtension("/x", { type: "audio/webm" }), "webm");
+    assert.equal(guessAudioExtension("/x", { type: "audio/webm;codecs=opus" }), "webm");
     assert.equal(guessAudioExtension("/v1/qualeval/runs/run_1/audio.wav", null), "wav");
     assert.equal(guessAudioExtension("/stream", null), "audio");
   });

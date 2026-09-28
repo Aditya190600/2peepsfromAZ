@@ -8,13 +8,14 @@ export function buildDownloadJson(turns, markers, downloadJson) {
 
 export function guessAudioExtension(src, blob) {
   if (blob?.type) {
+    const mime = blob.type.split(";")[0].trim().toLowerCase();
     const fromType = {
       "audio/webm": "webm",
       "audio/wav": "wav",
       "audio/x-wav": "wav",
       "audio/mpeg": "mp3",
       "audio/mp4": "m4a",
-    }[blob.type];
+    }[mime];
     if (fromType) return fromType;
   }
   try {
