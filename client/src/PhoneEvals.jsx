@@ -21,7 +21,7 @@ import "./App.css";
 // Calls that dialed an agent number directly (someone's own phone, not a
 // QualEval scenario run). Kept entirely apart from Qualitative Evals: these
 // are never attributed to an evaluation, and scenario runs never show here.
-// Operators see every call; other visitors only see calls to numbers they
+// Admins see every call; other visitors only see calls to numbers they
 // registered in Settings (server/telephony/store.js).
 
 function callerLabel(call) {
@@ -189,6 +189,7 @@ export default function PhoneEvals({ path, navigate }) {
 
   const canAccess = Boolean(config?.canAccessPhoneEvals);
   const isOperator = Boolean(config?.isOperator);
+  const isPhoneEvalAdmin = Boolean(config?.isPhoneEvalAdmin);
   const ownedNumbers = config?.ownedPhoneNumbers ?? [];
   const demoAgentNumber = config?.agentPhoneNumber;
 
@@ -210,7 +211,7 @@ export default function PhoneEvals({ path, navigate }) {
         setConfig(body);
         if (!body.canAccessPhoneEvals) return;
         loadCalls();
-        if (!body.isOperator) return;
+        if (!body.isPhoneEvalAdmin) return;
         listDemoAgents()
           .then((agents) => setAgentNames(Object.fromEntries(agents.variants.map((a) => [a.key, a.name]))))
           .catch(() => {});
@@ -230,7 +231,7 @@ export default function PhoneEvals({ path, navigate }) {
   }, [interval]);
 
   const dialTarget =
-    isOperator && demoAgentNumber
+    isPhoneEvalAdmin && demoAgentNumber
       ? demoAgentNumber
       : ownedNumbers[0] ?? null;
 
@@ -279,7 +280,7 @@ export default function PhoneEvals({ path, navigate }) {
         </ul>
         <p className="pack-note">
           Qualitative Evals scenario calls are tracked on their own page and never appear here.
-          {!isOperator && " You only see calls to numbers you imported under Settings."}
+          {!isPhoneEvalAdmin && " You only see calls to numbers you imported under Settings."}
         </p>
 
         {error && <p className="error-banner">{error}</p>}

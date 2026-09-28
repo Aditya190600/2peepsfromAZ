@@ -134,11 +134,11 @@ app.get("/v1/token", requireVisitor, async (_req, res) => {
   res.status(status).json(body);
 });
 
-// The operator allowlist (server/qualeval/operatorAccess.js) gates every
-// shared, process-wide control: QualEval's demo-agent settings and the
-// provider registry below.
-const isOperator = createOperatorCheck({
-  allowlist: parseOperatorEmails(process.env.QUALEVAL_OPERATOR_EMAILS),
+// Operator/admin allowlists (server/qualeval/operatorAccess.js):
+// - QUALEVAL_OPERATOR_EMAILS: deployment operator controls (Settings target agents, providers).
+// - QUALEVAL_ADMIN_EMAILS: Phone Evals admins who see every call (phoneEvalAccess.js).
+// Admins are also treated as operators so Settings stays available without duplicating emails.
+const operatorAuth = {
   clerkEnabled: CLERK_ENABLED,
   userIdOf: visitorId,
   lookupEmails: async (userId) => {
@@ -147,7 +147,12 @@ const isOperator = createOperatorCheck({
       .filter((address) => address.verification?.status === "verified")
       .map((address) => address.emailAddress);
   },
-});
+};
+const operatorAllowlist = parseOperatorEmails(process.env.QUALEVAL_OPERATOR_EMAILS);
+const adminAllowlist = parseOperatorEmails(process.env.QUALEVAL_ADMIN_EMAILS);
+const deploymentOperatorAllowlist = new Set([...operatorAllowlist, ...adminAllowlist]);
+const isPhoneEvalAdmin = createOperatorCheck({ allowlist: adminAllowlist, ...operatorAuth });
+const isOperator = createOperatorCheck({ allowlist: deploymentOperatorAllowlist, ...operatorAuth });
 app.use("/v1/providers", providersRouter({ requireVisitor, isOperator }));
 
 app.get("/v1/packs", requireVisitor, (_req, res) => {
@@ -258,7 +263,7 @@ app.post(
   }),
 );
 
-app.use("/v1/qualeval", requireVisitor, qualevalRouter({ visitorId, isOperator, telephonyStore }));
+app.use("/v1/qualeval", requireVisitor, qualevalRouter({ visitorId, isOperator, isPhoneEvalAdmin, telephonyStore }));
 
 // Numbers, trunks, and inbound sessions are scoped to the signed-in visitor
 // (server/telephony/store.js). A carrier webhook carrying
