@@ -31,6 +31,58 @@ async function checkResponse(response, { rejected, failed, unreachable }) {
   if (!response.ok) rejectStatus(`${failed} ${response.status}`, 502);
 }
 
+// Public URL Twilio should POST when an imported number is called. Same
+// route the deployment's own demo number uses (demoAgentProvision.js), which
+// is the only inbound writer of production_calls.
+export function phoneEvalsVoiceUrl(env = process.env) {
+  if (!env.RAILWAY_PUBLIC_DOMAIN) return null;
+  return `https://${env.RAILWAY_PUBLIC_DOMAIN}/v1/qualeval/demo-agent-voice`;
+}
+
+// Points one number on the caller's own Twilio account at voiceUrl. Without
+// this, importing the number only records it locally and inbound calls never
+// hit demo-agent-voice, so Phone Evals stays empty.
+export async function pointTwilioNumberAtVoiceUrl(
+  { accountSid, authToken, e164, voiceUrl },
+  { fetchImpl = fetch } = {},
+) {
+  const auth = `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString("base64")}`;
+  const headers = { Authorization: auth };
+  let listRes;
+  try {
+    listRes = await fetchImpl(
+      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(e164)}`,
+      { headers },
+    );
+  } catch {
+    rejectStatus("Could not reach Twilio to configure the number's voice webhook", 502);
+  }
+  const listBody = typeof listRes.json === "function" ? await listRes.json().catch(() => ({})) : {};
+  if (!listRes.ok) {
+    const status = listRes.status === 401 || listRes.status === 403 ? 400 : 502;
+    rejectStatus(`Twilio could not list the number (${listRes.status})`, status);
+  }
+  const number = listBody?.incoming_phone_numbers?.[0];
+  if (!number?.sid) rejectStatus("That number was not found on the Twilio account", 400);
+  if (number.voice_url === voiceUrl && number.voice_method === "POST") return { configured: true };
+
+  let updateRes;
+  try {
+    updateRes = await fetchImpl(
+      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers/${number.sid}.json`,
+      {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ VoiceUrl: voiceUrl, VoiceMethod: "POST" }).toString(),
+      },
+    );
+  } catch {
+    rejectStatus("Could not reach Twilio to configure the number's voice webhook", 502);
+  }
+  if (!updateRes.ok) rejectStatus(`Twilio could not set the voice webhook (${updateRes.status})`, 502);
+  return { configured: true };
+}
+
 export async function validateTwilio({ accountSid, authToken }, { fetchImpl = fetch } = {}) {
   if (!/^AC[0-9a-fA-F]{32}$/.test(accountSid ?? "")) {
     rejectStatus("Twilio Account SID must look like AC followed by 32 hex characters", 400);

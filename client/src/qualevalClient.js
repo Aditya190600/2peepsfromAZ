@@ -27,8 +27,9 @@ export async function getEvaluation(id) {
   return json(await fetch(`/v1/qualeval/evaluations/${encodeURIComponent(id)}`));
 }
 
-// Phone Evals: operator-only list of calls that dialed the agent number
-// directly, outside any QualEval scenario run.
+// Phone Evals: calls that dialed an agent number directly, outside any
+// QualEval scenario run. Operators see every call; others only calls to
+// numbers they registered in Settings.
 export async function listPhoneEvalCalls() {
   return json(await fetch("/v1/qualeval/phone-evals")).then((body) => body.calls);
 }

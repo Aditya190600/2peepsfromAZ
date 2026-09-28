@@ -5,6 +5,7 @@ import { RunResult, formatWhen } from "./QualEval";
 import { getQualevalConfig, listDemoAgents, listPhoneEvalCalls, rerunPhoneEvalAnalysis } from "./qualevalClient";
 import { formatPhoneNumber } from "./settingsView";
 import { seekAudio } from "./seek";
+import { PhoneEvalsSetupGate } from "./PhoneEvalsSetup";
 import {
   callListStatus,
   canRerunAnalysis,
@@ -17,16 +18,11 @@ import {
 } from "./phoneEvalsView";
 import "./App.css";
 
-// Calls that dialed the agent number directly (someone's own phone, not a
+// Calls that dialed an agent number directly (someone's own phone, not a
 // QualEval scenario run). Kept entirely apart from Qualitative Evals: these
 // are never attributed to an evaluation, and scenario runs never show here.
-// The moment a call ends it gets a compliance report
-// (server/qualeval/phoneCompliance.js, the same checks as Voice Compliance)
-// and a pass/fail score against the answering agent's own instructions
-// (server/qualeval/phoneEvaluation.js). Laid out like a mail client: every
-// call, newest first, on the left; the picked call's full report on the
-// right. Operator-only, since the number is shared and every caller's number
-// and transcript would otherwise be visible to every signed-in visitor.
+// Operators see every call; other visitors only see calls to numbers they
+// registered in Settings (server/telephony/store.js).
 
 function callerLabel(call) {
   return call.callerName || formatPhoneNumber(call.fromNumber) || "Unknown caller";
@@ -83,7 +79,6 @@ function CallListItem({ call, agentName, selected, onSelect }) {
           <strong className="phone-evals-item-caller">{callerLabel(call)}</strong>
           <span className="phone-evals-item-when">{formatWhen(call.startedAt)}</span>
         </span>
-        {/* The answering agent is saved at hangup, so a live call has none yet. */}
         {(agentName || duration) && (
           <span className="phone-evals-item-agent">{[agentName, duration].filter(Boolean).join(" · ")}</span>
         )}
@@ -163,7 +158,7 @@ function CallDetail({ call, agentName, onChanged }) {
 function CallHistory({ calls, agentNames, onChanged }) {
   const [selectedSid, setSelectedSid] = useState(null);
   if (calls.length === 0) {
-    return <p className="pack-note">No calls to the agent number yet. Call it from any phone to see one here.</p>;
+    return <p className="pack-note">No calls yet. Dial one of your registered numbers to see a report here.</p>;
   }
   const current = selectedCall(calls, selectedSid);
   const nameOf = (call) => agentNames[call.variantKey] ?? call.variantKey;
@@ -180,7 +175,6 @@ function CallHistory({ calls, agentNames, onChanged }) {
           />
         ))}
       </ol>
-      {/* Keyed by call so the tab and re-run state start fresh per call. */}
       <CallDetail key={current.twilioCallSid} call={current} agentName={nameOf(current)} onChanged={onChanged} />
     </div>
   );
@@ -193,7 +187,11 @@ export default function PhoneEvals({ path, navigate }) {
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  // A background poll stays quiet; only the Refresh button shows "Refreshing…".
+  const canAccess = Boolean(config?.canAccessPhoneEvals);
+  const isOperator = Boolean(config?.isOperator);
+  const ownedNumbers = config?.ownedPhoneNumbers ?? [];
+  const demoAgentNumber = config?.agentPhoneNumber;
+
   const loadCalls = async ({ quiet = false } = {}) => {
     if (!quiet) setRefreshing(true);
     try {
@@ -210,21 +208,18 @@ export default function PhoneEvals({ path, navigate }) {
     getQualevalConfig()
       .then((body) => {
         setConfig(body);
-        if (!body.isOperator) return;
+        if (!body.canAccessPhoneEvals) return;
         loadCalls();
+        if (!body.isOperator) return;
         listDemoAgents()
           .then((agents) => setAgentNames(Object.fromEntries(agents.variants.map((a) => [a.key, a.name]))))
-          .catch(() => {
-            // Names are optional; the variant key is shown instead.
-          });
+          .catch(() => {});
       })
       .catch((err) => setError(err.message ?? "Could not load Phone Evals."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // No push channel: poll fast while a call or its analysis is still running
-  // so results land on their own, and slowly otherwise so a new call appears.
-  const interval = calls ? pollIntervalMs(calls) : null;
+  const interval = canAccess && calls ? pollIntervalMs(calls) : null;
   useEffect(() => {
     if (!interval) return undefined;
     const timer = setInterval(() => {
@@ -234,21 +229,26 @@ export default function PhoneEvals({ path, navigate }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interval]);
 
-  const agentNumber = config?.agentPhoneNumber;
+  const dialTarget =
+    isOperator && demoAgentNumber
+      ? demoAgentNumber
+      : ownedNumbers[0] ?? null;
 
   return (
     <AppShell path={path} navigate={navigate} title="Phone Evals">
       <div className="qualeval-page phone-evals-page">
+        {config && !canAccess && <PhoneEvalsSetupGate navigate={navigate} />}
+
         <p className="app-lede">
-          Call the agent phone number
-          {agentNumber ? (
+          Call your agent number
+          {dialTarget ? (
             <>
               {" "}
-              at <a href={`tel:${agentNumber}`}>{formatPhoneNumber(agentNumber)}</a>
+              at <a href={`tel:${dialTarget}`}>{formatPhoneNumber(dialTarget)}</a>
             </>
           ) : null}{" "}
-          from any phone and talk to the agent. When you hang up, the call is recorded and transcribed, and a
-          compliance analysis runs immediately. The report shows up here on its own, usually within a minute.
+          from any phone. When you hang up, the call is recorded and transcribed, and a compliance
+          analysis runs immediately. The report shows up here on its own, usually within a minute.
         </p>
         <ul className="phone-evals-steps">
           <li>
@@ -260,31 +260,30 @@ export default function PhoneEvals({ path, navigate }) {
             <strong>Agent instructions</strong>: a pass/fail score for whether the agent followed its own
             system prompt, with quoted evidence.
           </li>
-          <li>
-            <strong>Which agent answers</strong>: pick the agent type (banking, healthcare, or flight booking,
-            each in a compliant and a flawed version) under{" "}
-            <a
-              href="/settings"
-              onClick={(e) => {
-                e.preventDefault();
-                navigate("/settings");
-              }}
-            >
-              Settings → Target agents
-            </a>
-            . The switch applies to the next call. Settings&apos; Call persona is a different setting: it only
-            applies to browser calls on Voice Compliance.
-          </li>
+          {isOperator && (
+            <li>
+              <strong>Which agent answers</strong>: pick the agent type (banking, healthcare, or flight booking,
+              each in a compliant and a flawed version) under{" "}
+              <a
+                href="/settings"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate("/settings");
+                }}
+              >
+                Settings → Target agents
+              </a>
+              . The switch applies to the next call.
+            </li>
+          )}
         </ul>
         <p className="pack-note">
           Qualitative Evals scenario calls are tracked on their own page and never appear here.
+          {!isOperator && " You only see calls to numbers you imported under Settings."}
         </p>
 
         {error && <p className="error-banner">{error}</p>}
-        {config && !config.isOperator && (
-          <p className="pack-note">Phone Evals is only available to operators of this deployment.</p>
-        )}
-        {config?.isOperator && (
+        {canAccess && (
           <section className="phone-evals-section">
             <div className="phone-evals-section-head">
               <h2>Calls{calls ? ` (${calls.length})` : ""}</h2>

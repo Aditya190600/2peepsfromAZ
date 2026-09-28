@@ -1,5 +1,9 @@
 import { WebSocketServer } from "ws";
-import { createBridgeSession, DEFAULT_MAX_DURATION_MS } from "./bridgeSession.js";
+import {
+  createBridgeSession,
+  DEFAULT_MAX_DURATION_MS,
+  DEFAULT_SILENCE_TIMEOUT_MS,
+} from "./bridgeSession.js";
 import { createCallRecorder, productionCallAudioKey } from "./callRecorder.js";
 import { transcribeCallRecording } from "./callTranscription.js";
 import { mintAssemblyAiToken } from "./assemblyaiToken.js";
@@ -158,6 +162,11 @@ export function attachTargetAgentStreamServer(
         twilioWs,
         token,
         agentId: variant.agentId,
+        // Same backstops as the outbound persona leg (twilioStream.js): a
+        // stored agent can't carry inline end_call tools, so silence and the
+        // max-duration cap are what hang up inbound Phone Evals calls.
+        maxDurationMs: DEFAULT_MAX_DURATION_MS,
+        silenceTimeoutMs: DEFAULT_SILENCE_TIMEOUT_MS,
         // No swap needed on this side - see bridgeSession.js's header
         // comment for why the two directions map roles oppositely.
         transcriptUserRole: "user",

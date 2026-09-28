@@ -1,6 +1,8 @@
 import { Router } from "express";
 import {
   assertE164,
+  phoneEvalsVoiceUrl,
+  pointTwilioNumberAtVoiceUrl,
   probeGateways,
   validateTelnyxApiKey,
   validateTwilio,
@@ -35,7 +37,7 @@ export function requireTelephonyHook(req, res, next) {
 // `ownerOf(req)` names the account a request acts for (index.js passes its
 // visitorId: the Clerk user id, or "anon" with Clerk off). Every number, trunk,
 // and session is read and written under that owner only.
-export function telephonyRouter({ store = new TelephonyStore(), fetchImpl = fetch, probe, ownerOf }) {
+export function telephonyRouter({ store = new TelephonyStore(), fetchImpl = fetch, probe, ownerOf, env = process.env }) {
   const router = Router();
   const wrap = (fn) => async (req, res) => {
     try {
@@ -152,6 +154,19 @@ export function telephonyRouter({ store = new TelephonyStore(), fetchImpl = fetc
     const body = req.body ?? {};
     const e164 = assertE164(body.e164);
     await validateTwilio({ accountSid: body.accountSid, authToken: body.authToken }, { fetchImpl });
+    // Phone Evals only scores calls that hit demo-agent-voice. Point the
+    // imported number there before saving it, so a successful import is a
+    // number that actually produces rows. No public host (local dev) keeps
+    // the previous store-only import.
+    const voiceUrl = phoneEvalsVoiceUrl(env);
+    let voiceWebhookConfigured = false;
+    if (voiceUrl) {
+      await pointTwilioNumberAtVoiceUrl(
+        { accountSid: body.accountSid, authToken: body.authToken, e164, voiceUrl },
+        { fetchImpl },
+      );
+      voiceWebhookConfigured = true;
+    }
     const ownerId = ownerOf(req);
     const trunk = await saveTrunk(ownerId, {
       provider: "twilio",
@@ -167,7 +182,7 @@ export function telephonyRouter({ store = new TelephonyStore(), fetchImpl = fetc
       credentialId: trunk.id,
       direction: "inbound",
     });
-    res.status(201).json({ trunk, number });
+    res.status(201).json({ trunk, number, voiceWebhookConfigured });
   }));
 
   router.post("/imports/telnyx", wrap(async (req, res) => {

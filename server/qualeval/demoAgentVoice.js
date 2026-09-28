@@ -26,13 +26,32 @@ import { productionCallFromTwilioBody, recordProductionCall } from "./production
 export async function demoAgentVoiceRoute(
   req,
   res,
-  { env = process.env, validate = twilio.validateRequest, recordCall = recordProductionCall } = {},
+  {
+    env = process.env,
+    validate = twilio.validateRequest,
+    recordCall = recordProductionCall,
+    // Imported numbers sign webhooks with their own auth token, not the
+    // deployment's TWILIO_AUTH_TOKEN. index.js passes a lookup against the
+    // telephony store.
+    authTokenForTo = null,
+  } = {},
 ) {
-  if (!twilioConfigured(env)) return res.status(503).send("Twilio is not configured.");
+  const candidates = [];
+  if (twilioConfigured(env)) candidates.push(env.TWILIO_AUTH_TOKEN);
+  if (typeof authTokenForTo === "function") {
+    try {
+      const imported = await authTokenForTo(req.body?.To);
+      if (imported && !candidates.includes(imported)) candidates.push(imported);
+    } catch (err) {
+      console.error(`QualEval demo agent: imported number token lookup failed: ${err.message}`);
+    }
+  }
+  if (candidates.length === 0) return res.status(503).send("Twilio is not configured.");
 
   const fullUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
   const signature = req.get("X-Twilio-Signature");
-  if (!validate(env.TWILIO_AUTH_TOKEN, signature, fullUrl, req.body ?? {})) {
+  const body = req.body ?? {};
+  if (!candidates.some((token) => validate(token, signature, fullUrl, body))) {
     return res.status(403).send("Invalid Twilio signature.");
   }
 

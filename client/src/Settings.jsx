@@ -17,6 +17,7 @@ import {
   isValidPhoneNumber,
   setDefaultPhoneNumber,
 } from "./phoneNumberPreference";
+import { PhoneEvalsSetupSection } from "./PhoneEvalsSetup";
 import "./App.css";
 
 function NumberCard({ title, number, children }) {
@@ -181,6 +182,11 @@ export default function Settings({ path, navigate }) {
 
   const isOperator = Boolean(config?.isOperator);
 
+  const reloadConfig = () =>
+    getQualevalConfig()
+      .then(setConfig)
+      .catch((err) => setError(err.message ?? "Could not reload settings."));
+
   return (
     <AppShell path={path} navigate={navigate} title="Settings">
       <div className="qualeval-page settings-page">
@@ -227,6 +233,10 @@ export default function Settings({ path, navigate }) {
             </p>
           )}
         </section>
+
+        {!isOperator && (
+          <PhoneEvalsSetupSection ownedNumbers={config?.ownedPhoneNumbers} onConfigured={reloadConfig} />
+        )}
 
         {isOperator && (
           <>

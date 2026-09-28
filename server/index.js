@@ -11,6 +11,7 @@ import { parsePackEvalRequest } from "./evals/wire.js";
 import { evaluatePacks } from "./evals/runPackEvals.js";
 import { evalRouter } from "./evals/router.js";
 import { telephonyRouter } from "./telephony/router.js";
+import { TelephonyStore } from "./telephony/store.js";
 import { requestCacheKey, warmNorthstarCache } from "./warmCache.js";
 import { loadReportCache, dbConfigured, upsertReportCache } from "./reportCache.js";
 import { runMigrations } from "./migrate.js";
@@ -239,22 +240,31 @@ app.post(
   (req, res) => twilioVoiceRoute(req, res),
 );
 
+// Shared telephony store: Phone Evals visibility (server/qualeval/
+// phoneEvalAccess.js) and /v1/telephony/* both read numbers registered here.
+// Created before the demo-agent voice webhook so an imported number's own
+// auth token can validate that POST (the deployment token will not).
+const telephonyStore = new TelephonyStore();
+
 // POST /v1/qualeval/demo-agent-voice - same Twilio-webhook posture as the
-// route above, answered by QUALEVAL_AGENT_NUMBER (server/qualeval/demoAgentVoice.js,
-// server/qualeval/demoAgentProvision.js).
+// route above, answered by QUALEVAL_AGENT_NUMBER and by Twilio numbers
+// imported for Phone Evals (server/qualeval/demoAgentVoice.js,
+// server/qualeval/demoAgentProvision.js, server/telephony/router.js).
 app.post(
   "/v1/qualeval/demo-agent-voice",
   express.urlencoded({ extended: false }),
-  (req, res) => demoAgentVoiceRoute(req, res),
+  (req, res) => demoAgentVoiceRoute(req, res, {
+    authTokenForTo: (to) => telephonyStore.twilioAuthTokenForE164(to),
+  }),
 );
 
-app.use("/v1/qualeval", requireVisitor, qualevalRouter({ visitorId, isOperator }));
+app.use("/v1/qualeval", requireVisitor, qualevalRouter({ visitorId, isOperator, telephonyStore }));
 
 // Numbers, trunks, and inbound sessions are scoped to the signed-in visitor
 // (server/telephony/store.js). A carrier webhook carrying
 // TELEPHONY_WEBHOOK_SECRET has no visitor, so its call lands with whoever
 // registered the dialed number.
-const telephony = telephonyRouter({ ownerOf: visitorId });
+const telephony = telephonyRouter({ store: telephonyStore, ownerOf: visitorId });
 app.post("/v1/telephony/inbound", (req, res, next) => {
   const expected = process.env.TELEPHONY_WEBHOOK_SECRET;
   if (expected && req.get("x-complyline-hook-secret") === expected) {

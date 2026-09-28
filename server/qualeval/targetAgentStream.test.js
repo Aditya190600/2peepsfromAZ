@@ -52,6 +52,8 @@ test("bridges immediately using the active variant, without waiting for a start 
   // No swap on this side - see bridgeSession.js's header comment.
   assert.equal(sessionArgs.transcriptUserRole, "user");
   assert.equal(sessionArgs.transcriptAgentRole, "agent");
+  assert.equal(sessionArgs.silenceTimeoutMs, 30_000);
+  assert.equal(sessionArgs.maxDurationMs, 5 * 60 * 1000);
 });
 
 test("closes the stream instead of hanging when loading the active variant fails", async () => {
