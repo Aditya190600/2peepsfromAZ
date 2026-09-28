@@ -27,7 +27,14 @@ import {
   endRun,
   getQualevalConfig,
 } from "./qualevalClient";
-import { EXAMPLE_EVALUATION, EXAMPLE_SCENARIO, EXAMPLE_RUN } from "./qualevalExampleData";
+import {
+  EXAMPLE_EVALUATION,
+  EXAMPLE_SCENARIO,
+  EXAMPLE_RUN,
+  EXAMPLE_EVALUATION_PASS,
+  EXAMPLE_SCENARIO_PASS,
+  EXAMPLE_RUN_PASS,
+} from "./qualevalExampleData";
 import "./App.css";
 
 const DEFAULT_SCENARIO_COUNT = 5;
@@ -580,52 +587,63 @@ export function RunResult({ run }) {
   );
 }
 
-const EXAMPLE_SCENARIO_FIELDS = [
-  ["Persona", EXAMPLE_SCENARIO.persona],
-  ["Situation", EXAMPLE_SCENARIO.situation],
-  ["Caller objectives", EXAMPLE_SCENARIO.callerObjectives],
-  ["Expected behavior", EXAMPLE_SCENARIO.expectedBehavior],
-];
+function exampleScenarioFields(scenario) {
+  return [
+    ["Persona", scenario.persona],
+    ["Situation", scenario.situation],
+    ["Caller objectives", scenario.callerObjectives],
+    ["Expected behavior", scenario.expectedBehavior],
+  ];
+}
 
-// Read-only view of the static example in qualevalExampleData.js, shared by
+const EXAMPLE_NOTICE_TEXT = {
+  fail: "A sample evaluation against our seeded-gap demo clinic agent. It illustrates a QualEval result and contains no customer data.",
+  pass: "A sample evaluation against our compliant demo banking agent. It illustrates a QualEval result and contains no customer data.",
+};
+
+// Read-only view of one static example in qualevalExampleData.js, shared by
 // this page's Examples tab and the public /examples/qualeval page. No API
 // calls and no edit/delete/run controls, so there is nothing here anyone can
 // remove. `showName` adds the evaluation name as a heading where the page
 // title does not already carry it.
-export function ExampleScorecard({ showName = false }) {
+export function ExampleScorecard({
+  showName = false,
+  evaluation = EXAMPLE_EVALUATION,
+  scenario = EXAMPLE_SCENARIO,
+  run = EXAMPLE_RUN,
+}) {
   return (
     <>
-      {showName && <h3 className="qe-example-name">{EXAMPLE_EVALUATION.name}</h3>}
+      {showName && <h3 className="qe-example-name">{evaluation.name}</h3>}
       <p className="example-notice">
         <span className="example-badge">Example</span>
-        A sample evaluation against our seeded-gap demo clinic agent. It illustrates a QualEval result and contains no
-        customer data.
+        {EXAMPLE_NOTICE_TEXT[run.verdict] ?? EXAMPLE_NOTICE_TEXT.fail}
       </p>
 
       <ul className="qe-eval-summary">
         <li>
-          <strong>Target agent:</strong> {EXAMPLE_EVALUATION.targetAgent}
+          <strong>Target agent:</strong> {evaluation.targetAgent}
         </li>
         <li>
           <strong>Description:</strong>
-          <ExampleListText text={EXAMPLE_EVALUATION.description} />
+          <ExampleListText text={evaluation.description} />
         </li>
         <li>
           <strong>Requirements:</strong>
-          <ExampleListText text={EXAMPLE_EVALUATION.requirements} />
+          <ExampleListText text={evaluation.requirements} />
         </li>
       </ul>
 
       <div className="qe-scenario-card is-approved">
         <div className="qe-scenario-head">
-          <h4>{EXAMPLE_SCENARIO.name}</h4>
+          <h4>{scenario.name}</h4>
           <div className="qe-scenario-badges">
-            <span className="qe-cat-badge">{EXAMPLE_SCENARIO.category}</span>
+            <span className="qe-cat-badge">{scenario.category}</span>
             <span className="example-badge">Example</span>
           </div>
         </div>
         <div className="qe-scenario-meta-grid">
-          {EXAMPLE_SCENARIO_FIELDS.map(([label, value]) => (
+          {exampleScenarioFields(scenario).map(([label, value]) => (
             <div key={label}>
               <div className="qe-meta-k">{label}</div>
               <div className="qe-meta-v">{value}</div>
@@ -633,12 +651,28 @@ export function ExampleScorecard({ showName = false }) {
           ))}
         </div>
         <ul className="qe-criteria-list">
-          {EXAMPLE_SCENARIO.evaluationCriteria.map((c) => (
+          {scenario.evaluationCriteria.map((c) => (
             <li key={c}>{c}</li>
           ))}
         </ul>
-        <RunResult run={EXAMPLE_RUN} />
+        <RunResult run={run} />
       </div>
+    </>
+  );
+}
+
+// Both permanent static examples (one fail, one pass), rendered together
+// wherever the Examples content is shown.
+export function ExampleScorecards({ showName = false }) {
+  return (
+    <>
+      <ExampleScorecard showName={showName} />
+      <ExampleScorecard
+        showName={showName}
+        evaluation={EXAMPLE_EVALUATION_PASS}
+        scenario={EXAMPLE_SCENARIO_PASS}
+        run={EXAMPLE_RUN_PASS}
+      />
     </>
   );
 }
@@ -1718,7 +1752,7 @@ export default function QualEval({ navigate, path, evaluationId }) {
         </div>
 
         {listTab === "examples" ? (
-          <ExampleScorecard showName />
+          <ExampleScorecards showName />
         ) : (
           <>
             <NewEvaluationForm
