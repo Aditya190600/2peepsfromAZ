@@ -1,4 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import {
+  buildDownloadJson,
+  guessAudioExtension,
+  resolveAudioBlob,
+  triggerBrowserDownload,
+} from "./audioDownload.js";
 import { computeDualPeaks, WAVEFORM_BUCKETS } from "./audioPeaks";
 import { seekAudio } from "./seek";
 
@@ -155,16 +161,23 @@ export default function AudioPlayer({
   // When src is a blob: URL, callers that still hold the Blob can pass it here
   // so waveform decode reads bytes directly instead of fetch(blob:).
   waveformBlob = null,
+  // Base name for downloaded files (no extension). Defaults to "recording".
+  downloadFilenameBase = "recording",
+  // Optional JSON payload override for the download menu.
+  downloadJson = null,
 }) {
   const internalRef = useRef(null);
   const ref = audioRef ?? internalRef;
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
+  const downloadWrapRef = useRef(null);
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
   const [dualPeaks, setDualPeaks] = useState(null);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
+  const [downloadBusy, setDownloadBusy] = useState(false);
   const [waveformBuffer, setWaveformBuffer] = useState(null);
   const speakerKey = speakerTurnsKey(turns);
   const drawStateRef = useRef({ dualPeaks: null, current: 0, duration: 0 });
@@ -275,6 +288,53 @@ export default function AudioPlayer({
     });
   };
 
+  useEffect(() => {
+    if (!downloadMenuOpen) return undefined;
+    const onPointerDown = (event) => {
+      if (downloadWrapRef.current?.contains(event.target)) return;
+      setDownloadMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [downloadMenuOpen]);
+
+  const downloadPayload = buildDownloadJson(turns, markers, downloadJson);
+  const filenameBase = downloadFilenameBase || "recording";
+
+  const downloadAudioFile = async () => {
+    const blob = await resolveAudioBlob(src, waveformBlob);
+    const ext = guessAudioExtension(src, blob);
+    const url = URL.createObjectURL(blob);
+    try {
+      triggerBrowserDownload(url, `${filenameBase}.${ext}`);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const downloadJsonFile = () => {
+    const blob = new Blob([JSON.stringify(downloadPayload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    try {
+      triggerBrowserDownload(url, `${filenameBase}.json`);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const runDownload = async (mode) => {
+    setDownloadBusy(true);
+    try {
+      if (mode === "audio" || mode === "both") await downloadAudioFile();
+      if (mode === "json" || mode === "both") downloadJsonFile();
+      setDownloadMenuOpen(false);
+    } catch (err) {
+      console.error("Download failed:", err);
+    } finally {
+      setDownloadBusy(false);
+    }
+  };
+
   const onScrub = (e) => {
     const audio = ref.current;
     if (!audio || !duration) return;
@@ -378,6 +438,43 @@ export default function AudioPlayer({
       <button type="button" className="audio-player-rate" onClick={cycleRate} aria-label="Playback speed">
         {rateLabel}
       </button>
+      {src && (
+        <div className="audio-player-download-wrap" ref={downloadWrapRef}>
+          <button
+            type="button"
+            className="audio-player-download"
+            onClick={() => setDownloadMenuOpen((open) => !open)}
+            aria-label="Download"
+            aria-haspopup="menu"
+            aria-expanded={downloadMenuOpen}
+            disabled={downloadBusy}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+              <path
+                d="M7 1.5v7M4 6.5 7 9.5 10 6.5M2.5 11.5h9"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+          {downloadMenuOpen && (
+            <div className="audio-player-download-menu" role="menu">
+              <button type="button" role="menuitem" disabled={downloadBusy} onClick={() => runDownload("audio")}>
+                Download audio
+              </button>
+              <button type="button" role="menuitem" disabled={downloadBusy} onClick={() => runDownload("json")}>
+                Download JSON
+              </button>
+              <button type="button" role="menuitem" disabled={downloadBusy} onClick={() => runDownload("both")}>
+                Download both
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
