@@ -68,44 +68,51 @@ const contradictoryJudgement = {
   evidenceQuotes: [],
 };
 
-test("a failing verdict's summary names only the unmet criteria, never a met one", async () => {
+test("drops a failing summary's clause that names a met criterion, keeping the other failure reasons", async () => {
   const result = await evaluateTranscript(scenario, transcript, {
     llmGateway: async () => JSON.stringify(contradictoryJudgement),
   });
   assert.equal(result.verdict, "fail");
-  assert.equal(result.assessment, `Failed 1 of 2 criteria: ${medicationCriterion}.`);
-  assert.doesNotMatch(result.assessment, /disclos/i);
+  assert.equal(result.assessment, "It never confirmed medication adherence.");
   assert.deepEqual(result.criterionResults, contradictoryJudgement.criterionResults);
 });
 
-test("an unmet criterion fails the run even if the model's verdict says pass", async () => {
+test("falls back to the unmet criteria when every clause of the summary names a met criterion", async () => {
   const result = await evaluateTranscript(scenario, transcript, {
-    llmGateway: async () => JSON.stringify({ ...contradictoryJudgement, verdict: "pass", assessment: "Looks fine." }),
+    llmGateway: async () =>
+      JSON.stringify({
+        ...contradictoryJudgement,
+        assessment: "The agent failed to disclose the automated system within 10 seconds (it took 1120ms, so this criterion is actually met).",
+      }),
   });
   assert.equal(result.verdict, "fail");
   assert.equal(result.assessment, `Failed 1 of 2 criteria: ${medicationCriterion}.`);
 });
 
-test("all criteria met passes the run, replacing a fail-shaped summary", async () => {
+test("a fail verdict with every criterion met stays fail with its prose intact", async () => {
   const allMet = contradictoryJudgement.criterionResults.map((c) => ({ ...c, met: true }));
+  const assessment = "The agent discussed the appointment before verifying the caller's date of birth.";
   const result = await evaluateTranscript(scenario, transcript, {
-    llmGateway: async () => JSON.stringify({ ...contradictoryJudgement, criterionResults: allMet }),
+    llmGateway: async () => JSON.stringify({ ...contradictoryJudgement, criterionResults: allMet, assessment }),
   });
-  assert.equal(result.verdict, "pass");
-  assert.equal(result.assessment, "All 2 criteria met.");
+  assert.equal(result.verdict, "fail");
+  assert.equal(result.assessment, assessment);
 });
 
-test("asks for criterion results before the verdict and assessment", async () => {
-  let systemPrompt = "";
-  await evaluateTranscript(scenario, transcript, {
-    llmGateway: async (messages) => {
-      systemPrompt = messages[0].content;
-      return JSON.stringify(contradictoryJudgement);
-    },
+test("a pass verdict with an unmet criterion keeps the model's verdict and prose", async () => {
+  const result = await evaluateTranscript(scenario, transcript, {
+    llmGateway: async () => JSON.stringify({ ...contradictoryJudgement, verdict: "pass", assessment: "Looks fine." }),
   });
-  const order = ['"criterionResults"', '"verdict"', '"assessment"'].map((key) => systemPrompt.indexOf(key));
-  assert.ok(order.every((i) => i >= 0));
-  assert.deepEqual([...order].sort((a, b) => a - b), order);
+  assert.equal(result.verdict, "pass");
+  assert.equal(result.assessment, "Looks fine.");
+});
+
+test("empty criterion results leave the verdict and assessment untouched", async () => {
+  const result = await evaluateTranscript(scenario, transcript, {
+    llmGateway: async () => JSON.stringify({ ...contradictoryJudgement, criterionResults: [] }),
+  });
+  assert.equal(result.verdict, "fail");
+  assert.equal(result.assessment, contradictoryJudgement.assessment);
 });
 
 test("gives the model turn times in seconds, the unit criteria are written in", async () => {
