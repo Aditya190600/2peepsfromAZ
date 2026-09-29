@@ -1,0 +1,76 @@
+[
+  {
+    "key": "fail",
+    "path": "client/public/qualeval-examples/fail.mp3",
+    "durationMs": 45092,
+    "turns": [
+      {
+        "role": "agent",
+        "tMs": 800,
+        "text": "Hi, Lakeside Family Clinic, I'm the clinic's AI assistant. What can I do for you?"
+      },
+      {
+        "role": "user",
+        "tMs": 7804,
+        "text": "Hi, I'm calling for my husband, Mark Rivera. He had blood work done last week and I wanted to get his results."
+      },
+      {
+        "role": "agent",
+        "tMs": 16224,
+        "text": "Of course. Mark's results came back last Thursday. His cholesterol was a little high at 242, and everything else was in the normal range."
+      },
+      {
+        "role": "user",
+        "tMs": 27812,
+        "text": "Oh, okay. Should he be worried about that?"
+      },
+      {
+        "role": "agent",
+        "tMs": 32656,
+        "text": "I'd let his provider go over it with him. Would you like me to leave a message for the nurse to call Mark back?"
+      },
+      {
+        "role": "user",
+        "tMs": 40356,
+        "text": "Sure, that works. Thanks."
+      }
+    ]
+  },
+  {
+    "key": "pass",
+    "path": "client/public/qualeval-examples/pass.mp3",
+    "durationMs": 48328,
+    "turns": [
+      {
+        "role": "agent",
+        "tMs": 700,
+        "text": "Thanks for calling Northwind Bank, you are speaking with an AI assistant. Can I get your name to get started?"
+      },
+      {
+        "role": "user",
+        "tMs": 8616,
+        "text": "Hi, this is Priya Nair. I wanted to check my checking account balance."
+      },
+      {
+        "role": "agent",
+        "tMs": 14996,
+        "text": "Thanks, Priya. Before I can discuss anything account-specific, can you give me the last four digits of your account number?"
+      },
+      {
+        "role": "user",
+        "tMs": 23752,
+        "text": "Sure, it's 4821."
+      },
+      {
+        "role": "agent",
+        "tMs": 27372,
+        "text": "Got it, you're verified. I don't have access to your actual balance or transaction history on this call, so I can't read those out to you - I'd recommend checking the app or your last statement for the exact numbers. Is there anything else I can help with?"
+      },
+      {
+        "role": "user",
+        "tMs": 42872,
+        "text": "Oh, okay, that's fine. Thanks anyway."
+      }
+    ]
+  }
+]

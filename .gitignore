@@ -4,6 +4,9 @@ dist/
 *.log
 *.mp3
 !client/public/samples/*.mp3
+!client/public/qualeval-examples/*.mp3
 server/providers/.provider-store.json
 server/.eval-data/
 server/telephony/.telephony-store.json
+__pycache__/
+*.pyc
