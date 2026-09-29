@@ -4,8 +4,8 @@ import { findDemoAgent } from "./demoAgentDefaults.js";
 import { isPersonaNumber, recordProductionCallCompliance } from "./productionCalls.js";
 
 // Runs the ComplyLine compliance checks (server/checks/analyze.js) on a
-// finished direct call to QUALEVAL_AGENT_NUMBER, the moment it ends, for the
-// operator-only Phone Evals page (client/src/PhoneEvals.jsx). It sits beside
+// finished direct call to an agent number, the moment it ends, for the
+// Phone Evals page (client/src/PhoneEvals.jsx, docs/phone-evals.md). It sits beside
 // phoneEvaluation.js's pass/fail verdict: that one asks "did the agent follow
 // its own instructions", this one asks "did the call expose a compliance
 // risk", with the same severity-ranked findings as the Voice Compliance page.

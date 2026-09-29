@@ -2,8 +2,8 @@ import { evaluateTranscript } from "./evaluator.js";
 import { getVariantWithAgent } from "./demoAgentConfig.js";
 import { isPersonaNumber, recordProductionCallEvaluation } from "./productionCalls.js";
 
-// Scores a finished call that reached QUALEVAL_AGENT_NUMBER's target agent,
-// for the operator-only Phone Evals page (client/src/PhoneEvals.jsx). Phone
+// Scores a finished call that reached an agent number's target agent,
+// for the Phone Evals page (client/src/PhoneEvals.jsx, docs/phone-evals.md). Phone
 // Evals is deliberately separate from QualEval evaluations: a direct dial is
 // never attributed to an evaluation, even one whose target number matches,
 // since matching on the dialed number put a real caller's call inside
