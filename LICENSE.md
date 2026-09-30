@@ -1,28 +1,21 @@
-Copyright (c) 2026 [COMPLYLINE]
+MIT License
 
-ALL RIGHTS RESERVED.
+Copyright (c) 2026 Aditya Lakshmi Narayanan and Sujeevraja Sanjeevi
 
-This repository and all of its contents (source code, documentation,
-assets, and any other files) are proprietary and confidential.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-NO LICENSE IS GRANTED.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-You may not, without prior written permission from the copyright holder:
-
-- clone, copy, duplicate, mirror, or redistribute this repository
-  or any part of it outside GitHub's built-in view/fork features
-- create derivative works
-- use the contents in another project, product, or service
-- sublicense, sell, or commercially exploit the contents
-
-Possession of a copy does not grant any right to use, modify,
-or share the contents except as required by GitHub's Terms of Service
-for public repositories (view and fork on GitHub only).
-
-THE SOFTWARE AND CONTENTS ARE PROVIDED "AS IS", WITHOUT WARRANTY
-OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
-WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE,
-AND NON-INFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE
-LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY.
-
-For permission requests, contact: adi@lakshminarayanan.dev OR sujeevraja26@gmail.com
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
