@@ -72,7 +72,7 @@ Sinch recipe (untested against a live Sinch account): same BYO SIP steps, using 
 ### Manual setup (what the scripts above automate)
 
 1. **AssemblyAI API key**: copy `.env.example` to `.env` at the repo root and set `ASSEMBLYAI_API_KEY`. Never commit `.env` (gitignored) or send the key to the browser - it's read server-side only, by `server/index.js`'s `/v1/token` route and by `server/checks/llmGateway.js` (used from `disclosureCheck.js` and `piiScan.js`).
-2. **Run the backend**: `cd server && npm install && npm start` (listens on `:8787`, mints Voice Agent tokens and serves `/v1/analyze-session`). No database - pattern packs and checks are plain code modules.
+2. **Run the backend**: `cd server && npm install && npm start` (listens on `:8787`, mints Voice Agent tokens and serves `/v1/analyze-session`). Pattern packs and checks are plain code modules. `/v1/qualeval` and `/v1/api-keys` return 503 until `DATABASE_URL` is set (`server/db.js`); the compliance report cache does not need it.
 3. **Run the frontend**: `cd client && npm install && npm run dev` (Vite dev server proxies `/v1/*` to the backend). Open the printed localhost URL, go to **Voice Compliance**, click Start call, allow mic access, talk, then End call - the report generates and saves to history automatically - or open **Examples** (zero setup, no sign-in) to run a synthetic sample session instead.
 4. **Run the checks' self-tests**: `cd server && npm test`.
 
@@ -87,6 +87,13 @@ python3 scripts/generate-sample-audio.py
 
 Then sync the `tMs` values in `client/src/sampleSessions.js` to the printed `manifest.json` if the generator had to push turns apart to avoid overlap.
 
+The two QualEval example scorecards (`client/public/qualeval-examples/{fail,pass}.mp3`, also git-tracked) are a separate script. Regenerate them only after editing the scripted turns in `scripts/generate-qualeval-example-audio.py`, then copy each turn's `tMs` from `client/public/qualeval-examples/manifest.json` into `client/src/qualevalExampleData.js` when the script warns a turn moved. See `docs/qualeval-scenario-runs.md`.
+
+```
+pip install edge-tts   # once; ffmpeg must be on PATH
+python3 scripts/generate-qualeval-example-audio.py
+```
+
 ### Deploy (Railway + Railway Postgres)
 
 This app keeps `reportCache` as an in-process `Map` and optionally persists those reports to a Railway Postgres addon so a Railway restart does not re-run 12 LLM Gateway calls. Browser report history is still `localStorage`, not a database. Live-call audio is never stored unless the Try page's "Record this call" checkbox is on, in which case it is uploaded to the Railway bucket - see `server/recordingsStore.js`.
@@ -99,7 +106,7 @@ This app keeps `reportCache` as an in-process `Map` and optionally persists thos
 4. Express binds `PORT`, then runs migrations and hydrates the Map from Postgres, then warms any missing Northstar sessions with `patternPackIds` `["generic"]` before `GET /v1/boot-status` flips to `{ ok: true }`. It does not invent an 83 percent KPI for a failed cache.
 5. Live call audio is written to the Railway bucket only when "Record this call" is checked; otherwise it is never written to disk, the bucket, or Postgres.
 
-Public demo URL: https://2peepsfromaz-production.up.railway.app (Railway project `exemplary-purpose`). Until that host is down, you can still run locally with `./scripts/start.sh`. Local dev does not need `DATABASE_URL`; the in-memory Map is enough.
+Public demo URL: https://2peepsfromaz-production.up.railway.app (Railway project `exemplary-purpose`). Until that host is down, you can still run locally with `./scripts/start.sh`. Local dev can omit `DATABASE_URL` for the compliance report cache (the in-memory Map is enough). Qualitative Evals and API keys still 503 without it. Scenario-run setup is `docs/qualeval-scenario-runs.md`.
 
 `GET /v1/boot-status` returns `{ ok, cached, total, error }`.
 

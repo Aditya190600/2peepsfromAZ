@@ -38,6 +38,13 @@ already map those to live agent_ids. The newer prompts follow
 same phone-only fallbacks so a call never stalls: asked for a human, it says
 it can't transfer right now (none has a transfer tool); compliant agents
 asked for real record/account data say they don't have access on this call.
+The shared refusal is `NO_TRANSFER` in `demoAgentDefaults.js`: asked for a
+human, the agent says it cannot transfer and offers what it can still do.
+Healthcare, Finance, and Flight (`TEMPLATES` in `client/src/QualEval.jsx`)
+each pre-select that domain's compliant agent. A requirement that the
+agent offer a human transfer fails it. Healthcare and Finance state the
+refusal; Finance used to require the transfer. See
+`docs/qualeval-scenario-runs.md`.
 
 Each body has `input`/`output.format` fixed to `audio/pcmu`, and `input`
 also carries `TARGET_TURN_DETECTION` (the target's own wait-out-pauses
